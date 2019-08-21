@@ -97,7 +97,8 @@ CONTAINS
                        csoil, salp, kdt, cfactr, zbot, refkdt, ptu,frzx,& 
                        sndens,  &  !added for use in SCF DA, yliu
 ! Save soil surface temperature for output - D. Mocko
-                       LVCOEF,TSOIL)
+                       LVCOEF,TSOIL, PCIRR)
+
 ! ----------------------------------------------------------------------
 ! SUBROUTINE SFLX - UNIFIED NOAHLSM VERSION 1.0 JULY 2007
 ! ----------------------------------------------------------------------
@@ -345,7 +346,7 @@ CONTAINS
 !              RSNOW,SNDENS,SNCOND,SBETA,SN_NEW,SLOPE,SNUP,SALP,SOILWM,      &
               RSNOW,SNDENS,SNCOND,SBETA,SN_NEW,SNUP,SALP,SOILWM,      &
               SOILWW,T1V,T24,T2V,TH2V,TOPT,TFREEZ,TSNOW,ZBOT,Z0,PRCPF,      &
-              ETNS,PTU,LSUBS,TSOIL
+              ETNS,PTU,LSUBS,TSOIL, PCIRR
         REAL ::  LVCOEF
 #if 0
       REAL :: INTERP_FRACTION
@@ -1213,15 +1214,26 @@ CONTAINS
 !   PC * LINEARIZED PENMAN POTENTIAL EVAP =
 !   PENMAN-MONTEITH ACTUAL EVAPORATION (CONTAINING RC TERM).
 ! ----------------------------------------------------------------------
-      RCSOIL = MAX (RCSOIL,0.0001)
+      RCSOIL = MAX (RCSOIL,0.0001)                 
 
-      RC = RSMIN / (XLAI * RCS * RCT * RCQ * RCSOIL)
 !      RR = (4.* SIGMA * RD / CP)* (SFCTMP **4.)/ (SFCPRS * CH) + 1.0
       RR = (4.* EMISSI *SIGMA * RD / CP)* (SFCTMP **4.)/ (SFCPRS * CH) &
              + 1.0
 
       DELTA = (SLV / CP)* DQSDT2
 
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+! Drip Irrigation per BZ module_sf_noah32lsm.F90
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+      RC=RSMIN/(XLAI*RCS*RCT*RCQ)
+      PCIRR=(RR+DELTA)/(RR*(1.+RC*CH)+DELTA)
+
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+! End Drip Irrigation
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+      RC = RSMIN / (XLAI * RCS * RCT * RCQ * RCSOIL)
       PC = (RR + DELTA)/ (RR * (1. + RC * CH) + DELTA)
 
 ! ----------------------------------------------------------------------

@@ -239,6 +239,14 @@ module noah33_module
      real :: sigma_sm  !used for optimization/uncertainty analysis
 
      real,allocatable :: relsmc(:)  !used to export relsmc to WRF
+
+! --------------------------------------------------------------------
+    For Drip Irrigation
+! -------------------------------------------------------------------- 
+
+    real :: PC    ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) PC  WHERE PC*ETP = ACTUAL TRANSP
+    real :: PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
+
   end type noah33dec
 
 end module noah33_module

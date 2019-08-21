@@ -760,7 +760,7 @@ subroutine noah33_main(n)
                 beta, etp, gflx, flx1, flx2, flx3,                                    & 
                 snomlt, sncovr, noah33_struc(n)%noah(t)%runoff1,                     &
                 noah33_struc(n)%noah(t)%runoff2, runoff3,                            & 
-                rc, pc, noah33_struc(n)%noah(t)%rsmin,                                & 
+                rc, noah33_struc(n)%noah(t)%pc, noah33_struc(n)%noah(t)%rsmin,       & 
                 noah33_struc(n)%noah(t)%lai, rcs, rct, rcq, rcsoil,                   &      
                 soilw, soilm, noah33_struc(n)%noah(t)%q1, smav, rdlai2d,              &
                 usemonalb, noah33_struc(n)%noah(t)%snotime1, ribb,                    & 
@@ -780,7 +780,7 @@ subroutine noah33_main(n)
                 noah33_struc(n)%noah(t)%zbot, noah33_struc(n)%noah(t)%refkdt, ptu, & 
                 noah33_struc(n)%noah(t)%frzx,                                      &
                 noah33_struc(n)%noah(t)%sndens, & !added for use in SCF DA, yliu 
-                noah33_struc(n)%noah(t)%lvcoef, tsoil)
+                noah33_struc(n)%noah(t)%lvcoef, tsoil,  noah33_struc(n)%noah(t)%PCIRR)
 
 !     if(LIS_localPet.eq.8) then 
 !        if(t.ge.61.and.t.le.80) then 
