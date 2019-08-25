@@ -241,7 +241,7 @@ module noah33_module
      real,allocatable :: relsmc(:)  !used to export relsmc to WRF
 
 ! --------------------------------------------------------------------
-    For Drip Irrigation
+!    For Drip Irrigation
 ! -------------------------------------------------------------------- 
 
     real :: PC    ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) PC  WHERE PC*ETP = ACTUAL TRANSP

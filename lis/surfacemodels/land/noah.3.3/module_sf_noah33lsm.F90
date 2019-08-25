@@ -830,7 +830,7 @@ CONTAINS
             CALL CANRES (SOLDN,CH,SFCTMP,Q2,SFCPRS,SH2O,ZSOIL,NSOIL,     &
                           SMCWLT,SMCREF,RSMIN,RC,PC,NROOT,Q2SAT,DQSDT2,  &
                           TOPT,RSMAX,RGL,HS,XLAI,                        &
-                          RCS,RCT,RCQ,RCSOIL,EMISSI)
+                          RCS,RCT,RCQ,RCSOIL,EMISSI, PCIRR)
          ELSE
             RC = 0.0
          END IF
@@ -1094,7 +1094,7 @@ CONTAINS
       SUBROUTINE CANRES (SOLAR,CH,SFCTMP,Q2,SFCPRS,SMC,ZSOIL,NSOIL,       &
                          SMCWLT,SMCREF,RSMIN,RC,PC,NROOT,Q2SAT,DQSDT2,    &
                          TOPT,RSMAX,RGL,HS,XLAI,                          &
-                         RCS,RCT,RCQ,RCSOIL,EMISSI)
+                         RCS,RCT,RCQ,RCSOIL,EMISSI, PCIRR)
 
 ! ----------------------------------------------------------------------
 ! SUBROUTINE CANRES
@@ -1130,6 +1130,7 @@ CONTAINS
 ! OUTPUT:
 !   PC  PLANT COEFFICIENT
 !   RC  CANOPY RESISTANCE
+!   PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
 ! ----------------------------------------------------------------------
 
       IMPLICIT NONE
@@ -1139,7 +1140,7 @@ CONTAINS
                              SFCPRS,SFCTMP,SMCREF,SMCWLT, SOLAR,TOPT,XLAI, &
                              EMISSI
       REAL,DIMENSION(1:NSOIL), INTENT(IN) :: SMC,ZSOIL
-      REAL,    INTENT(OUT):: PC,RC,RCQ,RCS,RCSOIL,RCT
+      REAL,    INTENT(OUT):: PC,RC,RCQ,RCS,RCSOIL,RCT, PCIRR
       REAL                :: DELTA,FF,GX,P,RR
       REAL, DIMENSION(1:NSOIL) ::  PART
       REAL, PARAMETER     :: SLV = 2.501000E6

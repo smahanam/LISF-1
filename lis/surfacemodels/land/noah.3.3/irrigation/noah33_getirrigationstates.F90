@@ -331,7 +331,7 @@ contains
                             ! CALL TRANSP (with PCIRR)
                             ! 
                             ! SM : 
-`                           ! (1) added below 2 variables to noah33dec structure in noah33_module.F90
+                            ! (1) added below 2 variables to noah33dec structure in noah33_module.F90
                             !     real :: PC    ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) PC  WHERE PC*ETP = ACTUAL TRANSP
                             !     real :: PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
                             ! (2) total transpriation with no soil moisture stress (perfect irrigation) from SUBROUTINE TRANSP would be
@@ -664,7 +664,7 @@ contains
                                !       PCIRR=(RR+DELTA)/(RR*(1.+RC*CH)+DELTA)
                                ! CALL TRANSP (with PCIRR)
                                ! SM : 
-`                              ! (1) added below 2 variables to noah33dec structure in noah33_module.F90
+                               ! (1) added below 2 variables to noah33dec structure in noah33_module.F90
                                !     real :: PC    ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) PC  WHERE PC*ETP = ACTUAL TRANSP
                                !     real :: PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
                                ! (2) total transpriation with no soil moisture stress (perfect irrigation) from SUBROUTINE TRANSP would be
