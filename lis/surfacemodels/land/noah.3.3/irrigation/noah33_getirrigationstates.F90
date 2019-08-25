@@ -20,7 +20,7 @@ subroutine noah33_getirrigationstates(n,irrigState)
   use ESMF
   use LIS_coreMod
   use LIS_logMod
-  use LIS_constantsMod, only : LIS_CONST_TKFRZ
+  use LIS_constantsMod, only : LIS_CONST_TKFRZ, LIS_CONST_LATVAP
   use noah33_lsmMod
 
   implicit none 
@@ -60,7 +60,7 @@ subroutine noah33_getirrigationstates(n,irrigState)
   ! Sprinkler parameters
   real, parameter      :: otimess = 6.0 ! local trigger check start time [hour]
   real, parameter      :: irrhrs = 4.   ! duration of irrigation hours 
-  ! Drip parameters (not currently implemented)
+  ! Drip parameters 
   real, parameter      :: otimeds = 6.0 ! local trigger check start time [hour]
   real, parameter      :: irrhrd = 12.0   ! duration of irrigation hours 
   ! Flood parameters
@@ -322,7 +322,7 @@ contains
                                   endif
                                endif
                             endif
-                !!!!! DRIP IRRIGATION (NOT CURRENTLY IMPLEMENTED)
+                !!!!! DRIP IRRIGATION
                          elseif(LIS_rc%irrigation_type.eq."Drip") then
 
                             ! Need to get crop coefficient so that we can caculate unstressed Transp
@@ -336,8 +336,10 @@ contains
                             !     real :: PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
                             ! (2) total transpriation with no soil moisture stress (perfect irrigation) from SUBROUTINE TRANSP would be
                             !     noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC [with appropriate unit conversion]  
-                                 
-                            twater = noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC
+                            !     and converted TVEG units [W / m2] to irrigrate units [kg / m /s]
+       
+                            twater = noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC /LIS_CONST_LATVAP
+
                             !-----------------------------------------------------------------------------
                             !     Apply efficiency correction
                             !-----------------------------------------------------------------------------
@@ -655,15 +657,22 @@ contains
                                      endif
                                   endif
                                endif
-!!!!! DRIP IRRIGATION (NOT CURRENTLY IMPLEMENTED)
+!!!!! DRIP IRRIGATION 
                             elseif(iType == 2) then
                                ! Need to get crop coefficient so that we can caculate unstressed Transp
                                !       RC=RSMIN/(XLAI*RCS*RCT*RCQ)
                                !       PCIRR=(RR+DELTA)/(RR*(1.+RC*CH)+DELTA)
                                ! CALL TRANSP (with PCIRR)
-                               
-                               ! Then add enough water to get from actual Transp to unstressed Transp
-                               twater = noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC
+                               ! SM : 
+`                              ! (1) added below 2 variables to noah33dec structure in noah33_module.F90
+                               !     real :: PC    ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) PC  WHERE PC*ETP = ACTUAL TRANSP
+                               !     real :: PCIRR ! PLANT COEFFICIENT (PC: UNITLESS FRACTION, 0-1) with no soil moisutre stress-i.e., perfect irrigation.
+                               ! (2) total transpriation with no soil moisture stress (perfect irrigation) from SUBROUTINE TRANSP would be
+                               !     noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC [w
+                               !     and converted TVEG units [W / m2] to irrigrate units [kg / m /s]
+
+                               twater = noah33_struc(n)%noah(t)%tveg * noah33_struc(n)%noah(t)%PCIRR / noah33_struc(n)%noah(t)%PC / LIS_CONST_LATVAP
+
                                !-----------------------------------------------------------------------------
                                !     Apply efficiency correction
                                !-----------------------------------------------------------------------------
