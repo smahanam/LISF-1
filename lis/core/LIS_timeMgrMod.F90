@@ -1441,7 +1441,41 @@ function LIS_is_last_step(LIS_rc)
           if(time2.gt.alarmTime) then 
              isMonthlyAlarmRinging = .true. 
              alarmTime = time2
-          endif          
+          endif         
+       endif
+    elseif(intervalType.eq."8day") then ! 8-day MODIS
+       if(midmonth) then 
+          if(LIS_rc%da.lt.16) then 
+             mo2=LIS_rc%mo
+             yr2=LIS_rc%yr
+          else
+             mo2=LIS_rc%mo+1
+             yr2=LIS_rc%yr
+             if(mo2.eq.13)then
+                mo2=1
+                yr2=LIS_rc%yr+1
+             endif
+          endif
+          
+          call LIS_date2time(time2,doy2,gmt2,yr2,mo2,&
+               numi,zeroi,zeroi,zeroi)          
+          if(time2.gt.alarmTime) then 
+             isMonthlyAlarmRinging = .true.
+             alarmTime = time2
+          endif
+       else ! check for the end of the month          
+          mo2 = LIS_rc%mo + 1
+          yr2 = LIS_rc%yr
+          if(mo2.eq.13) then 
+             mo2 = 1
+             yr2 = LIS_rc%yr + 1
+          endif
+          call LIS_date2time(time2,doy2,gmt2,yr2,mo2,&
+               numi,zeroi,zeroi,zeroi)
+          if(time2.gt.alarmTime) then 
+             isMonthlyAlarmRinging = .true. 
+             alarmTime = time2
+          endif         
        endif
     elseif(intervalType.eq."quarterly") then !quarterly
        zeroi = 0 

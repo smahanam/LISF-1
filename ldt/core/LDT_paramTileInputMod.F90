@@ -380,7 +380,7 @@ contains
 ! !USES:
    use LDT_coreMod, only : LDT_rc, LDT_domain
    use LDT_logMod,  only : LDT_verify, LDT_logunit, LDT_endrun
-   use LDT_numericalMethodsMod, only : LDT_quicksort_1arr
+   use LDT_numericalMethodsMod, only : LDT_quicksort
 
 ! !ARGUMENTS:
    integer,      intent(in) :: n
@@ -502,7 +502,7 @@ contains
       end do     ! End first bin loop
 
    !- Sort to locate dominant combinations:
-      call LDT_quicksort_1arr( num_bins*num_bins, combo_binarray )
+      call LDT_quicksort ( combo_binarray )
 
    !- Estimate fractions or areas of grid for combined fields:
       isum = sum(combo_binarray((num_bins*num_bins-num_bins+1):(num_bins*num_bins)))

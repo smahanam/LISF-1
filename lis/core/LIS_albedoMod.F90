@@ -167,6 +167,8 @@ contains
              LIS_alb(n)%albInterval = 2592000
           elseif(LIS_alb(n)%albIntervalType.eq."quarterly") then
              LIS_alb(n)%albInterval = 10368000
+          elseif(LIS_alb(n)%albIntervalType.eq."8day") then
+             LIS_alb(n)%albInterval = 691200
           endif
        enddo
        
@@ -697,6 +699,8 @@ contains
           write(LIS_logunit,*)'[INFO] Reading albedo map for quarter ', q
        elseif(LIS_alb(n)%albIntervaltype.eq."monthly") then 
           write(LIS_logunit,*)'[INFO] Reading albedo map for month ', q
+       elseif(LIS_alb(n)%albIntervaltype.eq."8day") then 
+          write(LIS_logunit,*)'[INFO] Reading albedo map for 8-day period ', q
        endif
 
        ios = nf90_open(path=LIS_rc%paramfile(n),&
@@ -714,6 +718,9 @@ contains
           call LIS_verify(ios,'Error in nf90_inq_dimid in read_albedoclimo')
        elseif(LIS_alb(n)%albIntervalType.eq."monthly") then 
           ios = nf90_inq_dimid(nid,"month",mId)
+          call LIS_verify(ios,'Error in nf90_inq_dimid in read_albedoclimo')
+       elseif(LIS_alb(n)%albIntervalType.eq."8day") then 
+          ios = nf90_inq_dimid(nid,"8day",mId)
           call LIS_verify(ios,'Error in nf90_inq_dimid in read_albedoclimo')
        endif
 

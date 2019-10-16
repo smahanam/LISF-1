@@ -171,6 +171,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_fasstId       = "FASST"
    character*50, public,  parameter :: LDT_sheelsId      = "SHEELS"
    character*50, public,  parameter :: LDT_clsmf25Id     = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_clsmj32Id     = "CLSMJ3.2"
    character*50, public,  parameter :: LDT_GeoWRSI2Id    = "GeoWRSI.2"
    character*50, public,  parameter :: LDT_rdhm356Id     = "RDHM.3.5.6"
    character*50, public,  parameter :: LDT_sachtet356Id  = "SACHTET.3.5.6"
@@ -200,6 +201,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_ALMIPIIlcId    = "ALMIPII"
    character*50, public,  parameter :: LDT_isalcId        = "ISA"
    character*50, public,  parameter :: LDT_clsmf25lcId    = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_clsmj32lcId    = "CLSMJ3.2"
    character*50, public,  parameter :: LDT_vic411lcId     = "VIC411"
    character*50, public,  parameter :: LDT_vic412lcId     = "VIC412"
    character*50, public,  parameter :: LDT_clm45lcId      = "CLM45"
@@ -252,12 +254,15 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_avhrrlaiId    = "AVHRR"
    character*50, public,  parameter :: LDT_modislaiId    = "MODIS"
    character*50, public,  parameter :: LDT_clsmf25laiId  = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_clsmJ32laiId  = "CLSMJ3.2"
+
 !-------------------------------------------------------------------------
 ! Greenness data sources
 !-------------------------------------------------------------------------
    character*50, public,  parameter :: LDT_gfracClimLISId = "NCEP_LIS"
    character*50, public,  parameter :: LDT_gfracClimNATId = "NCEP_Native"
    character*50, public,  parameter :: LDT_gfracClsmf25Id = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_gfracClsmJ32Id = "CLSMj3.2"
    character*50, public,  parameter :: LDT_gfracSACHTETId = "SACHTET.3.5.6"
 !-------------------------------------------------------------------------
 ! Maximum greenness data sources
@@ -292,6 +297,8 @@ module LDT_pluginIndices
 
    character*50, public,  parameter :: LDT_albnirclsmf25Id = "CLSMF2.5"
    character*50, public,  parameter :: LDT_albvisclsmf25Id = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_albnirclsmJ32Id = "CLSMJ3.2"
+   character*50, public,  parameter :: LDT_albvisclsmJ32Id = "CLSMJ3.2"
 
 !-------------------------------------------------------------------------
 ! Bottom temperature (Tbot) data sources

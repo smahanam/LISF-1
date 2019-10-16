@@ -15,40 +15,299 @@ module LDT_numericalMethodsMod
   implicit none
 
   PRIVATE
-
-  public :: LDT_quicksort_1arr
+  
+  public :: LDT_quicksort
   public :: LDT_rand_func
 
 !EOP
-  contains
+  integer, parameter :: max_simple_sort_size = 7
+  
+  interface LDT_quicksort
+     module procedure LDT_quicksort_1int
+     module procedure LDT_quicksort_1real
+     module procedure LDT_quicksort_matrix_int
+     module procedure LDT_quicksort_matrix_real
+  end interface
+  
+contains
+  
+  !BOP
+  !
+  ! !ROUTINE: LDT_quicksort_1arr
+  ! \label{LDT_quicksort_1arr}
+  !
+  ! !DESCRIPTION:
+  ! Quick sort routine from:
+  !
+  ! Brainerd, W.S., Goldberg, C.H. & Adams, J.C. (1990) "Programmer's Guide to
+  ! Fortran 90", McGraw-Hill  ISBN 0-07-000248-7, pages 149-150.
+  ! Modified by Alan Miller to include an associated integer array which gives
+  ! the positions of the elements in the original order.
+  !
+  ! Obtained Quicksort routine from the site::
+  !  http://users.bigpond.net.au/amiller/qsort.f90
+  !
+  ! !REVISION HISTORY:
+  !  08 Aug 2012: KR Arsenault : Specification in LDT.
+  !
+  ! !INTERFACE:
+  
+  RECURSIVE SUBROUTINE LDT_quicksort_1int(list)
+    ! EOP
+    
+    implicit none
+    !- Inputs::
+    
+    integer, dimension (:), intent(inout)   :: list
 
-!BOP
-!
-! !ROUTINE: LDT_quicksort_1arr
-! \label{LDT_quicksort_1arr}
-!
-! !DESCRIPTION:
-! Quick sort routine from:
-!
-! Brainerd, W.S., Goldberg, C.H. & Adams, J.C. (1990) "Programmer's Guide to
-! Fortran 90", McGraw-Hill  ISBN 0-07-000248-7, pages 149-150.
-! Modified by Alan Miller to include an associated integer array which gives
-! the positions of the elements in the original order.
-!
-! Obtained Quicksort routine from the site::
-!  http://users.bigpond.net.au/amiller/qsort.f90
-!
-! !REVISION HISTORY:
-!  08 Aug 2012: KR Arsenault : Specification in LDT.
-!
-! !INTERFACE:
-  RECURSIVE SUBROUTINE LDT_quicksort_1arr( array_len, list )
+    !- Start recursive quicksort routine::
+    call quicksort_1(1, size(list))
+   
+  contains
+    ! --------
+    recursive subroutine quicksort_1(left_end, right_end)
+
+     integer, intent(in):: left_end, right_end
+!   Local variables
+     integer            :: i, j
+     real               :: reference, temp
+
+    IF (right_end < left_end + max_simple_sort_size) THEN
+     ! Use interchange sort for small lists
+       call interchange_sort(left_end, right_end)
+    ELSE 
+     ! Use partition ("quick") sort
+       reference = list((left_end + right_end)/2)
+       i = left_end - 1; j = right_end + 1
+       DO
+       ! Scan list from left end until element >= reference is found
+         DO;  i = i + 1
+           IF (list(i) >= reference) EXIT
+         END DO
+       ! Scan list from right end until element <= reference is found
+         DO;  j = j - 1
+           IF (list(j) <= reference) EXIT
+         END DO
+         IF (i < j) THEN
+         ! Swap two out-of-order elements::
+           temp = list(i)
+           list(i) = list(j)
+           list(j) = temp
+         ELSE IF (i == j) THEN
+           i = i + 1
+           EXIT
+         ELSE
+           EXIT
+         END IF
+       END DO
+       IF (left_end < j)  call quicksort_1(left_end, j)
+       IF (i < right_end) call quicksort_1(i, right_end)
+    END IF
+  end subroutine quicksort_1
+
+  subroutine interchange_sort(left_end, right_end)
+   INTEGER, INTENT(IN) :: left_end, right_end
+!  Local variables
+   INTEGER             :: i, j
+   REAL                :: temp
+
+   DO i = left_end, right_end - 1
+      DO j = i+1, right_end
+        IF (list(i) > list(j)) THEN
+           temp = list(i)
+           list(i) = list(j)
+           list(j) = temp
+        END IF
+      END DO
+   END DO
+ end subroutine interchange_sort
+
+ end subroutine LDT_quicksort_1int
+
+!#####################################################################
+
+  RECURSIVE SUBROUTINE LDT_quicksort_matrix_int (list, matrix)
 ! EOP
 
   implicit none
 !- Inputs::
-   integer, intent (in)                         :: array_len
-   real, dimension (array_len), intent(inout)   :: list
+   integer, dimension (:), intent(inout)   :: list
+   integer, dimension (:,:), intent (inout):: matrix
+   integer                                 :: NY
+
+   NY = SIZE (matrix,2)
+!- Start recursive quicksort routine::
+   call quicksort_2D(1, size(list))
+
+! --------
+   contains
+! --------
+    recursive subroutine quicksort_2D(left_end, right_end)
+
+     integer, intent(in):: left_end, right_end
+!   Local variables
+     integer            :: i, j
+     real               :: reference, temp, temp2D(NY)
+
+    IF (right_end < left_end + max_simple_sort_size) THEN
+     ! Use interchange sort for small lists
+       call interchange_sort(left_end, right_end)
+    ELSE 
+     ! Use partition ("quick") sort
+       reference = list((left_end + right_end)/2)
+       i = left_end - 1; j = right_end + 1
+       DO
+       ! Scan list from left end until element >= reference is found
+         DO;  i = i + 1
+           IF (list(i) >= reference) EXIT
+         END DO
+       ! Scan list from right end until element <= reference is found
+         DO;  j = j - 1
+           IF (list(j) <= reference) EXIT
+         END DO
+         IF (i < j) THEN
+         ! Swap two out-of-order elements::
+           temp = list(i)
+           temp2D(:) = matrix(i,:)
+
+           list(i) = list(j)
+           matrix(i,:) = matrix(j,:)
+
+           list(j) = temp
+           matrix(j,:) = temp2D(:)
+
+         ELSE IF (i == j) THEN
+           i = i + 1
+           EXIT
+         ELSE
+           EXIT
+         END IF
+       END DO
+       IF (left_end < j)  call quicksort_2D(left_end, j)
+       IF (i < right_end) call quicksort_2D(i, right_end)
+    END IF
+  end subroutine quicksort_2D
+
+  subroutine interchange_sort(left_end, right_end)
+   INTEGER, INTENT(IN) :: left_end, right_end
+!  Local variables
+   INTEGER             :: i, j
+   REAL                :: temp, temp2D(NY)
+
+   DO i = left_end, right_end - 1
+      DO j = i+1, right_end
+        IF (list(i) > list(j)) THEN
+           temp = list(i)
+           temp2D(:) = matrix(i,:)
+
+           list(i) = list(j)
+           matrix(i,:) = matrix(j,:)
+
+           list(j) = temp
+           matrix(j,:) = temp2D(:)
+        END IF
+      END DO
+   END DO
+  end subroutine interchange_sort
+
+end subroutine LDT_quicksort_matrix_int
+
+!#####################################################################
+
+  RECURSIVE SUBROUTINE LDT_quicksort_matrix_real (list, matrix)
+! EOP
+
+  implicit none
+!- Inputs::
+   integer, dimension (:), intent(inout)   :: list
+   real,  dimension (:,:), intent (inout)  :: matrix
+   integer                                 :: NY
+
+   NY = SIZE (matrix,2)
+!- Start recursive quicksort routine::
+   call quicksort_2D(1, size(list))
+
+! --------
+   contains
+! --------
+    recursive subroutine quicksort_2D(left_end, right_end)
+
+     integer, intent(in):: left_end, right_end
+!   Local variables
+     integer            :: i, j
+     real               :: reference, temp, temp2D(NY)
+
+    IF (right_end < left_end + max_simple_sort_size) THEN
+     ! Use interchange sort for small lists
+       call interchange_sort(left_end, right_end)
+    ELSE 
+     ! Use partition ("quick") sort
+       reference = list((left_end + right_end)/2)
+       i = left_end - 1; j = right_end + 1
+       DO
+       ! Scan list from left end until element >= reference is found
+         DO;  i = i + 1
+           IF (list(i) >= reference) EXIT
+         END DO
+       ! Scan list from right end until element <= reference is found
+         DO;  j = j - 1
+           IF (list(j) <= reference) EXIT
+         END DO
+         IF (i < j) THEN
+         ! Swap two out-of-order elements::
+           temp = list(i)
+           temp2D(:) = matrix(i,:)
+
+           list(i) = list(j)
+           matrix(i,:) = matrix(j,:)
+
+           list(j) = temp
+           matrix(j,:) = temp2D(:)
+
+         ELSE IF (i == j) THEN
+           i = i + 1
+           EXIT
+         ELSE
+           EXIT
+         END IF
+       END DO
+       IF (left_end < j)  call quicksort_2D(left_end, j)
+       IF (i < right_end) call quicksort_2D(i, right_end)
+    END IF
+  end subroutine quicksort_2D
+
+  subroutine interchange_sort(left_end, right_end)
+   INTEGER, INTENT(IN) :: left_end, right_end
+!  Local variables
+   INTEGER             :: i, j
+   REAL                :: temp, temp2D(NY)
+
+   DO i = left_end, right_end - 1
+      DO j = i+1, right_end
+        IF (list(i) > list(j)) THEN
+           temp = list(i)
+           temp2D(:) = matrix(i,:)
+
+           list(i) = list(j)
+           matrix(i,:) = matrix(j,:)
+
+           list(j) = temp
+           matrix(j,:) = temp2D(:)
+        END IF
+      END DO
+   END DO
+  end subroutine interchange_sort
+
+end subroutine LDT_quicksort_matrix_real
+
+!#####################################################################
+
+  RECURSIVE SUBROUTINE LDT_quicksort_1real(list)
+! EOP
+
+  implicit none
+!- Inputs::
+   real, dimension (:), intent(inout)   :: list
 
 !- Start recursive quicksort routine::
    call quicksort_1(1, size(list))
@@ -62,7 +321,6 @@ module LDT_numericalMethodsMod
 !   Local variables
      integer            :: i, j
      real               :: reference, temp
-     integer, parameter :: max_simple_sort_size = 7
 
     IF (right_end < left_end + max_simple_sort_size) THEN
      ! Use interchange sort for small lists
@@ -114,7 +372,7 @@ module LDT_numericalMethodsMod
    END DO
   end subroutine interchange_sort
 
- end subroutine LDT_quicksort_1arr
+ end subroutine LDT_quicksort_1real
 
 ! =========================================================
 

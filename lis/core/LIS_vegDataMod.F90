@@ -1584,7 +1584,9 @@ contains
              if(LIS_lai(n)%laiIntervalType.eq."monthly") then 
                 LIS_lai(n)%laiInterval = 2592000  ! 30 days
              endif
-
+             if(LIS_lai(n)%laiIntervalType.eq."8day") then 
+                LIS_lai(n)%laiInterval = 691200  ! 8 days
+             endif
              call LIS_registerAlarm("LIS LAI climo read alarm", LIS_rc%ts, &
                   LIS_lai(n)%laiInterval, &
                   intervalType = LIS_lai(n)%laiIntervalType)
@@ -1882,7 +1884,7 @@ contains
              LIS_lai(n)%laiInterval = 2592000
              LIS_lai(n)%laiIntervalType = "monthly"
           endif
-          
+
           call LIS_registerAlarm("LIS LAI read alarm",&
                LIS_rc%ts, LIS_lai(n)%laiInterval, &
                intervalType = LIS_lai(n)%laiIntervalType)
@@ -1891,7 +1893,36 @@ contains
                LIS_lai(n)%laiIntervalType, t1,t2,wt1,wt2)
           
           
-          if(LIS_rc%uselaimap(n).eq."LDT") then 
+          if(LIS_rc%uselaimap(n).eq."LDT") then
+
+#if (defined USE_NETCDF3 || defined USE_NETCDF4)
+             
+             inquire(file=LIS_rc%paramfile(n), exist=file_exists)
+             if(file_exists) then 
+                
+                ios = nf90_open(path=trim(LIS_rc%paramfile(n)),&
+                     mode=NF90_NOWRITE,ncid=nid)
+                call LIS_verify(ios,'Error in nf90_open in read_laiclimo')
+                
+                ios = nf90_get_att(nid, NF90_GLOBAL, 'LAISAI_DATA_INTERVAL', &
+                     LIS_lai(n)%laiIntervalType)
+                call LIS_verify(ios,'Error in nf90_get_att in read_laiclimo')       
+                
+                ios = nf90_close(nid)
+                call LIS_verify(ios,'Error in nf90_close in read_laiclimo')
+             else
+                write(LIS_logunit,*) '[ERR] ',LIS_rc%paramfile(n), ' does not exist'
+                write(LIS_logunit,*) '[ERR] program stopping ...'
+                call LIS_endrun
+             endif
+#endif 
+             if(LIS_lai(n)%laiIntervalType.eq."monthly") then 
+                LIS_lai(n)%laiInterval = 2592000  ! 30 days
+             endif
+             if(LIS_lai(n)%laiIntervalType.eq."8day") then 
+                LIS_lai(n)%laiInterval = 691200  ! 8 days
+             endif
+
              allocate(value1(LIS_rc%ntiles(n)))
              allocate(value2(LIS_rc%ntiles(n)))
 
@@ -2204,6 +2235,9 @@ contains
 #endif
              if(LIS_lai(n)%laiIntervalType.eq."monthly") then 
                 LIS_lai(n)%laiInterval = 2592000  ! 30 days
+             endif
+             if(LIS_lai(n)%laiIntervalType.eq."8day") then 
+                LIS_lai(n)%laiInterval = 691200   ! 8 days
              endif
           endif
           
