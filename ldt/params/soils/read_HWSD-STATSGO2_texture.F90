@@ -11,7 +11,8 @@
 !  22 Sept 2019: Sarith Mahanama and Kristi Arsenault ; Initial Specification
 !
 ! !INTERFACE:
-subroutine read_HWSD-STATSGO2_texture( n, num_bins, fgrd, texture_layers )
+
+subroutine read_HWSD_STATSGO2_texture ( n, num_bins, fgrd, texture_layers )
 
 ! !USES:
   use LDT_coreMod,  only : LDT_rc, LDT_domain ! EMK
@@ -241,4 +242,4 @@ subroutine read_HWSD-STATSGO2_texture( n, num_bins, fgrd, texture_layers )
    call LDT_releaseUnitNumber(ftn)
    write(unit=LDT_logunit,fmt=*) "[INFO] Done reading Native STATSGO+FAO texture file"
 
- end subroutine read_HWSD-STATSGO2_texture
+ end subroutine read_HWSD_STATSGO2_texture

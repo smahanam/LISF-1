@@ -57,7 +57,7 @@ contains
 
     use Noah_parmsMod
     use CLSMF25_parmsMod
-    use CLSMJ32_parmsMod
+!    use CLSMJ32_parmsMod
     use RDHM_parmsMod
     use SACHTET_parmsMod
     use Snow17_parmsMod
@@ -135,12 +135,12 @@ contains
          catchmentParms_writeData)
 
 ! CLSM J3.2 LSM:
-    call registerlsmparamprocinit(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_init)
-    call registerlsmparamprocwriteheader(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_writeHeader)
-    call registerlsmparamprocwritedata(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_writeData)
+!    call registerlsmparamprocinit(trim(LDT_clsmj32Id)//char(0),&
+!         catchmentParms_init)
+!    call registerlsmparamprocwriteheader(trim(LDT_clsmj32Id)//char(0),&
+!         catchmentParms_writeHeader)
+!    call registerlsmparamprocwritedata(trim(LDT_clsmj32Id)//char(0),&
+!         catchmentParms_writeData)
 
   ! RDHM:
 
@@ -368,7 +368,7 @@ contains
 
     external read_ALMIPII_lc
     external read_CLSMF25_lc
-    external read_CLSMJ32_lc
+!    external read_CLSMJ32_lc
     external read_VIC411_lc
     external read_VIC412_lc
     external read_ISA_lc
@@ -420,7 +420,7 @@ contains
   ! Catchment LSM - F2.5:
     call registerreadlc(trim(LDT_clsmf25lcId)//char(0), read_CLSMF25_lc)
   ! Catchment LSM - J3.2:
-    call registerreadlc(trim(LDT_clsmj32lcId)//char(0), read_CLSMJ32_lc)
+!    call registerreadlc(trim(LDT_clsmj32lcId)//char(0), read_CLSMJ32_lc)
   ! VIC-4.1.1:
     call registerreadlc(trim(LDT_vic411lcId)//char(0), read_VIC411_lc)
   ! VIC-4.1.2:
@@ -667,7 +667,7 @@ contains
     external read_CLSMF25_porosity
 
   ! CLSM Jason 3.2 readers
-    external read_CLSMJ32_porosity
+!    external read_CLSMJ32_porosity
 
   ! Constant cases
     external set_CONSTANT_texture_attribs
@@ -770,7 +770,7 @@ contains
     call registerreadporosity(trim(LDT_clsmf25Id)//char(0),read_CLSMF25_porosity)
 
 !== Catchment-Jason 3.2: ==
-    call registerreadporosity(trim(LDT_clsmj32Id)//char(0),read_CLSMJ32_porosity)
+!    call registerreadporosity(trim(LDT_clsmj32Id)//char(0),read_CLSMJ32_porosity)
 
 !== Special case study:
     call registersettextureattribs(trim(LDT_specialSoilId)//char(0),set_Special_texture_attribs)
@@ -847,11 +847,11 @@ contains
     external set_CLSMF25_lai_attribs
     external read_CLSMF25_lai
 
-    external set_CLSMJ32_lai_attribs
-    external read_CLSMJ32_lai
+!    external set_MODGEO_lai_attribs
+!    external read_MODGEO_lai
 
     external read_CLSMF25_laimax,read_CLSMF25_laimin
-    external read_CLSMJ32_laimax,read_CLSMJ32_laimin
+!    external read_MODGEO_laimax,read_MODGEO_laimin
     external read_CONSTANT_lai, read_CONSTANT_sai
 
   ! AVHRR:
@@ -867,12 +867,12 @@ contains
     call registerreadlaimax(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimax)
     call registerreadlaimin(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimin)
 
-  ! CLSM J3.2:
-    call registersetlaiattribs(trim(LDT_clsmj32laiId)//char(0),&
-         set_CLSMJ32_lai_attribs)
-    call registerreadlai(trim(LDT_clsmj32laiId)//char(0),read_CLSMJ32_lai)
-    call registerreadlaimax(trim(LDT_clsmj32laiId)//char(0),read_CLSMJ32_laimax)
-    call registerreadlaimin(trim(LDT_clsmj32laiId)//char(0),read_CLSMJ32_laimin)
+  ! MODGEO :
+!    call registersetlaiattribs(trim(LDT_MODGEOlaiId)//char(0),&
+!         set_MODGEO_lai_attribs)
+!    call registerreadlai(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_lai)
+!    call registerreadlaimax(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_laimax)
+!    call registerreadlaimin(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_laimin)
 
   ! Constant values:
     call registerreadlai(trim(LDT_constId)//char(0),read_CONSTANT_lai)
@@ -1004,11 +1004,7 @@ contains
     external set_CLSMF25_gfrac_attribs
     external read_CLSMF25_gfrac
 
-    external set_CLSMJ32_gfrac_attribs
-    external read_CLSMJ32_gfrac
-
     external read_CLSMF25_gfracmax,read_CLSMF25_gfracmin
-    external read_CLSMJ32_gfracmax,read_CLSMJ32_gfracmin
     external read_SACHTET356_gfrac
     external read_CONSTANT_gfrac, read_CONSTANT_gfracmax, read_CONSTANT_gfracmin
 
@@ -1022,15 +1018,10 @@ contains
     call registerreadshdmin(trim(LDT_gfracClimLISId)//char(0),read_NCEP_shdmin)
     call registerreadshdmin(trim(LDT_gfracClimNATId)//char(0),read_NCEPNative_shdmin)
 
- !- Catchment LSM:
+ !- Catchment LSM both :
     call registerreadgfrac(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfrac)
     call registerreadshdmax(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfracmax)
     call registerreadshdmin(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfracmin)
-
- !- Catchment LSM Jason 3.2:
-    call registerreadgfrac(trim(LDT_gfracClsmj32Id)//char(0),read_CLSMJ32_gfrac)
-    call registerreadshdmax(trim(LDT_gfracClsmj32Id)//char(0),read_CLSMJ32_gfracmax)
-    call registerreadshdmin(trim(LDT_gfracClsmj32Id)//char(0),read_CLSMJ32_gfracmin)
 
  !- SAC-HTET v3.5.6 LSM:
     call registerreadgfrac(trim(LDT_gfracSACHTETId)//char(0),read_SACHTET356_gfrac)

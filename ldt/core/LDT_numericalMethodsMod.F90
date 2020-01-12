@@ -27,10 +27,49 @@ module LDT_numericalMethodsMod
      module procedure LDT_quicksort_1real
      module procedure LDT_quicksort_matrix_int
      module procedure LDT_quicksort_matrix_real
+     module procedure LDT_quicksort_2VEC_int
+     module procedure LDT_quicksort_2VEC_real     
   end interface
   
 contains
-  
+
+  SUBROUTINE LDT_quicksort_2VEC_int(A,B)
+    implicit none
+    integer, dimension(:), intent (inout) :: A
+    integer, dimension(:), intent (inout) :: B
+    integer, allocatable, dimension(:,:)  :: C
+    integer                  :: i
+
+    i = size (B)
+    allocate (C(1:i,1))
+    c (:,1) = B
+    call LDT_quicksort_matrix_int (A,C)
+    B(:) = C(:,1)
+    deallocate (c)
+
+  END SUBROUTINE LDT_quicksort_2VEC_int 
+
+  ! -------------------------------------------------
+
+  SUBROUTINE LDT_quicksort_2VEC_real (A,B)
+
+    implicit none
+    integer, dimension(:), intent (inout) :: A
+    real,    dimension(:), intent (inout) :: B
+    real,    allocatable, dimension(:,:)  :: C
+    integer                  :: i
+
+    i = size (B)
+    allocate (C(1:i,1))
+    c (:,1) = B
+    call LDT_quicksort_matrix_real (A,C)
+    B(:) = C(:,1)
+    deallocate (c)
+
+  END SUBROUTINE LDT_quicksort_2VEC_real
+
+  ! ------------------------------------------------------------------
+ 
   !BOP
   !
   ! !ROUTINE: LDT_quicksort_1arr
@@ -63,7 +102,7 @@ contains
     !- Start recursive quicksort routine::
     call quicksort_1(1, size(list))
    
-  contains
+  contains    
     ! --------
     recursive subroutine quicksort_1(left_end, right_end)
 

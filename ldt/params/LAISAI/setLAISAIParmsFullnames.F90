@@ -52,6 +52,9 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
         case( "CLSMF2.5" )
           LDT_laisai_struc(n)%lai%standard_name =&
              "CLSMF2.5 LAI climatology"
+        case( "MODGEO" )
+          LDT_laisai_struc(n)%lai%standard_name =&
+             "MODGEO LAI climatology"
         case( "CONSTANT" )
           LDT_laisai_struc(n)%lai%standard_name =&
              "CONSTANT LAI climatology"
@@ -81,6 +84,9 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
         case( "CLSMF2.5" )
           LDT_laisai_struc(n)%laimin%standard_name =&
              "CLSMF2.5 min LAI"
+        case( "MODGEO" )
+          LDT_laisai_struc(n)%laimin%standard_name =&
+             "MODGEO min LAI"
         case( "CONSTANT" )
           LDT_laisai_struc(n)%laimin%standard_name =&
              "CONSTANT min LAI"
@@ -97,6 +103,9 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
         case( "CLSMF2.5" )
           LDT_laisai_struc(n)%laimax%standard_name =&
              "CLSMF2.5 max LAI"
+        case( "MODGEO" )
+          LDT_laisai_struc(n)%laimax%standard_name =&
+             "MODGEO max LAI"
         case( "CONSTANT" )
           LDT_laisai_struc(n)%laimax%standard_name =&
              "CONSTANT max LAI"
