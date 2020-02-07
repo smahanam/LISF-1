@@ -1,0 +1,168 @@
+module LDT_catch_util
+
+  implicit none
+  include 'netcdf.inc'	
+
+  private
+  public  LDT_RegridRaster
+
+  interface LDT_RegridRaster
+     module procedure RegridRaster
+     module procedure RegridRaster1
+     module procedure RegridRaster2
+     module procedure RegridRasterReal
+  end interface
+
+  contains
+
+       ! -----------------------------------------------------------
+
+    subroutine RegridRaster(Rin,Rout)
+      
+      integer, intent(IN)  :: Rin(:,:)
+      integer, intent(OUT) :: Rout(:,:)
+      
+      REAL(KIND=8)  :: xx, yy
+      integer :: i,j,ii,jj
+      
+      xx = size(Rin ,1)/float(size(Rout,1))
+      yy = size(Rin ,2)/float(size(Rout,2))
+      
+      do j=1,size(Rout,2)
+         jj = (j-1)*yy + 1
+         do i=1,size(Rout,1)
+            ii = (i-1)*xx + 1
+            Rout(i,j) = Rin(ii,jj)
+         end do
+      end do
+      
+    end subroutine RegridRaster
+    
+    ! --------------------------------------------------------------
+    
+    subroutine RegridRaster1(Rin,Rout)
+      
+      integer*1, intent(IN)  :: Rin(:,:)
+      integer*1, intent(OUT) :: Rout(:,:)
+      
+      REAL(KIND=8)  :: xx, yy
+      integer :: i,j,ii,jj
+      
+      xx = size(Rin ,1)/float(size(Rout,1))
+      yy = size(Rin ,2)/float(size(Rout,2))
+      
+      do j=1,size(Rout,2)
+         jj = (j-1)*yy + 1
+         do i=1,size(Rout,1)
+            ii = (i-1)*xx + 1
+            Rout(i,j) = Rin(ii,jj)
+         end do
+      end do
+      
+    end subroutine RegridRaster1
+        
+    ! --------------------------------------------------------------
+    
+    subroutine RegridRaster2(Rin,Rout)
+
+      integer(kind=2), intent(IN)  :: Rin(:,:)
+      integer(kind=2), intent(OUT) :: Rout(:,:)
+      
+      REAL(KIND=8)  :: xx, yy
+      integer :: i,j,ii,jj
+      
+      xx = size(Rin ,1)/float(size(Rout,1))
+      yy = size(Rin ,2)/float(size(Rout,2))
+      
+      do j=1,size(Rout,2)
+         jj = (j-1)*yy + 1
+         do i=1,size(Rout,1)
+            ii = (i-1)*xx + 1
+            Rout(i,j) = Rin(ii,jj)
+         end do
+      end do
+    end subroutine RegridRaster2
+    
+    ! --------------------------------------------------------------
+    
+    subroutine RegridRasterReal(Rin,Rout)
+      
+      real, intent(IN)  :: Rin(:,:)
+      real, intent(OUT) :: Rout(:,:)
+      
+      REAL(KIND=8) :: xx, yy
+      integer :: i,j,ii,jj
+      
+      xx = size(Rin ,1)/float(size(Rout,1))
+      yy = size(Rin ,2)/float(size(Rout,2))
+      
+      do j=1,size(Rout,2)
+         jj = (j-1)*yy + 1
+         do i=1,size(Rout,1)
+            ii = (i-1)*xx + 1
+            Rout(i,j) = Rin(ii,jj)
+         end do
+      end do
+      
+    end subroutine RegridRasterReal
+        
+    !-------------------------------------------------------------
+    
+    
+    INTEGER FUNCTION soil_class (min_perc)
+      
+      ! Function returns a unique soil class [1-100], 
+      
+      IMPLICIT NONE
+      type(mineral_perc), intent (in)  :: min_perc
+      !real, intent (in) :: clay_perc,silt_perc,sand_perc
+      integer :: clay_row, sand_row, silt_row
+      
+      clay_row = ceiling((100.- min_perc%clay_perc)/10.)
+      if(clay_row == 0 ) clay_row = 1
+      if(clay_row == 11) clay_row = 10
+      
+      sand_row = ceiling((min_perc%sand_perc)/10.)
+      if(sand_row == 0 ) sand_row = 1
+      if(sand_row == 11) sand_row = 10
+      
+      silt_row = ceiling((min_perc%silt_perc)/10.)
+      if(silt_row == 0 ) silt_row = 1
+      if(silt_row == 11) silt_row = 10
+      
+      if(clay_row == 1) soil_class=1
+      
+      if(clay_row > 1) soil_class=   &
+           (clay_row - 1)*(clay_row - 1) + (clay_row - sand_row) + silt_row
+      
+    end FUNCTION soil_class
+    
+    ! ------------------------------------------------------------
+    
+    integer function NC_VarID (NCFID, VNAME) 
+      
+      integer, intent (in)      :: NCFID
+      character(*), intent (in) :: VNAME
+      integer                   :: status
+      
+      STATUS = NF_INQ_VARID (NCFID, trim(VNAME) ,NC_VarID)
+      IF (STATUS .NE. NF_NOERR) &
+           CALL HANDLE_ERR(STATUS, trim(VNAME))  
+      
+    end function NC_VarID
+    
+    ! ------------------------------------------------------------
+    
+    SUBROUTINE HANDLE_ERR(STATUS, Line)
+      
+      INTEGER,      INTENT (IN) :: STATUS
+      CHARACTER(*), INTENT (IN) :: Line
+      
+      IF (STATUS .NE. NF_NOERR) THEN
+         PRINT *, trim(Line),': ',NF_STRERROR(STATUS)
+         STOP 'Stopped'
+      ENDIF
+      
+    END SUBROUTINE HANDLE_ERR
+ 
+end module catch_util
