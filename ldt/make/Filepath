@@ -18,7 +18,7 @@ dirs := . \
 ../params/climateparms \
 ../params/crop_parms \
 ../params/irrigation \
-../params/catchment/catchment_util/ \
+../params/catchment/Shared/ \
 ../params/catchment/F25 \
 ../params/CLM2 \
 ../params/GeoWRSI \
