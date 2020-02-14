@@ -28,6 +28,10 @@ module mod_HWSD_STATSGO2_texture
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
   use LDT_catch_util, only : LDT_RegridRaster, NC_VarID, GEOS2LIS
+  use get_DeLannoy_SoilClass, ONLY :  &
+       mineral_perc, GDL_center_pix, &
+       n_SoilClasses => n_DeLannoy_classes, & 
+       soil_class => DeLannoy_class
 
   implicit none
   include 'netcdf.inc'	
@@ -36,19 +40,8 @@ module mod_HWSD_STATSGO2_texture
   public  read_HWSD_STATSGO2_texture
 
   character*300 :: c_data = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
-  integer, parameter :: n_SoilClasses = 253
-  real, parameter :: gnu = 1.0, zks = 2.0
-  
-  type :: mineral_perc
-     real :: clay_perc
-     real :: silt_perc
-     real :: sand_perc
-  end type mineral_perc
 
-  interface GDL_center_pix
-     module procedure center_pix
-     module procedure center_pix_int0
-  end interface
+
   
 contains
 
@@ -1176,30 +1169,30 @@ contains
             wp_wetness = a_wp(fac)     /d_poros
          endif
 
-         write (11,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')tindex,pfafindex,      &
-               soil_class_top(n),soil_class_com(n),d_bee,d_psis,d_poros,               &
-               d_ks/exp(-1.0*zks*gnu),wp_wetness,soildepth(n),                 &
-               grav_vec(n),soc_vec(n),poc_vec(n), &
-               a_sand(fac_surf),a_clay(fac_surf),a_sand(fac),a_clay(fac), &
-	       a_wpsurf(fac_surf)/a_porosurf(fac_surf),a_porosurf(fac_surf), pmap(n)
+!         write (11,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')tindex,pfafindex,      &
+!               soil_class_top(n),soil_class_com(n),d_bee,d_psis,d_poros,               &
+!               d_ks/exp(-1.0*zks*gnu),wp_wetness,soildepth(n),                 &
+!               grav_vec(n),soc_vec(n),poc_vec(n), &
+!               a_sand(fac_surf),a_clay(fac_surf),a_sand(fac),a_clay(fac), &
+!	       a_wpsurf(fac_surf)/a_porosurf(fac_surf),a_porosurf(fac_surf), pmap(n)
 	       	    
          write (12,'(i8,i8,4f10.7)')tindex,pfafindex, &
 	       atau_2cm(fac_surf),btau_2cm(fac_surf),atau(fac_surf),btau(fac_surf)  
 
-         if (allocated (parms4file)) then
-
-            parms4file (n, 1) = d_bee
-            parms4file (n, 2) = d_ks /exp(-1.0*zks*gnu)
-            parms4file (n, 3) = d_poros
-            parms4file (n, 4) = d_psis
-            parms4file (n, 5) = wp_wetness
-            parms4file (n, 6) = soildepth(n)
-            parms4file (n, 7) = atau_2cm(fac_surf)
-            parms4file (n, 8) = btau_2cm(fac_surf)
-            parms4file (n, 9) = atau(fac_surf)
-            parms4file (n,10) = btau(fac_surf) 
-  
-  	 endif
+!         if (allocated (parms4file)) then
+!
+!            parms4file (n, 1) = d_bee
+!            parms4file (n, 2) = d_ks /exp(-1.0*zks*gnu)
+!            parms4file (n, 3) = d_poros
+!            parms4file (n, 4) = d_psis
+!            parms4file (n, 5) = wp_wetness
+!            parms4file (n, 6) = soildepth(n)
+!            parms4file (n, 7) = atau_2cm(fac_surf)
+!            parms4file (n, 8) = btau_2cm(fac_surf)
+!            parms4file (n, 9) = atau(fac_surf)
+!            parms4file (n,10) = btau(fac_surf) 
+!  
+!  	 endif
 
       end do
       write (11,'(a)')'                    '
@@ -1234,171 +1227,7 @@ contains
 
     END SUBROUTINE soil_para_hwsd
 
-    ! --------------------------------------------------------------------------------------------------------
 
-    INTEGER FUNCTION center_pix_int (sf,ktop, ktot, x,y,x0,y0,z0,ext_point)
-      
-      implicit none
-      
-      integer (kind =2), dimension (:), intent (in) :: x,y
-      integer, intent (in) :: ktop,ktot
-      real, intent (in) :: sf
-      real :: xi,xj,yi,yj,xx0,yy0,zz0
-      real, allocatable, dimension (:,:) :: length_m
-      real, allocatable, dimension (:) :: length
-      real, intent (inout) :: x0,y0,z0
-      integer :: i,j,npix
-      logical, intent(in) :: ext_point
-      real :: zi, zj
-      
-      allocate (length_m (1:ktot,1:ktot))
-      allocate (length   (1:ktot))
-      length_m =0.
-      length   =0.
-      
-      center_pix_int = -9999
-      if(ktot /= 0) then
-         do i = 1,ktot
-            xi = sf*x(i)
-            yi = sf*y(i)
-            zi = 100. - xi - yi
-            if (.not. ext_point) then
-               x0 = xi
-               y0 = yi
-               z0 = zi
-            endif
-            
-            do j = 1,ktot
-               xj = sf*x(j)
-               yj = sf*y(j)
-               zj = 100. - xj - yj
-               xx0= xj - x0
-               yy0= yj - y0
-               zz0= zj - z0
-               
-               if(ktot > ktop) then 
-                  if(j <= ktop) then
-                     length_m (i,j) = (xx0*xx0 +  yy0*yy0 + zz0*zz0)**0.5
-                  else
-                     length_m (i,j) = 2.33*((xx0*xx0 +  yy0*yy0 + zz0*zz0)**0.5)
-                  endif
-               else
-                  length_m (i,j) = (xx0*xx0 +  yy0*yy0 + zz0*zz0)**0.5
-               endif
-            end do
-            length (i) = sum(length_m (i,:))
-         end do
-         
-         center_pix_int = minloc(length,dim=1)
-      endif
-      
-    END FUNCTION center_pix_int
-      
-    !
-    ! ====================================================================
-    !
-    
-    INTEGER FUNCTION center_pix_int0 (sf,ktop, ktot, x,y)
-      
-      implicit none
-      ! sf = 0.01 (integer to real scale factor), ktop = # of pixels in top layer
-      ! ktot = total # of pixels, top + subsurface combined
-      ! x (clay), y (sand_
-      integer (kind =2), dimension (:), intent (in) :: x,y
-      integer, intent (in) :: ktop,ktot
-      real, intent (in) :: sf
-      real :: xi,xj,yi,yj
-      real :: length
-      
-      integer :: i,j,npix
-      real :: zi, zj, mindist,xc,yc,zc
-      
-      length   =0.
-      
-      center_pix_int0 = -9999
-      
-      if(ktot /= 0) then
-         ! There should be some data pixels
-         if(ktot > ktop) then 
-            ! Have both layers
-            if(ktop > 0) then
-               ! There are data in top layer
-               xc = sf*0.3*sum(real(x(1:ktop)))/real(ktop) + sf*0.7*sum(real(x(ktop + 1 : ktot)))/real(ktot - ktop)  
-               yc = sf*0.3*sum(real(y(1:ktop)))/real(ktop) + sf*0.7*sum(real(y(ktop + 1 : ktot)))/real(ktot - ktop)
-            else
-               ! There are no data in top layer
-               xc = sf*sum(real(x(1:ktot)))/real(ktot)  
-               yc = sf*sum(real(y(1:ktot)))/real(ktot)         
-            endif
-         else
-            ! working on Top layer alone
-            xc = sf*sum(real(x(1:ktot)))/real(ktot)  
-            yc = sf*sum(real(y(1:ktot)))/real(ktot)
-         endif
-         zc = 100. - xc - yc
-      endif
-      
-      mindist=100000.*100000.
-      
-      do i = 1,ktot
-         xi = sf*x(i)
-         yi = sf*y(i)
-         zi = 100. - xi - yi
-         length = (xi-xc)**2+(yi-yc)**2+(zi-zc)**2
-         if(mindist>length)then
-            mindist=length
-            center_pix_int0=i
-         end if
-      end do
-      !print *,ktop,ktot,center_pix_int0
-      
-    END FUNCTION center_pix_int0
-    !
-    ! ====================================================================
-    !
-    
-    INTEGER FUNCTION center_pix (x,y,x0,y0,z0,ext_point)
-      
-      implicit none
-
-      real, dimension (:), intent (in) :: x,y
-      real, allocatable, dimension (:,:) :: length_m
-      real, allocatable, dimension (:) :: length
-      real, intent (inout) :: x0,y0,z0
-      integer :: i,j,npix,ii
-      logical, intent(in) :: ext_point
-      real :: zi, zj
-      
-      npix = size (x)
-      allocate (length_m (1:npix,1:npix))
-      allocate (length   (1:npix))
-      length_m =0.
-      length   =0.
-      
-      do i = 1,npix
-         zi = 100. - x(i) - y(i)
-         if (.not. ext_point) then
-            x0 = x(i)
-            y0 = y(i)
-            z0 = zi
-         endif
-         
-         do j = i,npix
-            zj = 100. - x(j) - y(j)
-            !      length_m (i,j) = abs (x(j) - x0) + &
-            !            abs (y(j) - y0) +  abs (zj - z0)
-            !
-            length_m (i,j) = ((x(j) - x0)*(x(j) - x0) &
-                 +  (y(j) - y0)*(y(j) - y0) &
-                 +  (zj - z0)*(zj - z0))**0.5
-            length_m (j,i) = length_m (i,j)
-         end do
-         length (i) = sum(length_m (i,:))
-      end do
-      
-      center_pix = minloc(length,dim=1)
-      
-    END FUNCTION center_pix
     
     ! --------------------------------------------------------------------------------------
 
@@ -1478,35 +1307,6 @@ contains
       deallocate (tile_id)
       
     END SUBROUTINE process_peatmap
-    !-------------------------------------------------------------
-    
-    
-    INTEGER FUNCTION soil_class (min_perc)
-      
-      ! Function returns a unique soil class [1-100], 
-      
-      IMPLICIT NONE
-      type(mineral_perc), intent (in)  :: min_perc
-      !real, intent (in) :: clay_perc,silt_perc,sand_perc
-      integer :: clay_row, sand_row, silt_row
-      
-      clay_row = ceiling((100.- min_perc%clay_perc)/10.)
-      if(clay_row == 0 ) clay_row = 1
-      if(clay_row == 11) clay_row = 10
-      
-      sand_row = ceiling((min_perc%sand_perc)/10.)
-      if(sand_row == 0 ) sand_row = 1
-      if(sand_row == 11) sand_row = 10
-      
-      silt_row = ceiling((min_perc%silt_perc)/10.)
-      if(silt_row == 0 ) silt_row = 1
-      if(silt_row == 11) silt_row = 10
-      
-      if(clay_row == 1) soil_class=1
-      
-      if(clay_row > 1) soil_class=   &
-           (clay_row - 1)*(clay_row - 1) + (clay_row - sand_row) + silt_row
-      
-    end FUNCTION soil_class
+
         
 end module mod_HWSD_STATSGO2_texture
