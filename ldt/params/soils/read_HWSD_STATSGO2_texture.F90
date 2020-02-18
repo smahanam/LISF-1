@@ -40,8 +40,6 @@ module mod_HWSD_STATSGO2_texture
   public  read_HWSD_STATSGO2_texture
 
   character*300 :: c_data = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
-
-
   
 contains
 

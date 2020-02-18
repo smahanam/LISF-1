@@ -20,6 +20,7 @@ dirs := . \
 ../params/irrigation \
 ../params/catchment/Shared/ \
 ../params/catchment/F25 \
+../params/catchment/J32 \
 ../params/CLM2 \
 ../params/GeoWRSI \
 ../params/FLAKE \

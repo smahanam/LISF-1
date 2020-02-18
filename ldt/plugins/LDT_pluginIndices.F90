@@ -171,7 +171,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_fasstId       = "FASST"
    character*50, public,  parameter :: LDT_sheelsId      = "SHEELS"
    character*50, public,  parameter :: LDT_clsmf25Id     = "CLSMF2.5"
-!   character*50, public,  parameter :: LDT_clsmj32Id     = "CLSMJ3.2"  # TURN THIS ON, JUST TO HAVE ON .
+   character*50, public,  parameter :: LDT_clsmj32Id     = "CLSMJ3.2"  
    character*50, public,  parameter :: LDT_GeoWRSI2Id    = "GeoWRSI.2"
    character*50, public,  parameter :: LDT_rdhm356Id     = "RDHM.3.5.6"
    character*50, public,  parameter :: LDT_sachtet356Id  = "SACHTET.3.5.6"

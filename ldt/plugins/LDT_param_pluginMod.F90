@@ -57,7 +57,7 @@ contains
 
     use Noah_parmsMod
     use CLSMF25_parmsMod
-!    use CLSMJ32_parmsMod
+    use CLSMJ32_parmsMod
     use RDHM_parmsMod
     use SACHTET_parmsMod
     use Snow17_parmsMod
@@ -135,12 +135,12 @@ contains
          catchmentParms_writeData)
 
 ! CLSM J3.2 LSM:
-!    call registerlsmparamprocinit(trim(LDT_clsmj32Id)//char(0),&
-!         catchmentParms_init)
-!    call registerlsmparamprocwriteheader(trim(LDT_clsmj32Id)//char(0),&
-!         catchmentParms_writeHeader)
-!    call registerlsmparamprocwritedata(trim(LDT_clsmj32Id)//char(0),&
-!         catchmentParms_writeData)
+    call registerlsmparamprocinit(trim(LDT_clsmj32Id)//char(0),&
+         catchmentParms_init_J32)
+    call registerlsmparamprocwriteheader(trim(LDT_clsmj32Id)//char(0),&
+         catchmentParms_writeHeader_J32)
+    call registerlsmparamprocwritedata(trim(LDT_clsmj32Id)//char(0),&
+         catchmentParms_writeData_J32)
 
   ! RDHM:
 
@@ -368,7 +368,6 @@ contains
 
     external read_ALMIPII_lc
     external read_CLSMF25_lc
-!    external read_CLSMJ32_lc
     external read_VIC411_lc
     external read_VIC412_lc
     external read_ISA_lc
@@ -419,8 +418,8 @@ contains
     call registerreadlc(trim(LDT_ALMIPIIlcId)//char(0), read_ALMIPII_lc)
   ! Catchment LSM - F2.5:
     call registerreadlc(trim(LDT_clsmf25lcId)//char(0), read_CLSMF25_lc)
-  ! Catchment LSM - J3.2:
-!    call registerreadlc(trim(LDT_clsmj32lcId)//char(0), read_CLSMJ32_lc)
+  ! Catchment LSM - J3.2 is same as F2.5: 
+
   ! VIC-4.1.1:
     call registerreadlc(trim(LDT_vic411lcId)//char(0), read_VIC411_lc)
   ! VIC-4.1.2:
@@ -666,9 +665,6 @@ contains
   ! CLSM Fortuna 2.5 readers
     external read_CLSMF25_porosity
 
-  ! CLSM Jason 3.2 readers
-!    external read_CLSMJ32_porosity
-
   ! Constant cases
     external set_CONSTANT_texture_attribs
     external read_CONSTANT_texture, read_CONSTANT_soilfractions, read_CONSTANT_porosity
@@ -768,9 +764,6 @@ contains
 
 !== Catchment-Fortuna 2.5: ==
     call registerreadporosity(trim(LDT_clsmf25Id)//char(0),read_CLSMF25_porosity)
-
-!== Catchment-Jason 3.2: ==
-!    call registerreadporosity(trim(LDT_clsmj32Id)//char(0),read_CLSMJ32_porosity)
 
 !== Special case study:
     call registersettextureattribs(trim(LDT_specialSoilId)//char(0),set_Special_texture_attribs)
