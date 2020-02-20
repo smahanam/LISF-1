@@ -33,7 +33,7 @@ module CLSMJ32_parmsMod
   use LDT_albedoMod
   use LDT_paramDataMod
   use LDT_logMod
-  use catch_util
+  use CLSM_util
 
   implicit none
 
@@ -121,7 +121,7 @@ contains
     use LDT_logMod,    only : LDT_verify
     use LDT_paramOptCheckMod, only: &! LDT_catchparmsOptChecks, &
                        LDT_gridOptChecks
-    use catch_util,    only : init_geos2lis_mapping, LDT_g5map
+    use CLSM_util,     only : init_geos2lis_mapping, LDT_g5map
 
 ! !DESCRIPTION:
 !
