@@ -3,7 +3,7 @@
 
 module catch_routines
 
-  use LDT_catch_util
+  use catch_util
   use get_DeLannoy_SoilClass, ONLY:  & 
        mineral_perc, GDL_center_pix,         &
        n_SoilClasses => n_DeLannoy_classes,  &
@@ -17,6 +17,8 @@ module catch_routines
   logical, parameter ::  bug =.false.
   logical, parameter :: error_file=.false. 
   real, parameter :: slice=0.1, lim =5.,grzdep =1.1
+
+  include 'netcdf.inc'	
 
   contains
 
@@ -454,22 +456,22 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
 	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n) ,   &
 	     wpwet_surf(n),poros_surf(n), pmap(n)
      if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then   
-      write(20,'(i8,i8,f5.2,11(2x,e14.7))')         &
-                     tindex2(n),pfaf2(n),gnu,       &
-                     ars1(n),ars2(n),ars3(n),         &
-                     ara1(n),ara2(n),ara3(n),ara4(n), &
-                     arw1(n),arw2(n),arw3(n),arw4(n) 
-
-      write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(n),bf2(n),bf3(n)
-      write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-          tsa1(n),tsa2(n),tsb1(n),tsb2(n)
-
-      write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')  &
-	     tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),      &
-             BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),       &
-	     grav_vec(n),soc_vec(n),poc_vec(n),                            &
-	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n),    &
-	     wpwet_surf(n),poros_surf(n), pmap(n)
+!      write(20,'(i8,i8,f5.2,11(2x,e14.7))')         &
+!                     tindex2(n),pfaf2(n),gnu,       &
+!                     ars1(n),ars2(n),ars3(n),         &
+!                     ara1(n),ara2(n),ara3(n),ara4(n), &
+!                     arw1(n),arw2(n),arw3(n),arw4(n) 
+!
+!      write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(n),bf2(n),bf3(n)
+!      write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
+!          tsa1(n),tsa2(n),tsb1(n),tsb2(n)
+!
+!      write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')  &
+!	     tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),      &
+!             BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),       &
+!	     grav_vec(n),soc_vec(n),poc_vec(n),                            &
+!	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n),    &
+!	     wpwet_surf(n),poros_surf(n), pmap(n)
 
       if (allocated (parms4file)) then
          parms4file (n, 1) = ara1(n)
@@ -542,21 +544,21 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
             !                BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k) 
          endif
          
-         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
-              tindex2(n),pfaf2(n),gnu,   &
-              ars1(k),ars2(k),ars3(k),                   &
-              ara1(k),ara2(k),ara3(k),ara4(k),           &
-              arw1(k),arw2(k),arw3(k),arw4(k) 
-        write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
-        write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-          tsa1(k),tsa2(k),tsb1(k),tsb2(k)
+!         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
+!              tindex2(n),pfaf2(n),gnu,   &
+!              ars1(k),ars2(k),ars3(k),                   &
+!              ara1(k),ara2(k),ara3(k),ara4(k),           &
+!              arw1(k),arw2(k),arw3(k),arw4(k) 
+!        write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
+!        write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
+!          tsa1(k),tsa2(k),tsb1(k),tsb2(k)
 
-        write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)') &
-              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),      &
-              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
-              grav_vec(k),soc_vec(k),poc_vec(k),                            &
-              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
-	      wpwet_surf(k),poros_surf(k), pmap (k)
+!        write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)') &
+!              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),      &
+!              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
+!              grav_vec(k),soc_vec(k),poc_vec(k),                            &
+!              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
+!	      wpwet_surf(k),poros_surf(k), pmap (k)
 
         if (allocated (parms4file)) then
            parms4file (n, 1) = ara1(k)
@@ -604,20 +606,20 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
             endif
          enddo
          write (41,*)n,k
-         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
-              tindex2(n),pfaf2(n),gnu,   &
-              ars1(k),ars2(k),ars3(k),                   &
-              ara1(k),ara2(k),ara3(k),ara4(k),           &
-              arw1(k),arw2(k),arw3(k),arw4(k) 
-         write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
-         write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-              tsa1(k),tsa2(k),tsb1(k),tsb2(k)
-         write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')&
-              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),         &
-              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
-              grav_vec(k),soc_vec(k),poc_vec(k),                            &
-              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
-	      wpwet_surf(k),poros_surf(k), pmap(k)
+!         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
+!              tindex2(n),pfaf2(n),gnu,   &
+!              ars1(k),ars2(k),ars3(k),                   &
+!              ara1(k),ara2(k),ara3(k),ara4(k),           &
+!              arw1(k),arw2(k),arw3(k),arw4(k) 
+!         write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
+!         write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
+!              tsa1(k),tsa2(k),tsb1(k),tsb2(k)
+!         write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')&
+!              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),         &
+!              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
+!              grav_vec(k),soc_vec(k),poc_vec(k),                            &
+!              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
+!	      wpwet_surf(k),poros_surf(k), pmap(k)
 
          if (allocated (parms4file)) then
             parms4file (n, 1) = ara1(k)

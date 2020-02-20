@@ -33,7 +33,7 @@ module CLSMJ32_parmsMod
   use LDT_albedoMod
   use LDT_paramDataMod
   use LDT_logMod
-  use LDT_catch_util
+  use catch_util
 
   implicit none
 
@@ -98,8 +98,10 @@ module CLSMJ32_parmsMod
      type(LDT_paramEntry) :: tsb2
      type(LDT_paramEntry) :: atau
      type(LDT_paramEntry) :: btau
-     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM)
-     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM)
+     type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM F2.5)
 
   end type clsmJ32_type_dec
 
@@ -153,11 +155,8 @@ contains
     ! (2) Derive soil types, atau and btau
     ! ------------------------------------
 
-    
-
     ! (3) Derive CLSM model - the parameters thta were in ar.new, bf.dat, ts.dat 
-    ! --------------------------------------------------------------------------
-
+    ! ---------------------------------------------------------------------------
 
     do n=1,LDT_rc%nnest  
 
@@ -203,6 +202,14 @@ contains
             units="mm", &
             full_name="CLSM depth to bedrock" )
 
+       call set_param_attribs(CLSMJ32_struc(n)%albnirdir,"ALBNIRDIR",&
+            vlevels=12, &
+            full_name="CLSM alb near-IR (direct) scale factor" )
+
+       call set_param_attribs(CLSMJ32_struc(n)%albvisdir,"ALBVISDIR",&
+            vlevels=12, &
+            full_name="CLSM alb visible (direct) scale factor" )
+
        call set_param_attribs(CLSMJ32_struc(n)%albnirdif,"ALBNIRDIF",&
             vlevels=12, &
             full_name="CLSM alb near-IR (diffuse) scale factor" )
@@ -233,6 +240,12 @@ contains
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%gnu%vlevels))
 
+       allocate(CLSMJ32_struc(n)%albnirdir%value(&
+            LDT_rc%lnc(n),LDT_rc%lnr(n),&
+            CLSMJ32_struc(n)%albnirdir%vlevels))
+       allocate(CLSMJ32_struc(n)%albvisdir%value(&
+            LDT_rc%lnc(n),LDT_rc%lnr(n),&
+            CLSMJ32_struc(n)%albvisdir%vlevels))
        allocate(CLSMJ32_struc(n)%albnirdif%value(&
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%albnirdif%vlevels))
@@ -529,7 +542,7 @@ contains
     
     do n=1,LDT_rc%nnest
        write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albnirfile)
-       call read_CLSMJ32_albnir(&
+       call read_CLSMF25_albnir(&
             n,CLSMJ32_struc(n)%albnirdir%value, &   ! Direct
             CLSMJ32_struc(n)%albnirdif%value, &   ! Diffuse
             LDT_LSMparam_struc(n)%landmask%value )
@@ -537,7 +550,7 @@ contains
             trim(CLSMJ32_struc(n)%albnirfile)
        
        write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albvisfile)
-       call read_CLSMJ32_albvis(&
+       call read_CLSMF25_albvis(&
             n,CLSMJ32_struc(n)%albvisdir%value, &   ! Direct
             CLSMJ32_struc(n)%albvisdif%value, &   ! Diffuse
             LDT_LSMparam_struc(n)%landmask%value )

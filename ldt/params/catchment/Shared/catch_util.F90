@@ -6,7 +6,7 @@
 !-------------------------END NOTICE -- DO NOT EDIT-----------------------
 #include "LDT_misc.h"
 
-module LDT_catch_util
+module catch_util
 
   use LDT_coreMod,  only            : LDT_rc, LDT_domain
   use LDT_numericalMethodsMod, only : LDT_quicksort
@@ -507,4 +507,4 @@ module LDT_catch_util
 !
 
  
-end module LDT_catch_util
+end module catch_util
