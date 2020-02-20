@@ -3,167 +3,63 @@
 
 module CLSM_param_routines
 
-  use CLSM_util
-  use get_DeLannoy_SoilClass, ONLY:  & 
+  use CLSM_util, ONLY: NC_VarID, &
+       c_data => G5_BCSDIR,      &
+       LDT_g5map
+  use get_DeLannoy_SoilClass, ONLY:          & 
        mineral_perc, GDL_center_pix,         &
        n_SoilClasses => n_DeLannoy_classes,  &
-       soil_class => DeLannoy_class
+       soil_class    => DeLannoy_class
   implicit none
 
+  private
+
+  public gnu 
+  
   real, parameter :: gnu = 1.0, zks = 2.0
-  character*300 :: c_data = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
   integer, PARAMETER :: nbdep=150, NAR=1000,nwt=81,nrz=41
   logical :: preserve_soiltype = .false.
   logical, parameter ::  bug =.false.
   logical, parameter :: error_file=.false. 
   real, parameter :: slice=0.1, lim =5.,grzdep =1.1
 
-  include 'netcdf.inc'	
-
   contains
 
 !----------------------------------------------------------------------
 
-  SUBROUTINE cti_stat_file (ease_grid,gfile, MaskFile)
+  SUBROUTINE read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
 
     IMPLICIT NONE
-    INTEGER, PARAMETER :: nbcat=36716,nofvar=6, SRTM_maxcat = 291284
-    INTEGER :: n,i,ip, itext(SRTM_maxcat,2),ix, jx,ip2, maxcat
-    INTEGER :: typ,pfs,ig,jg,j_dum,ierr,indx_dum,indr1,indr2,indr3
-    INTEGER*8 :: idum8
-    INTEGER :: ncat,i_dum
-    INTEGER, dimension(:), allocatable :: colin2cat 
-    INTEGER, allocatable, dimension (:) :: id,indx_old
-    integer :: idum1,idum2
-    real :: dum1,dum2,dum3,dum4,dum5,dum6
-    integer :: nc_gcm,nr_gcm,nc_ocean,nr_ocean
-    REAL :: lat,lon,fr_gcm,fr_cat,tarea
-    REAL :: fr
+    real, dimension (:), intent (inout) :: TOPMEAN, TOPVAR, TOPSKEW
+    INTEGER, PARAMETER :: nofvar= 3
+    INTEGER :: n, i, ncat,idum2
     REAL, allocatable, dimension (:,:) :: var
-    REAL, allocatable, dimension (:) :: dummy
-    logical :: ease_grid
-    CHARACTER*20 :: version
-    character*100 :: fname
-    character(*) :: gfile
-    character(*) :: MaskFile
-    !
+    real :: dum1,dum2,dum3,dum4,dum5,dum6
+    INTEGER*8 :: idum8
 
-    fname=trim(gfile)//'.til'
-    open (10,file=fname,status='old',action='read',form='formatted')
-    read (10,*)ip
-    allocate(indx_old(ip))
-    allocate(id(ip))
-    indx_old=0
-    id=0
- 
-    read (10,*)j_dum
-    read (10,'(a)')version
-    read (10,*)nc_gcm
-    read (10,*)nr_gcm
-    read (10,'(a)')version
-    read (10,*)nc_ocean
-    read (10,*)nr_ocean
-    
-    do n = 1,ip
-      if (ease_grid) then  
-         read(10,*,IOSTAT=ierr) typ,pfs,lon,lat,ig,jg,fr_gcm,i_dum
-      else
-	 read(10,'(I10,3E20.12,9(2I10,E20.12,I10))',IOSTAT=ierr)     &    
-            typ,tarea,lon,lat,ig,jg,fr_gcm,indx_dum,pfs,i_dum,fr_cat,j_dum
-      endif
-
-       id(n)=pfs
-       indx_old(n) = i_dum
-       if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) indx_old(n) = pfs
-       if (typ == 100) ip2 = n
-       if(ierr /= 0)write (*,*)'Problem reading',fname
-       if(ierr /= 0) stop
-    end do
-    
-    close (10,status='keep')
-!
-    allocate(colin2cat(1:6000000))
-    colin2cat=0
-    if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) then
-       open (10,file=trim(c_data)//'/SRTM-TopoData/Pfafcatch-routing.dat',   &
-            form='formatted', status='old',action='read')       
-    else
-       open (10,file=trim(c_data)//'/catchment.def',   &
-            form='formatted', status='old',action='read')
-    endif
-
-    read (10,*) ncat
-    do n=1,ncat
-        if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) then
-           read (10,*)indx_dum,idum8
-        else
-           read (10,*)j_dum,indx_dum
-        endif
-       colin2cat(indx_dum)=n
-    end do
-    close (10,status='keep')
-
-    if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) then
-       open (10,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
-            form='formatted', status='old',action='read')
-    else
-       open (10,file=trim(c_data)//'/cti_stats.dat',       &
-            form='formatted', status='old',action='read')
-    endif
-
-    fname='clsm/cti_stats.dat'
-    open (20,file=fname,form='formatted', status='unknown')
-    write (20,*)ip2
+    open (10,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
+         form='formatted', status='old',action='read')
 
     read (10,*)ncat
     allocate(var(1:ncat,1:nofvar))
-    var=0.
-    pfs=1
-    do i=1,ncat
-       if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) then
-          read(10,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
-          idum1 = n
-       else
-          read(10,'(i8,i8,5(1x,f8.4),i5,e18.3)')n,idum1,dum1,dum2,dum3,dum4,dum5,idum2,dum6
-       endif
-       if(colin2cat(idum1).gt.0)then
-          itext(pfs,1)=idum1
-          var(pfs,1)=dum1
-          var(pfs,2)=dum2
-          var(pfs,3)=dum3
-          var(pfs,4)=dum4
-          var(pfs,5)=dum5
-          itext(pfs,2)=idum2
-          var(pfs,6)=dum6
-          pfs=pfs+1
-       endif
+
+    do i = 1, ncat
+       read(10,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
+          var(i,1)=dum1
+          var(i,2)=dum2
+          var(i,3)=dum5
     end do
 
     close (10,status='keep')
-!
-    do i=1,ip
 
-       if((i > ip1).and.(i <= ip2))then
-          if(((id(i).ge.5000142).and.(id(i).le.5025829)))then
-             write(20,'(i8,i8,5(1x,f8.4),i5,e18.3)')i,id(i),var(indx_old(i),1)*11.1/9.1,var(indx_old(i),2), &
-                  var(indx_old(i),3),var(indx_old(i),4),var(indx_old(i),5),itext(indx_old(i),2),            &
-                  var(indx_old(i),6)
-          else
-
-             write(20,'(i8,i8,5(1x,f8.4),i5,e18.3)')i,id(i),var(indx_old(i),1),var(indx_old(i),2), & 
-                  var(indx_old(i),3),var(indx_old(i),4),var(indx_old(i),5),itext(indx_old(i),2),   &
-                  var(indx_old(i),6)
-          endif
-       endif
-       
+    do i = 1,LDT_g5map%NT_GEOS 
+       TOPMEAN(i) = var(LDT_g5map%catid_index(i),1)
+       TOPVAR (i) = var(LDT_g5map%catid_index(i),2) * var(LDT_g5map%catid_index(i),2)
+       TOPSKEW(i) = var(LDT_g5map%catid_index(i),3) * var(LDT_g5map%catid_index(i),2) * TOPVAR (i)
     end do
-    close (20,status='keep')
-    deallocate (colin2cat,var,id,indx_old)
 
-  END SUBROUTINE cti_stat_file
+  END SUBROUTINE read_cti_stats
  
-!--------------------------------------------------------------------
-
 !--------------------------------------------------------------------
 
   SUBROUTINE create_model_para_woesten (Maskfile)
@@ -435,24 +331,24 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
         endif
      END DO
 
-     inquire(file='clsm/catch_params.nc4', exist=file_exists)
-
-     if(file_exists) then
-        status = NF_OPEN ('clsm/catch_params.nc4', NF_WRITE, ncid) ; VERIFY_(STATUS)
-        allocate (parms4file (1:nbcatch, 1:25))
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), BEE  (:)) ; VERIFY_(STATUS) 
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), COND (:)) ; VERIFY_(STATUS) 
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), POROS(:)) ; VERIFY_(STATUS) 
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), PSIS (:)) ; VERIFY_(STATUS)    
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), WPWET(:)) ; VERIFY_(STATUS) 
-        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), soildepth (:)) ; VERIFY_(STATUS) 
-        parms4file (:,12) = BEE      (:)
-        parms4file (:,16) = COND     (:)
-        parms4file (:,18) = POROS    (:)
-        parms4file (:,19) = PSIS     (:)
-        parms4file (:,24) = wpwet    (:)
-        parms4file (:,25) = soildepth(:)
-     endif
+!    inquire(file='clsm/catch_params.nc4', exist=file_exists)
+!
+!     if(file_exists) then
+!        status = NF_OPEN ('clsm/catch_params.nc4', NF_WRITE, ncid) ; VERIFY_(STATUS)
+!        allocate (parms4file (1:nbcatch, 1:25))
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), BEE  (:)) ; VERIFY_(STATUS) 
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), COND (:)) ; VERIFY_(STATUS) 
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), POROS(:)) ; VERIFY_(STATUS) 
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), PSIS (:)) ; VERIFY_(STATUS)    
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), WPWET(:)) ; VERIFY_(STATUS) 
+!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), soildepth (:)) ; VERIFY_(STATUS) 
+!        parms4file (:,12) = BEE      (:)
+!        parms4file (:,16) = COND     (:)
+!        parms4file (:,18) = POROS    (:)
+!        parms4file (:,19) = PSIS     (:)
+!        parms4file (:,24) = wpwet    (:)
+!        parms4file (:,25) = soildepth(:)
+!     endif
 
      rewind(10)
 
@@ -818,35 +714,35 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
          close(41,status='keep')
       endif
 
-      if(file_exists) then
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA1' ) ,(/1/),(/nbcatch/), parms4file (:, 1)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA2' ) ,(/1/),(/nbcatch/), parms4file (:, 2)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA3' ) ,(/1/),(/nbcatch/), parms4file (:, 3)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA4' ) ,(/1/),(/nbcatch/), parms4file (:, 4)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS1' ) ,(/1/),(/nbcatch/), parms4file (:, 5)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS2' ) ,(/1/),(/nbcatch/), parms4file (:, 6)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS3' ) ,(/1/),(/nbcatch/), parms4file (:, 7)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW1' ) ,(/1/),(/nbcatch/), parms4file (:, 8)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW2' ) ,(/1/),(/nbcatch/), parms4file (:, 9)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW3' ) ,(/1/),(/nbcatch/), parms4file (:,10)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW4' ) ,(/1/),(/nbcatch/), parms4file (:,11)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), parms4file (:,12)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF1'  ) ,(/1/),(/nbcatch/), parms4file (:,13)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF2'  ) ,(/1/),(/nbcatch/), parms4file (:,14)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF3'  ) ,(/1/),(/nbcatch/), parms4file (:,15)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), parms4file (:,16)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'GNU'  ) ,(/1/),(/nbcatch/), parms4file (:,17)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), parms4file (:,18)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), parms4file (:,19)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA1' ) ,(/1/),(/nbcatch/), parms4file (:,20)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA2' ) ,(/1/),(/nbcatch/), parms4file (:,21)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB1' ) ,(/1/),(/nbcatch/), parms4file (:,22)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB2' ) ,(/1/),(/nbcatch/), parms4file (:,23)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), parms4file (:,24)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), parms4file (:,25)) ; VERIFY_(STATUS) 
-         STATUS   = NF_CLOSE (NCID) ; VERIFY_(STATUS)
-         DEALLOCATE (parms4file)
-      endif
+!      if(file_exists) then
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA1' ) ,(/1/),(/nbcatch/), parms4file (:, 1)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA2' ) ,(/1/),(/nbcatch/), parms4file (:, 2)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA3' ) ,(/1/),(/nbcatch/), parms4file (:, 3)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA4' ) ,(/1/),(/nbcatch/), parms4file (:, 4)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS1' ) ,(/1/),(/nbcatch/), parms4file (:, 5)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS2' ) ,(/1/),(/nbcatch/), parms4file (:, 6)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS3' ) ,(/1/),(/nbcatch/), parms4file (:, 7)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW1' ) ,(/1/),(/nbcatch/), parms4file (:, 8)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW2' ) ,(/1/),(/nbcatch/), parms4file (:, 9)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW3' ) ,(/1/),(/nbcatch/), parms4file (:,10)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW4' ) ,(/1/),(/nbcatch/), parms4file (:,11)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), parms4file (:,12)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF1'  ) ,(/1/),(/nbcatch/), parms4file (:,13)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF2'  ) ,(/1/),(/nbcatch/), parms4file (:,14)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF3'  ) ,(/1/),(/nbcatch/), parms4file (:,15)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), parms4file (:,16)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'GNU'  ) ,(/1/),(/nbcatch/), parms4file (:,17)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), parms4file (:,18)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), parms4file (:,19)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA1' ) ,(/1/),(/nbcatch/), parms4file (:,20)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA2' ) ,(/1/),(/nbcatch/), parms4file (:,21)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB1' ) ,(/1/),(/nbcatch/), parms4file (:,22)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB2' ) ,(/1/),(/nbcatch/), parms4file (:,23)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), parms4file (:,24)) ; VERIFY_(STATUS) 
+!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), parms4file (:,25)) ; VERIFY_(STATUS) 
+!         STATUS   = NF_CLOSE (NCID) ; VERIFY_(STATUS)
+!         DEALLOCATE (parms4file)
+!      endif
 
   END SUBROUTINE create_model_para_woesten
 

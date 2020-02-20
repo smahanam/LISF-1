@@ -33,7 +33,9 @@ module CLSMJ32_parmsMod
   use LDT_albedoMod
   use LDT_paramDataMod
   use LDT_logMod
-  use CLSM_util
+  use CLSM_util, only : init_geos2lis_mapping, LDT_g5map, G52LIS, LISv2g
+  use CLSM_param_routines, only : &
+       gnu
 
   implicit none
 
@@ -72,6 +74,7 @@ module CLSMJ32_parmsMod
      real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
      real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config
 
+     type(LDT_paramEntry) :: porosity       ! Soil porosity
      type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
      type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
      type(LDT_paramEntry) :: wpwet       ! wilting point wetness
@@ -90,8 +93,8 @@ module CLSMJ32_parmsMod
      type(LDT_paramEntry) :: arw3
      type(LDT_paramEntry) :: arw4
      type(LDT_paramEntry) :: bf1         ! Baseflow topographic params
-     type(LDT_paramEntry) :: bf2
-     type(LDT_paramEntry) :: bf3
+     type(LDT_paramEntry) :: bf2 
+     type(LDT_paramEntry) :: bf3 
      type(LDT_paramEntry) :: tsa1        ! Water transfer parameters
      type(LDT_paramEntry) :: tsa2
      type(LDT_paramEntry) :: tsb1        
@@ -121,7 +124,7 @@ contains
     use LDT_logMod,    only : LDT_verify
     use LDT_paramOptCheckMod, only: &! LDT_catchparmsOptChecks, &
                        LDT_gridOptChecks
-    use CLSM_util,     only : init_geos2lis_mapping, LDT_g5map
+
 
 ! !DESCRIPTION:
 !
@@ -136,10 +139,14 @@ contains
 !
 !EOP
     implicit none
-    integer      :: n, c, r, ntiles, i
+    integer      :: n, c, r, ntiles, i, glpnr, glpnc
     integer      :: rc
     character*50 :: catchparms_proj
     real         :: catchparms_gridDesc(LDT_rc%nnest, 20)
+    real         :: param_grid(20)
+    real, pointer, dimension (:) :: ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
+         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2,       &
+         ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH
 
 ! ________________________________________________________
 
@@ -155,14 +162,23 @@ contains
     ! (2) Derive soil types, atau and btau
     ! ------------------------------------
 
-    ! (3) Derive CLSM model - the parameters thta were in ar.new, bf.dat, ts.dat 
+    ! (3) Derive CLSM model - the parameters that were in ar.new, bf.dat, ts.dat 
     ! ---------------------------------------------------------------------------
 
+    ! (4) write out gridded arrays in LIS input file
+    ! ----------------------------------------------
+    
     do n=1,LDT_rc%nnest  
+
+       param_grid(:) = LDT_rc%mask_gridDesc(n,:)
+       glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
+       glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9))  + 1
+
+       call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY", &
+            full_name="CLSM soil porosity")
 
        call set_param_attribs(CLSMJ32_struc(n)%bexp,"BEXP", &
             full_name="CLSM Bexp Clapp-Hornberger parameter")
-
        call set_param_attribs(CLSMJ32_struc(n)%psisat,"PSISAT", &
             full_name="CLSM saturated soil moisture potential")
 
@@ -426,95 +442,47 @@ contains
     do n=1,LDT_rc%nnest
        CLSMJ32_struc(n)%catchparms_gridDesc = catchparms_gridDesc(n,:)
     enddo
+
 !-- Read in Catchment Parameter Datasets:
+
     do n=1,LDT_rc%nnest
 
        call LDT_gridOptChecks( n, "CLSMJ32", &
             CLSMJ32_struc(n)%catchparms_gridtransform, &
             CLSMJ32_struc(n)%catchparms_proj, &
             CLSMJ32_struc(n)%catchparms_gridDesc(9) )
-              
-    !- Vertical transmissivity (topo:ar) parameter data:
-    !   write(LDT_logunit,*) "Reading gnu values from "//trim(CLSMJ32_struc(n)%topo_ar_file)
-    !   call read_CLSMJ32_gnuparam(&
-    !        n,CLSMJ32_struc(n)%gnu%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading gnu values."
-    !- Topographic parameters ("ar"):
-    !   write(LDT_logunit,*) "Reading ars values from "//trim(CLSMJ32_struc(n)%topo_ar_file)
-    !   call read_CLSMJ32_arsparams(&
-    !        n,CLSMJ32_struc(n)%ars1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%ars2%value(:,:,1),&
-    !        CLSMJ32_struc(n)%ars3%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading ars values."
-    !   write(LDT_logunit,*) "Reading ara values from "//trim(CLSMJ32_struc(n)%topo_ar_file)
-    !   call read_CLSMJ32_araparams(&
-    !        n,CLSMJ32_struc(n)%ara1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%ara2%value(:,:,1),&
-    !        CLSMJ32_struc(n)%ara3%value(:,:,1),&
-    !        CLSMJ32_struc(n)%ara4%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading ara values."
-    !   write(LDT_logunit,*) "Reading arw values from "//trim(CLSMJ32_struc(n)%topo_ar_file)
-    !   call read_CLSMJ32_arwparams(&
-    !        n,CLSMJ32_struc(n)%arw1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%arw2%value(:,:,1),&
-    !        CLSMJ32_struc(n)%arw3%value(:,:,1),&
-    !        CLSMJ32_struc(n)%arw4%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading arw values."
 
-    !- Baseflow timescale parameters:
-    !   write(LDT_logunit,*) "Reading baseflow (bf) values from "//trim(CLSMJ32_struc(n)%topo_bf_file)
-    !   call read_CLSMJ32_bfparams(&
-    !        n,CLSMJ32_struc(n)%bf1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%bf2%value(:,:,1),&
-    !        CLSMJ32_struc(n)%bf3%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading baseflow (bf) values."
-
-    !- Water transfer timescale parameters:
-    !   write(LDT_logunit,*) "Reading ts values from "//trim(CLSMJ32_struc(n)%topo_ts_file)
-    !   call read_CLSMJ32_tsparams(&
-    !        n,CLSMJ32_struc(n)%tsa1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%tsa2%value(:,:,1),&
-    !        CLSMJ32_struc(n)%tsb1%value(:,:,1),&
-    !        CLSMJ32_struc(n)%tsb2%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading ts values."
-
-    !- Surface layer timescale data:
-    !   write(LDT_logunit,*) "Reading tau values from "//trim(CLSMJ32_struc(n)%sltsfile)
-    !   call read_CLSMJ32_tauparams(&
-    !        n,CLSMJ32_struc(n)%atau%value(:,:,1),&
-    !        CLSMJ32_struc(n)%btau%value(:,:,1),&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-    !   write(LDT_logunit,*) "Done reading tau values."
-
-
-    !   call read_CLSMJ32_psisat(&
-    !        n,CLSMJ32_struc(n)%psisat%value,&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-
-    !   call read_CLSMJ32_bexp(&
-    !        n,CLSMJ32_struc(n)%bexp%value,&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-
-    !   call read_CLSMJ32_wpwet(&
-    !        n,CLSMJ32_struc(n)%wpwet%value,&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-
-    !   call read_CLSMJ32_ksat(&
-    !        n,CLSMJ32_struc(n)%ksat%value,&
-    !        LDT_LSMparam_struc(n)%landmask%value)
-       
-    !   call read_CLSMJ32_bedrockdepth(&
-    !        n,CLSMJ32_struc(n)%bdrckdpth%value,&
-    !        LDT_LSMparam_struc(n)%landmask%value)
+       CLSMJ32_struc(n)%ars1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars1))
+       CLSMJ32_struc(n)%ars2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars2))
+       CLSMJ32_struc(n)%ars3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars3))
+       CLSMJ32_struc(n)%ara1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara1))
+       CLSMJ32_struc(n)%ara2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara2))
+       CLSMJ32_struc(n)%ara3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara3))
+       CLSMJ32_struc(n)%ara4%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara4))
+       CLSMJ32_struc(n)%arw1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw1))
+       CLSMJ32_struc(n)%arw2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw2))
+       CLSMJ32_struc(n)%arw3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw3))
+       CLSMJ32_struc(n)%arw4%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw4))
+       CLSMJ32_struc(n)%bf1%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf1 ))
+       CLSMJ32_struc(n)%bf2%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf2 ))
+       CLSMJ32_struc(n)%bf3%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf3 ))
+       CLSMJ32_struc(n)%tsa1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsa1))
+       CLSMJ32_struc(n)%tsa2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsa2))
+       CLSMJ32_struc(n)%tsb1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb1))
+       CLSMJ32_struc(n)%tsb2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb2))
+       CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau))
+       CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau))
+       CLSMJ32_struc(n)%psisat%value   (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (psis))
+       CLSMJ32_struc(n)%bexp%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bee ))
+       CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (wpwet))
+       CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (Ks))
+       CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
+       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
+       soildepth(:) = gnu
+       CLSMJ32_struc(n)%gnu%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
        
        call populate_param_attribs( "ALBNIRDIFF", &
-            "Alb near-IR diffuse scale factor", "-",  &
+           "Alb near-IR diffuse scale factor", "-",  &
             CLSMJ32_struc(n)%albnirdir, &
             CLSMJ32_struc(n)%albnirdif )
        
@@ -699,6 +667,8 @@ contains
     call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ksat)
     call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bexp)
     call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%wpwet)
+    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%porosity)  ! overwriting LDT_soil_struc.F90 created variable
+
 !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%quartz)
 !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%soildepth)
     call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bdrckdpth)
@@ -766,5 +736,18 @@ contains
    paramEntry%standard_name = trim(name_temp)
 
   end subroutine set_param_attribs
+
+  ! ---------------------------------------
+
+  SUBROUTINE create_CLSM_PARAMS
+
+    implicit none
+
+    real, dimension (:), allocatable :: TOPMEAN, TOPVAR, TOPSKEW
+      
+!         ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4,ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3,   &
+!         tsa1, tsa2,tsb1, tsb2, 
+
+  end SUBROUTINE create_CLSM_PARAMS
 
 end module CLSMJ32_parmsMod

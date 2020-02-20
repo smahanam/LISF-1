@@ -27,7 +27,8 @@ module mod_HWSD_STATSGO2_texture
   use LDT_constantsMod, ONLY:      &
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
-  use CLSM_util, only : LDT_RegridRaster, NC_VarID, GEOS2LIS
+  use CLSM_util, only : LDT_RegridRaster, NC_VarID, GEOS2LIS, &
+       c_data => G5_BCSDIR
   use get_DeLannoy_SoilClass, ONLY :  &
        mineral_perc, GDL_center_pix, &
        n_SoilClasses => n_DeLannoy_classes, & 
@@ -38,8 +39,6 @@ module mod_HWSD_STATSGO2_texture
 
   private
   public  read_HWSD_STATSGO2_texture
-
-  character*300 :: c_data = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
   
 contains
 

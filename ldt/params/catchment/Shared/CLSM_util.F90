@@ -23,7 +23,8 @@ module CLSM_util
   include 'netcdf.inc'	
 
   private
-  public  LDT_RegridRaster, NC_VarID, GEOS2LIS, LDT_g5map, init_geos2lis_mapping
+  public  LDT_RegridRaster, NC_VarID, GEOS2LIS, LDT_g5map, init_geos2lis_mapping, SRTM_maxcat, & 
+       nc_g5_rst, nr_g5_rst, G5_BCSDIR, G52LIS, LISv2g
   
   interface LDT_RegridRaster
      module procedure RegridRaster
@@ -43,7 +44,9 @@ module CLSM_util
 
   end type GEOS2LIS
 
-  integer  , parameter  :: nc_esa = 129600, nr_esa = 64800, SRTM_maxcat = 291284, nc = 43200, nr = 21600
+  integer  , parameter  :: nc_esa = 129600, nr_esa = 64800, SRTM_maxcat = 291284, nc_g5_rst = 43200, nr_g5_rst = 21600
+  character*300         :: G5_BCSDIR = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
+
   type (GEOS2LIS), save :: LDT_g5map
 
   contains
@@ -83,8 +86,8 @@ module CLSM_util
       dx = LDT_rc%mask_gridDesc(i, 9)  ! LDT_fileIOMod.F90 L702
       dy = LDT_rc%mask_gridDesc(i,10)  ! LDT_fileIOMod.F90 L708     
             
-      LDT_g5map%NX = nc
-      LDT_g5map%NY = nr
+      LDT_g5map%NX = nc_g5_rst
+      LDT_g5map%NY = nr_g5_rst
       LDT_g5map%NT_LIS = NINT(SUM (LDT_LSMparam_struc(i)%landmask%value(:, :,i)))
       
       allocate (lat    (1: LDT_g5map%NT_LIS))
@@ -117,19 +120,19 @@ module CLSM_util
      nr_global = nint(180./dy)
      dx_esa = ceiling(real(nc_esa) / real(nc_global)) ! x-dimension (or # of ESA columns within the raster grid cell)
      dy_esa = ceiling(real(nr_esa) / real(nr_global)) ! y-dimension (or # of ESA rows within the raster grid cell)
-     msk2rst = nc_esa/nc
+     msk2rst = nc_esa/nc_g5_rst
 
      allocate(geos_msk              (1: dx_esa,1: dy_esa))
      allocate(high_msk              (1:msk2rst,1:msk2rst))
-     allocate(LDT_g5map%rst         (1:nc, 1: nr))
+     allocate(LDT_g5map%rst         (1:nc_g5_rst, 1: nr_g5_rst))
      allocate(LDT_g5map%catid_index (1:LDT_g5map%NT_LIS)) 
      allocate(LDT_g5map%ID_LOC      (1:LDT_g5map%NT_LIS)) 
 
      LDT_g5map%rst(:,:)       = 0
      LDT_g5map%catid_index(:) = 0
 
-     dxh = 360.d0/nc
-     dyh = 180.d0/nr
+     dxh = 360.d0/nc_g5_rst
+     dyh = 180.d0/nr_g5_rst
 
      catCount = 0
      NCELLS   = 1
@@ -505,6 +508,42 @@ module CLSM_util
 !
 ! ====================================================================
 !
+   function G52LIS (g5_array) result (lis_array)
 
+     implicit none
+
+     real, dimension (:), intent (in)   :: g5_array
+     real, dimension (LDT_g5map%NT_LIS) :: lis_array
+     integer :: n
+
+     do n = 1, LDT_g5map%NT_LIS
+        lis_array (n) = g5_array(LDT_g5map%ID_LOC(n))
+     end do
+     
+   end function G52LIS
+   
+!
+! ====================================================================
+!
+   
+   function LISv2g (nc,nr, lis_array) result (lis_2D)
+
+     implicit none 
+     integer, intent (in)             :: nc, nr 
+     real, dimension (:), intent (in) :: lis_array
+     real, dimension (nc,nr)          :: lis_2D
+     integer                          :: c, r, i
+     
+     i = 1
+     do r = 1, nr
+        do c = 1, nc
+           if( LDT_rc%global_mask(c,r) > 0. ) then
+              lis_2D (c,r) = lis_array(i)
+              i = i + 1
+           endif
+        end do
+     end do
+
+   end function LISv2g
  
 end module CLSM_util
