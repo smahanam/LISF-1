@@ -9,12 +9,13 @@ module CLSM_param_routines
   use get_DeLannoy_SoilClass, ONLY:          & 
        mineral_perc, GDL_center_pix,         &
        n_SoilClasses => n_DeLannoy_classes,  &
-       soil_class    => DeLannoy_class
+       soil_class    => DeLannoy_class,      &
+       GDL_TABLE
   implicit none
 
   private
 
-  public gnu 
+  public create_CLSM_parameters 
   
   real, parameter :: gnu = 1.0, zks = 2.0
   integer, PARAMETER :: nbdep=150, NAR=1000,nwt=81,nrz=41
@@ -27,50 +28,45 @@ contains
 
   !--------------------------------------------------------------------
 
-  SUBROUTINE create_CLSM_parameters 
+  SUBROUTINE create_CLSM_parameters (nbcatch, BEE, POROS, WPWET, PSIS, COND,  &
+       SOILDEPTH, SOIL_CLASS_TOP, SOIL_CLASS_COM,                             &
+       AGNU, ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4,                             &
+       ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2)
 
     implicit none
+    integer, intent (in) :: nbcatch
+    real, dimension (:), intent (inout) :: BEE, POROS, WPWET, PSIS, COND, SOILDEPTH, &
+         AGNU, ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
+         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2 
+    integer, dimension (:), intent (inout) :: SOIL_CLASS_TOP, SOIL_CLASS_COM  
 
     REAL, allocatable, dimension(:) :: TOPMEAN, TOPVAR, TOPSKEW
     real, allocatable, dimension (:)  :: a_sand,a_clay,a_silt,a_oc,  &
-         atile_sand,atile_clay, tile_lon, tile_lat, grav_vec, soc_vec,&
-         poc_vec,a_sand_surf,a_clay_surf,wpwet_surf,poros_surf, pmap
+         tile_lon, tile_lat
     
-    real, allocatable, dimension (:,:) :: good_clay, good_sand
+    real, allocatable, dimension (:,:)    :: good_clay, good_sand
     integer, allocatable, dimension (:,:) :: tile_add, tile_pick
     type (mineral_perc) :: min_percs
     integer :: CF1, CF2, CF3, CF4
-    integer i,j,n,k, tindex1,pfaf1,nbcatch
+    integer i,j,n,k
     integer soil_gswp
-    real meanlu,stdev,minlu,maxlu,coesk,rzdep
-    real minlat,maxlat,minlon,maxlon
-    real,allocatable, dimension (:) ::   &
-         BEE, PSIS,POROS,COND,WPWET,soildepth
-    
+    real rzdep, atile_sand,atile_clay 
+     
     REAL ST(NAR), AC(NAR),COESKEW
-    REAL, allocatable, dimension (:) ::   &
-         ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
-         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3,   &
-         tsa1, tsa2,tsb1, tsb2,               &
+    REAL, allocatable, dimension (:) ::       &
          taberr1,taberr2,normerr1,normerr2,   &
          taberr3,taberr4,normerr3,normerr4
 
-    integer, allocatable, dimension (:) :: soil_class_com,tindex2,pfaf2, &
-         soil_class_top
     real watdep(nwt,nrz),wan(nwt,nrz),rzexcn(nwt,nrz),frc(nwt,nrz)
     real, allocatable, dimension  (:,:,:) :: &
          gwatdep,gwan,grzexcn,gfrc
     real :: wtdep,wanom,rzaact,fracl,profdep,dist_save,     &
          ncells_top, ncells_top_pro,ncells_sub_pro,tile_distance
-    character*100 :: pathout,fname,fout,losfile
-    character*10 :: dline
-    CHARACTER*20 :: version,resoln,continent
+    character*100 :: fname,fout,losfile
     character*6 rdep,ext
     integer :: iwt,irz,group
     logical :: picked
-    logical :: file_exists
-    REAL, ALLOCATABLE, DIMENSION (:,:) :: parms4file
-    integer :: ncid, status
+    logical :: preserve_soiltype = .false.
  
 ! --------- VARIABLES FOR *OPENMP* PARALLEL ENVIRONMENT ------------
 !
@@ -115,7 +111,19 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
   !$OMP ENDPARALLEL
       
 !c-------------------------------------------------------------------------
-      fname = trim(c_data)//'SoilClasses-SoilHyd-TauParam.dat' 
+
+      ! Scale saturated hydraulic conductivity  to surface 
+      ! --------------------------------------------------
+
+      COND = COND/exp(-1.0*zks*gnu)
+      AGNU = GNU
+
+      allocate (TOPMEAN (1: nbcatch))
+      allocate (TOPVAR  (1: nbcatch))
+      allocate (TOPSKEW (1: nbcatch))
+      call read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
+
+      fname = trim(c_data)//trim(GDL_TABLE)
       open (11, file=trim(fname), form='formatted',status='old', &
            action = 'read')
       read (11,'(a)')fout           
@@ -132,201 +140,59 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       
       do n =1,n_SoilClasses
          read (11,'(4f7.3)')a_sand(n),a_clay(n),a_silt(n),a_oc(n)
-      write (fout,'(i2.2,i2.2,i4.4)')nint(a_sand(n)),nint(a_clay(n)),nint(100*a_oc(n))
-	   open (120,file=trim(losfile)//trim(fout),  &
-           form='formatted',status='old')
-
-	   do iwt=1,nwt
-	      do irz=1,nrz
-		 read(120,2000) wtdep,wanom,rzaact,fracl
- 2000		 format(1x,4e16.8)
-		 gwatdep(iwt,irz,n)= wtdep
-		 gwan(iwt,irz,n)   = wanom
-		 grzexcn(iwt,irz,n)= rzaact
-		 gfrc(iwt,irz,n)   = amin1(fracl,1.)
-	      enddo
-	  enddo
-          close (120,status='keep')	   
-      end do  
+         write (fout,'(i2.2,i2.2,i4.4)')nint(a_sand(n)),nint(a_clay(n)),nint(100*a_oc(n))
+         open (120,file=trim(losfile)//trim(fout),  &
+              form='formatted',status='old')
+         
+         do iwt=1,nwt
+            do irz=1,nrz
+               read(120,2000) wtdep,wanom,rzaact,fracl
+2000           format(1x,4e16.8)
+               gwatdep(iwt,irz,n)= wtdep
+               gwan(iwt,irz,n)   = wanom
+               grzexcn(iwt,irz,n)= rzaact
+               gfrc(iwt,irz,n)   = amin1(fracl,1.)
+            enddo
+         enddo
+         close (120,status='keep')	   
+      end do
       close (11,status='keep')  
-      deallocate (a_sand,a_silt,a_clay,a_oc)
 
-     fname='clsm/soil_param.first'       
-       open (10,file=fname,action='read',       &
-          form='formatted',status='old')              
-                                                 
-     fname='clsm/cti_stats.dat'           
-      open (11,file=fname,action='read',        &
-          form='formatted',status='old')  
+      allocate (tile_lon  (1:nbcatch))
+      allocate (tile_lat  (1:nbcatch))
+      allocate (TABERR1   (1:nbcatch))
+      allocate (TABERR2   (1:nbcatch))
+      allocate (TABERR3   (1:nbcatch))
+      allocate (TABERR4   (1:nbcatch))
+      allocate (NORMERR1  (1:nbcatch))
+      allocate (NORMERR2  (1:nbcatch))
+      allocate (NORMERR3  (1:nbcatch))
+      allocate (NORMERR4  (1:nbcatch))
+      allocate (good_clay (1:100,4))
+      allocate (good_sand (1:100,4))
+      allocate (tile_add  (1:100,4))   
+      allocate (tile_pick (1:100,4)) 
+      tile_add = 0
+      tile_pick= 0
+      good_clay =0.
+      good_sand =0.
+
+      tile_lon = LDT_g5map%lon
+      tile_lat = LDT_g5map%lat
+
+      allocate(low_ind(n_threads))
+      allocate(upp_ind(n_threads))
+      low_ind(1)         = 1
+      upp_ind(n_threads) = nbcatch
+      
+      if (running_omp)  then
+         do i=1,n_threads-1
             
-     fname='clsm/catchment.def'           
-      open (12,file=fname,action='read',        &
-          form='formatted',status='old')                                                             
-
-     fout='clsm/ar.new'               
-      open (20,file=fout,action='write',        &
-          form='formatted',status='unknown')          
-                                                 
-     fout='clsm//bf.dat'               
-      open (30,file=fout,action='write',        &
-          form='formatted',status='unknown')          
-                                                 
-     fout='clsm//ts.dat'               
-      open (40,file=fout,action='write',        &
-          form='formatted',status='unknown')        
-
-     if (error_file) then 
-	fout='clsm/ar_rmse.dat'           
-	open (21,file=fout,action='write',        &
-	     form='formatted',status='unknown')
-
-	fout='clsm/bf_rmse.dat'           
-	open (31,file=fout,action='write',        &
-	     form='formatted',status='unknown')
-
-        fout='clsm/bad_sat_param.tiles'
- 	open (41,file=fout,action='write',        &
-	     form='formatted',status='unknown')  
- 
-     endif 
-       fout='clsm/soil_param.dat'
- 	open (42,file=fout,action='write',        &
-	     form='formatted',status='unknown')       
-
-     read (11,*)nbcatch
-     read (12,*)nbcatch
-
-     allocate (tile_lon(1:nbcatch))
-     allocate (tile_lat(1:nbcatch))
-     allocate (TOPMEAN (1:nbcatch))
-     allocate (TOPVAR  (1:nbcatch))
-     allocate (TOPSKEW (1:nbcatch))
-     allocate (ARS1 (1:nbcatch))
-     allocate (ARS2 (1:nbcatch))
-     allocate (ARS3 (1:nbcatch))
-     allocate (ARA1 (1:nbcatch))
-     allocate (ARA2 (1:nbcatch))
-     allocate (ARA3 (1:nbcatch))
-     allocate (ARA4 (1:nbcatch))
-     allocate (ARW1 (1:nbcatch))
-     allocate (ARW2 (1:nbcatch))
-     allocate (ARW3 (1:nbcatch))
-     allocate (ARW4 (1:nbcatch))
-     allocate (BF1 (1:nbcatch))
-     allocate (BF2 (1:nbcatch))
-     allocate (BF3 (1:nbcatch))
-     allocate (TSA1 (1:nbcatch))
-     allocate (TSA2 (1:nbcatch))
-     allocate (TSB1 (1:nbcatch))
-     allocate (TSB2 (1:nbcatch))
-     allocate (TABERR1 (1:nbcatch))
-     allocate (TABERR2 (1:nbcatch))
-     allocate (TABERR3 (1:nbcatch))
-     allocate (TABERR4 (1:nbcatch))
-     allocate (NORMERR1 (1:nbcatch))
-     allocate (NORMERR2 (1:nbcatch))
-     allocate (NORMERR3 (1:nbcatch))
-     allocate (NORMERR4 (1:nbcatch))
-     allocate (BEE        (1:nbcatch))
-     allocate (PSIS      (1:nbcatch))
-     allocate (POROS     (1:nbcatch))
-     allocate (COND      (1:nbcatch))
-     allocate (WPWET     (1:nbcatch))
-     allocate (soildepth (1:nbcatch))
-     allocate (soil_class_top (1:nbcatch))
-     allocate (soil_class_com (1:nbcatch))
-     allocate (tindex2        (1:nbcatch))
-     allocate (pfaf2          (1:nbcatch))
-     allocate (atile_clay     (1:nbcatch))
-     allocate (atile_sand     (1:nbcatch))
-     allocate (grav_vec       (1:nbcatch))
-     allocate (soc_vec        (1:nbcatch))
-     allocate (poc_vec        (1:nbcatch))
-     allocate (a_sand_surf    (1:nbcatch))
-     allocate (a_clay_surf    (1:nbcatch))
-     allocate (wpwet_surf     (1:nbcatch))
-     allocate (poros_surf     (1:nbcatch))
-     allocate (pmap           (1:nbcatch))
-     allocate (good_clay     (1:100,4))
-     allocate (good_sand     (1:100,4))
-     allocate (tile_add      (1:100,4))   
-     allocate (tile_pick     (1:100,4)) 
-     tile_add = 0
-     tile_pick= 0
-     good_clay =0.
-     good_sand =0.
- 
-     do n=1,nbcatch
-        read(11,'(i8,i8,5(1x,f8.4))') tindex1,pfaf1,meanlu,stdev  &
-             ,minlu,maxlu,coesk                                  
- 
-        read(10,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4)') &
-	     tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),      &
-             BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),       &
-	     grav_vec(n),soc_vec(n),poc_vec(n),                            &
-	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n)                     
-        if(tindex1.ne.tindex2(n))then
-           write(*,*)'Warnning 1: tindex mismatched'                        
-           stop
-        endif
-
-        read (12,*) tindex1,pfaf1,minlon,maxlon,minlat,maxlat
-        tile_lon(n) = (minlon + maxlon)/2.
-        tile_lat(n) = (minlat + maxlat)/2.
-
-        if(pfaf1.ne.pfaf2(n)) then
-           write(*,*)'Warnning 1: pfafstetter mismatched' 
-           stop
-        endif
-
-        TOPMEAN(n) = meanlu
-        TOPVAR(n)  = stdev*stdev                                
-        TOPSKEW(n) = coesk*stdev*stdev*stdev                   
-        
-        if ( TOPVAR(n) .eq. 0. .or. coesk .eq. 0.            &
-             .or. topskew(n) .eq. 0.) then                       
-           write(*,*) 'Problem: undefined values:'         
-           write(*,*) TOPMEAN(n),TOPVAR(n),coesk,            &
-                minlu,maxlu
-           stop
-        endif
-     END DO
-
-!    inquire(file='clsm/catch_params.nc4', exist=file_exists)
-!
-!     if(file_exists) then
-!        status = NF_OPEN ('clsm/catch_params.nc4', NF_WRITE, ncid) ; VERIFY_(STATUS)
-!        allocate (parms4file (1:nbcatch, 1:25))
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), BEE  (:)) ; VERIFY_(STATUS) 
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), COND (:)) ; VERIFY_(STATUS) 
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), POROS(:)) ; VERIFY_(STATUS) 
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), PSIS (:)) ; VERIFY_(STATUS)    
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), WPWET(:)) ; VERIFY_(STATUS) 
-!        status = NF_GET_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), soildepth (:)) ; VERIFY_(STATUS) 
-!        parms4file (:,12) = BEE      (:)
-!        parms4file (:,16) = COND     (:)
-!        parms4file (:,18) = POROS    (:)
-!        parms4file (:,19) = PSIS     (:)
-!        parms4file (:,24) = wpwet    (:)
-!        parms4file (:,25) = soildepth(:)
-!     endif
-
-     rewind(10)
-
-     allocate(low_ind(n_threads))
-     allocate(upp_ind(n_threads))
-     low_ind(1)         = 1
-     upp_ind(n_threads) = nbcatch
-
-     if (running_omp)  then
-      do i=1,n_threads-1
-        
-         upp_ind(i)   = low_ind(i) + (nbcatch/n_threads) - 1 
-         low_ind(i+1) = upp_ind(i) + 1
-        
-      end do 
-     end if
-
+            upp_ind(i)   = low_ind(i) + (nbcatch/n_threads) - 1 
+            low_ind(i+1) = upp_ind(i) + 1
+            
+         end do
+      end if
 
 !$OMP PARALLELDO DEFAULT(NONE)                          &
 !$OMP SHARED( BEE, PSIS,POROS,COND,WPWET,soildepth,     &
@@ -395,262 +261,123 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
      CF4 =0
 
      DO n=1,nbcatch
-
+        atile_clay = a_clay(SOIL_CLASS_COM(n))
+        atile_sand = a_sand(SOIL_CLASS_COM(n))
      	if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then
 
-	   if ((soil_class_com(n)>=1).and.(soil_class_com(n)<=84)) then	
-      	      group=1
-           else if ((soil_class_com(n) > 84).and.(soil_class_com(n)<=168)) then
-      	      group=2
-           else if ((soil_class_com(n) >168).and.(soil_class_com(n)< N_SoilClasses)) then
-              group=3
-	   else
-              group=4
-           endif
-
-           min_percs%clay_perc = atile_clay(n)
-           min_percs%sand_perc = atile_sand(n) 
-           min_percs%silt_perc = 100. - min_percs%clay_perc - min_percs%sand_perc
-
-           if(tile_pick(soil_class (min_percs),group) == 0) then
-             tile_pick(soil_class (min_percs),group) = n 
-
-             select case (group)
-
-             case (1)
-                 
-                CF1 = CF1 + 1
-                good_clay (CF1,group) = atile_clay(n)
-                good_sand (CF1,group) = atile_sand(n)
-                tile_add  (CF1,group) = n
-
-             case (2)
-                CF2 = CF2 + 1
-                good_clay (CF2,group) = atile_clay(n)
-                good_sand (CF2,group) = atile_sand(n)
-                tile_add  (CF2,group) = n
-
-             case (3)
-                CF3 = CF3 + 1
-                good_clay (CF3,group) = atile_clay(n)
-                good_sand (CF3,group) = atile_sand(n)
-                tile_add  (CF3,group) = n
-
-             case (4)
-                CF4 = CF4 + 1
-                good_clay (CF4,group) = atile_clay(n)
-                good_sand (CF4,group) = atile_sand(n)
-                tile_add  (CF4,group) = n
-
-             end select
-          endif
-	endif	
-     END DO	
-
-     DO n=1,nbcatch
-         read(10,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)') &
-	     tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),         &
-             BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),       &
-	     grav_vec(n),soc_vec(n),poc_vec(n),                            &
-	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n) ,   &
-	     wpwet_surf(n),poros_surf(n), pmap(n)
-     if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then   
-!      write(20,'(i8,i8,f5.2,11(2x,e14.7))')         &
-!                     tindex2(n),pfaf2(n),gnu,       &
-!                     ars1(n),ars2(n),ars3(n),         &
-!                     ara1(n),ara2(n),ara3(n),ara4(n), &
-!                     arw1(n),arw2(n),arw3(n),arw4(n) 
-!
-!      write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(n),bf2(n),bf3(n)
-!      write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-!          tsa1(n),tsa2(n),tsb1(n),tsb2(n)
-!
-!      write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')  &
-!	     tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),      &
-!             BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),       &
-!	     grav_vec(n),soc_vec(n),poc_vec(n),                            &
-!	     a_sand_surf(n),a_clay_surf(n),atile_sand(n),atile_clay(n),    &
-!	     wpwet_surf(n),poros_surf(n), pmap(n)
-
-      if (allocated (parms4file)) then
-         parms4file (n, 1) = ara1(n)
-         parms4file (n, 2) = ara2(n)
-         parms4file (n, 3) = ara3(n)
-         parms4file (n, 4) = ara4(n)
-         parms4file (n, 5) = ars1(n)
-         parms4file (n, 6) = ars2(n)
-         parms4file (n, 7) = ars3(n)
-         parms4file (n, 8) = arw1(n)
-         parms4file (n, 9) = arw2(n)
-         parms4file (n,10) = arw3(n)
-         parms4file (n,11) = arw4(n)  
-         parms4file (n,13) = bf1(n)
-         parms4file (n,14) = bf2(n)
-         parms4file (n,15) = bf3(n)
-         parms4file (n,17) = gnu
-         parms4file (n,20) = tsa1(n)
-         parms4file (n,21) = tsa2(n)
-         parms4file (n,22) = tsb1(n)
-         parms4file (n,23) = tsb2(n)
-      endif
-
-      else
-      if(preserve_soiltype) then 
          if ((soil_class_com(n)>=1).and.(soil_class_com(n)<=84)) then	
             group=1
-         else if ((soil_class_com(n)>  84).and.(soil_class_com(n)<=168)) then
+         else if ((soil_class_com(n) > 84).and.(soil_class_com(n)<=168)) then
             group=2
-         else if ((soil_class_com(n)> 168).and.(soil_class_com(n)< N_SoilClasses)) then
+         else if ((soil_class_com(n) >168).and.(soil_class_com(n)< N_SoilClasses)) then
             group=3
          else
             group=4
          endif
          
-         min_percs%clay_perc = atile_clay(n)
-         min_percs%sand_perc = atile_sand(n) 
+         min_percs%clay_perc = atile_clay
+         min_percs%sand_perc = atile_sand
          min_percs%silt_perc = 100. - min_percs%clay_perc - min_percs%sand_perc
-         if(tile_pick(soil_class (min_percs),group) > 0) then
-            k = tile_pick(soil_class (min_percs),group) 
+         
+         if(tile_pick(soil_class (min_percs),group) == 0) then
+            tile_pick(soil_class (min_percs),group) = n 
             
-         else
             select case (group)
                
             case (1)
-               j = GDL_center_pix (good_clay(1:CF1,group),good_sand(1:CF1,group),       &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
-               k = tile_add  (j,group) 
+               
+               CF1 = CF1 + 1
+               good_clay (CF1,group) = atile_clay
+               good_sand (CF1,group) = atile_sand
+               tile_add  (CF1,group) = n
+               
             case (2)
-               j = GDL_center_pix (good_clay(1:CF2,group),good_sand(1:CF2,group),       &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
-               k = tile_add  (j,group)   
+               CF2 = CF2 + 1
+               good_clay (CF2,group) = atile_clay
+               good_sand (CF2,group) = atile_sand
+               tile_add  (CF2,group) = n
+               
             case (3)
-               j = GDL_center_pix (good_clay(1:CF3,group),good_sand(1:CF3,group),       &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
-               k = tile_add  (j,group) 
+               CF3 = CF3 + 1
+               good_clay (CF3,group) = atile_clay
+               good_sand (CF3,group) = atile_sand
+               tile_add  (CF3,group) = n
+               
             case (4)
-               j = GDL_center_pix (good_clay(1:CF4,group),good_sand(1:CF4,group),       &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
-               k = tile_add  (j,group)   
+               CF4 = CF4 + 1
+               good_clay (CF4,group) = atile_clay
+               good_sand (CF4,group) = atile_sand
+               tile_add  (CF4,group) = n
+               
             end select
-            print *,'NO Similar SoilClass :',soil_class (min_percs),group,n,k
-            
-         endif
-         if (error_file) then
-            write (41,*)n,k
-            !           write (41,*)tindex2(n),pfaf2(n),soil_class_top(n),soil_class_com(n),    &
-            !            BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n)  
-            !           write (41,*)tindex2(k),pfaf2(k),soil_class_top,soil_class_com(k),    &
-            !                BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k) 
-         endif
-         
-!         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
-!              tindex2(n),pfaf2(n),gnu,   &
-!              ars1(k),ars2(k),ars3(k),                   &
-!              ara1(k),ara2(k),ara3(k),ara4(k),           &
-!              arw1(k),arw2(k),arw3(k),arw4(k) 
-!        write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
-!        write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-!          tsa1(k),tsa2(k),tsb1(k),tsb2(k)
-
-!        write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)') &
-!              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),      &
-!              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
-!              grav_vec(k),soc_vec(k),poc_vec(k),                            &
-!              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
-!	      wpwet_surf(k),poros_surf(k), pmap (k)
-
-        if (allocated (parms4file)) then
-           parms4file (n, 1) = ara1(k)
-           parms4file (n, 2) = ara2(k)
-           parms4file (n, 3) = ara3(k)
-           parms4file (n, 4) = ara4(k)
-           parms4file (n, 5) = ars1(k)
-           parms4file (n, 6) = ars2(k)
-           parms4file (n, 7) = ars3(k)
-           parms4file (n, 8) = arw1(k)
-           parms4file (n, 9) = arw2(k)
-           parms4file (n,10) = arw3(k)
-           parms4file (n,11) = arw4(k)  
-           parms4file (n,12) = BEE(k)
-           parms4file (n,13) = bf1(k)
-           parms4file (n,14) = bf2(k)
-           parms4file (n,15) = bf3(k)
-           parms4file (n,16) = COND(k)
-           parms4file (n,17) = gnu
-           parms4file (n,18) = POROS(k)
-           parms4file (n,19) = PSIS(k)
-           parms4file (n,20) = tsa1(k)
-           parms4file (n,21) = tsa2(k)
-           parms4file (n,22) = tsb1(k)
-           parms4file (n,23) = tsb2(k)
-           parms4file (n,24) = wpwet    (k)
-           parms4file (n,25) = soildepth(k)
-        endif
-
-     else 
-
-         dist_save = 1000000.
-         k = 0
-         do i = 1,nbcatch
-            if(i /= n) then
-               if((ars1(i).ne.9999.).and.(arw1(i).ne.9999.)) then
-
-                  tile_distance = (tile_lon(i) - tile_lon(n)) * (tile_lon(i) - tile_lon(n)) + &
-                                  (tile_lat(i) - tile_lat(n)) * (tile_lat(i) - tile_lat(n))
-                  if(tile_distance < dist_save) then
-                     k = i
-                     dist_save = tile_distance
-                  endif
-               endif
-            endif
-         enddo
-         write (41,*)n,k
-!         write(20,'(i8,i8,f5.2,11(2x,e14.7))')   &
-!              tindex2(n),pfaf2(n),gnu,   &
-!              ars1(k),ars2(k),ars3(k),                   &
-!              ara1(k),ara2(k),ara3(k),ara4(k),           &
-!              arw1(k),arw2(k),arw3(k),arw4(k) 
-!         write(30,'(i8,i8,f5.2,3(2x,e13.7))')tindex2(n),pfaf2(n),gnu,bf1(k),bf2(k),bf3(k)
-!         write(40,'(i8,i8,f5.2,4(2x,e13.7))')tindex2(n),pfaf2(n),gnu,    &
-!              tsa1(k),tsa2(k),tsb1(k),tsb2(k)
-!         write(42,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')&
-!              tindex2(n),pfaf2(n),soil_class_top(k),soil_class_com(k),         &
-!              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),       &
-!              grav_vec(k),soc_vec(k),poc_vec(k),                            &
-!              a_sand_surf(k),a_clay_surf(k),atile_sand(k),atile_clay(k) ,   &
-!	      wpwet_surf(k),poros_surf(k), pmap(k)
-
-         if (allocated (parms4file)) then
-            parms4file (n, 1) = ara1(k)
-            parms4file (n, 2) = ara2(k)
-            parms4file (n, 3) = ara3(k)
-            parms4file (n, 4) = ara4(k)
-            parms4file (n, 5) = ars1(k)
-            parms4file (n, 6) = ars2(k)
-            parms4file (n, 7) = ars3(k)
-            parms4file (n, 8) = arw1(k)
-            parms4file (n, 9) = arw2(k)
-            parms4file (n,10) = arw3(k)
-            parms4file (n,11) = arw4(k)  
-            parms4file (n,12) = BEE(k)
-            parms4file (n,13) = bf1(k)
-            parms4file (n,14) = bf2(k)
-            parms4file (n,15) = bf3(k)
-            parms4file (n,16) = COND(k)
-            parms4file (n,17) = gnu
-            parms4file (n,18) = POROS(k)
-            parms4file (n,19) = PSIS(k)
-            parms4file (n,20) = tsa1(k)
-            parms4file (n,21) = tsa2(k)
-            parms4file (n,22) = tsb1(k)
-            parms4file (n,23) = tsb2(k)
-            parms4file (n,24) = wpwet    (k)
-            parms4file (n,25) = soildepth(k)
          endif
       endif
-   endif
+   END DO
    
-END DO
+   DO n=1,nbcatch
+      atile_clay = a_clay(SOIL_CLASS_COM(n))
+      atile_sand = a_sand(SOIL_CLASS_COM(n))
+      if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then   
+      else
+         if(preserve_soiltype) then 
+            if ((soil_class_com(n)>=1).and.(soil_class_com(n)<=84)) then	
+               group=1
+            else if ((soil_class_com(n)>  84).and.(soil_class_com(n)<=168)) then
+               group=2
+            else if ((soil_class_com(n)> 168).and.(soil_class_com(n)< N_SoilClasses)) then
+               group=3
+            else
+               group=4
+            endif
+            
+            min_percs%clay_perc = atile_clay
+            min_percs%sand_perc = atile_sand
+            min_percs%silt_perc = 100. - min_percs%clay_perc - min_percs%sand_perc
+            
+            if(tile_pick(soil_class (min_percs),group) > 0) then
+               k = tile_pick(soil_class (min_percs),group)               
+            else
+               select case (group)
+                  
+               case (1)
+                  j = GDL_center_pix (good_clay(1:CF1,group),good_sand(1:CF1,group),       &
+                       min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
+                  k = tile_add  (j,group) 
+               case (2)
+                  j = GDL_center_pix (good_clay(1:CF2,group),good_sand(1:CF2,group),       &
+                       min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
+                  k = tile_add  (j,group)   
+               case (3)
+                  j = GDL_center_pix (good_clay(1:CF3,group),good_sand(1:CF3,group),       &
+                       min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
+                  k = tile_add  (j,group) 
+               case (4)
+                  j = GDL_center_pix (good_clay(1:CF4,group),good_sand(1:CF4,group),       &
+                       min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)
+                  k = tile_add  (j,group)   
+               end select
+               print *,'NO Similar SoilClass :',soil_class (min_percs),group,n,k            
+            endif
+         else 
+            dist_save = 1000000.
+            k = 0
+            do i = 1,nbcatch
+               if(i /= n) then
+                  if((ars1(i).ne.9999.).and.(arw1(i).ne.9999.)) then
+                  
+                     tile_distance = (tile_lon(i) - tile_lon(n)) * (tile_lon(i) - tile_lon(n)) + &
+                          (tile_lat(i) - tile_lat(n)) * (tile_lat(i) - tile_lat(n))
+                     if(tile_distance < dist_save) then
+                        k = i
+                        dist_save = tile_distance
+                     endif
+                  endif
+               endif
+            enddo
+         endif
+      endif
+      
+   END DO
       
 END SUBROUTINE create_CLSM_parameters
 

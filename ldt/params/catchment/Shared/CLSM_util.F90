@@ -35,6 +35,7 @@ module CLSM_util
      integer :: NY
      integer :: NT_LIS
      integer :: NT_GEOS
+     real,    allocatable, dimension (:)   :: lat, lon
      integer, allocatable, dimension (:)   :: ID_LOC, catid_index
      integer, allocatable, dimension (:,:) :: rst
 
@@ -122,7 +123,9 @@ module CLSM_util
      allocate(high_msk              (1:msk2rst,1:msk2rst))
      allocate(LDT_g5map%rst         (1:nc_g5_rst, 1: nr_g5_rst))
      allocate(LDT_g5map%catid_index (1:LDT_g5map%NT_LIS)) 
-     allocate(LDT_g5map%ID_LOC      (1:LDT_g5map%NT_LIS)) 
+     allocate(LDT_g5map%ID_LOC      (1:LDT_g5map%NT_LIS))
+     allocate(LDT_g5map%lat         (1:LDT_g5map%NT_LIS))
+     allocate(LDT_g5map%lon         (1:LDT_g5map%NT_LIS))
 
      LDT_g5map%rst(:,:)       = 0
      LDT_g5map%catid_index(:) = 0
@@ -221,6 +224,8 @@ module CLSM_util
         endif
         lon_g5 (ncells) = lon (CatNo)
         lat_g5 (ncells) = lat (CatNo)
+        LDT_g5map%lat(ncells) = lat (CatNo)
+        LDT_g5map%lon(ncells) = lon (CatNo)
         ncells = ncells + 1
 !        write(20,'(i10,i9,2f10.4,2i5,f19.12,i10,e13.4,i15,i8)') 100,catid_index,lon,lat,i-i_offset,j-j_offset,    &
 !             real(count(tileid (ix1:ix2,iy1:iy2) > 0))/real((ix2-ix1+1)*(iy2-iy1+1)),catid_index,da*sum(pfaf_area (1:nbins)),  &

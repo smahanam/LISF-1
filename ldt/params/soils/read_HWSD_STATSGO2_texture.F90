@@ -1,4 +1,5 @@
 #define VERIFY_(A) if(A /=0)then;print *,'ERROR code',A,'at',__LINE__;call exit(3);endif
+#define ASSERT_(A)   if(.not.A)then;print *,'Error:',__FILE__,__LINE__;stop;endif
 
 !-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
 ! NASA Goddard Space Flight Center Land Data Toolkit (LDT) v1.0
@@ -27,8 +28,12 @@ module mod_HWSD_STATSGO2_texture
   use LDT_constantsMod, ONLY:      &
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
-  use CLSM_util, only : LDT_RegridRaster, NC_VarID, GEOS2LIS, &
-       c_data => G5_BCSDIR
+  use CLSM_util, only : LDT_RegridRaster,   &
+       NC_VarID, LDT_g5map,                 &
+       c_data => G5_BCSDIR,                 &
+       NX => nc_g5_rst,                     &
+       NY => nr_g5_rst
+
   use get_DeLannoy_SoilClass, ONLY :        &
        mineral_perc, GDL_center_pix,        &
        n_SoilClasses => n_DeLannoy_classes, & 
@@ -266,31 +271,27 @@ contains
 
   !----------------------------------------------------------------------  
 
-  SUBROUTINE derive_CLSM_HWSD_soiltypes (nx,ny,gfiler)
+  SUBROUTINE derive_CLSM_HWSD_soiltypes (              &
+       maxcat, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, &
+       ATAU2, BTAU2, ATAU5, BTAU5, SOIL_CLASS_TOP, SOIL_CLASS_COM)
     
     ! Processing NGDC-HWSD-STATSGO merged soil properties with Woesten Soil
     ! Parameters and produces tau_param.dat and soil_param.dat files
     
     implicit none	    
-    integer, intent (in) :: nx, ny 
-    character(*)  :: gfiler
+
+    integer, intent (in) :: maxcat
+    real, dimension (:), intent (inout) :: BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, &
+         ATAU2, BTAU2, ATAU5, BTAU5
+    integer, dimension (:), intent (inout) :: SOIL_CLASS_TOP, SOIL_CLASS_COM  
     real, dimension (:), pointer ::              &
          a_sand,a_clay,a_silt,a_oc,a_bee,a_psis, &
          a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, &
          atau_2cm,btau_2cm 
     integer, dimension (100,3) :: table_map
-    type (mineral_perc)        :: min_percs
-    
-    integer :: n,maxcat,i,j,k,ktop,ncid,i_highd,j_highd,nx_adj,ny_adj
-    integer :: status,iLL,jLL,ix,jx,vid,nc_10,nr_10,d_undef,   &
-         i1,i2,icount
-    character*100 :: fname
-    character*10 :: string
-    character*2 :: VV,HH
-    
+    type (mineral_perc)        :: min_percs    
+    integer :: n,i,j,k,ktop,icount, i1, i2
     logical, allocatable, dimension(:,:) :: land_pixels
-    integer, allocatable, dimension (:,:) :: &
-         net_data1,net_data2,net_data3,net_data4,net_data5,net_data6 ,net_data7 
     integer (kind=2) , allocatable, target, dimension (:,:) :: SOIL_HIGH,  &
          sand_top,clay_top,oc_top,sand_sub,clay_sub,oc_sub, grav_grid
     integer (kind=2), pointer, dimension (:,:) :: Raster, &  
@@ -298,7 +299,7 @@ contains
     integer,          allocatable, dimension (:) :: tileid_vec,arrayA,arrayB          
     integer (kind=2), allocatable, dimension (:) ::  &
          data_vec1, data_vec2,data_vec3, data_vec4,data_vec5, data_vec6
-    REAL, ALLOCATABLE, dimension (:) :: soildepth, grav_vec,soc_vec,poc_vec,&
+    REAL, ALLOCATABLE, dimension (:) :: grav_vec,soc_vec,poc_vec,&
          ncells_top,ncells_top_pro,ncells_sub_pro 
     integer(kind=2) , allocatable, dimension (:) :: ss_clay,    &
          ss_sand,ss_clay_all,ss_sand_all,ss_oc_all
@@ -307,13 +308,8 @@ contains
     integer, pointer :: iRaster(:,:)
     integer :: tindex, pfafindex,fac,o_cl,o_clp,fac_surf,vtype
     real,dimension(4) :: cFamily
-    real   ,dimension(5) :: cF_lim
     logical :: first_entry = .true.
-    logical :: regrid,write_file
-    INTEGER, allocatable, dimension (:) :: soil_class_top,soil_class_com
     REAL :: sf,factor,wp_wetness,fac_count
-    logical                            :: file_exists
-    REAL, ALLOCATABLE, DIMENSION (:,:) :: parms4file
     REAL, PARAMETER  :: p_poros = 0.93, p_bee = 3.5, p_psis = -0.03, p_ks = 2.8e-5, pmap_thresh = 0.3
     REAL, DIMENSION (:), POINTER      :: PMAP
     REAL :: d_poros, d_bee, d_psis, d_ks
@@ -364,121 +360,26 @@ contains
        nullify(iraster) ; first_entry = .false.
     endif
 
- !   cf_lim = OC_LIMITS
- !   
- !   nsoil_pcarbon(1) = 84 ! 84
- !   nsoil_pcarbon(2) = nsoil_pcarbon(1) + 84 ! 84
- !   nsoil_pcarbon(3) = nsoil_pcarbon(2) + 84 ! 57
-    
-    fname='clsm/catchment.def'
-    !
-    ! Reading number of cathment-tiles from catchment.def file
-    ! 
-    open (10,file=fname,status='old',action='read',form='formatted')
-    read(10,*) maxcat
-    
-    close (10,status='keep')
-    
-    fname =trim(c_data)//'SOIL-DATA/GSWP2_soildepth_H11V13.nc'
-    status = NF_OPEN(trim(fname),NF_NOWRITE, ncid); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'i_ind_offset_LL',iLL); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'j_ind_offset_LL',jLL); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lon_global',i_highd); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lat_global',j_highd); VERIFY_(STATUS)
-    status = NF_INQ_DIM (ncid,1,string, nc_10); VERIFY_(STATUS)
-    status = NF_INQ_DIM (ncid,2,string, nr_10); VERIFY_(STATUS)
-    status = NF_CLOSE(ncid); VERIFY_(STATUS)
-    
-    allocate(soildepth(1:maxcat))
-    allocate(soil_high(1:i_highd,1:j_highd))  
-    allocate(count_soil(1:maxcat))  
-    allocate(tile_id(1:nx,1:ny))
-    allocate(net_data1 (1:nc_10,1:nr_10))
-    
-    fname=trim(gfiler)//'.rst'
-              
-    ! Reading tile-id raster file
-    
-    open (10,file=fname,status='old',action='read',  &
-           form='unformatted',convert='little_endian')
-    
-    do j=1,ny
-       read(10)tile_id(:,j)
-    end do
-    
-    close (10,status='keep')
-    
+    allocate(soil_high (1:nx,1:ny))
+    allocate(tile_id   (1:nx,1:ny))
+    allocate(count_soil(1: maxcat))  
+ 
+    tile_id = LDT_g5map%rst
+        
     ! reading soil depth data
     
-    soil_high = -9999
-    do jx = 1,18
-       do ix = 1,36
-          write (vv,'(i2.2)')jx
-          write (hh,'(i2.2)')ix 
-          fname = trim(c_data)//'SOIL-DATA/GSWP2_soildepth_H'//hh//'V'//vv//'.nc'
-          status = NF_OPEN(trim(fname),NF_NOWRITE, ncid)
-          if(status == 0) then
-             status = NF_GET_att_INT  (ncid,NF_GLOBAL,'i_ind_offset_LL',iLL); VERIFY_(STATUS)
-             status = NF_GET_att_INT  (ncid,NF_GLOBAL,'j_ind_offset_LL',jLL); VERIFY_(STATUS)
-             status = NF_GET_att_INT  (ncid,4,'UNDEF',d_undef); VERIFY_(STATUS)
-             status = NF_GET_att_REAL (ncid,4,'ScaleFactor',sf); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 4,(/1,1/),(/nc_10,nr_10/),net_data1); VERIFY_(STATUS)
-             
-             do j = jLL,jLL + nr_10 -1 
-                do i = iLL, iLL + nc_10 -1 
-                   if(net_data1(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        soil_high(i,j) = net_data1(i-iLL +1 ,j - jLL +1)
-                enddo
-             enddo
-             status = NF_CLOSE(ncid)
-          endif
-       end do
-    end do
-    
-    deallocate (net_data1)
-    
-    ! Regridding 
-    
-    nx_adj = nx
-    ny_adj = ny
-    
-    regrid = nx/=i_highd .or. ny/=j_highd
-    
-    if(regrid) then
-       if(nx > i_highd) then 
-          allocate(raster(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(soil_high,raster)	
-          iRaster => tile_id
-          if(ny < j_highd) then
-             print *,'nx > i_highd and ny < j_highd'
-             stop 
-          endif
-       else
-          if( .not.associated(iraster) ) then 
-             allocate(iraster(i_highd,j_highd),stat=STATUS); VERIFY_(STATUS)
-          endif
-          call LDT_RegridRaster (tile_id,iraster)	
-          raster  => soil_high
-          nx_adj = i_highd
-          ny_adj = j_highd
-          
-          if(ny > j_highd) then
-             print *,'nx < i_highd and ny > j_highd'
-             stop 
-          endif
-       endif
-    else
-       raster  => soil_high
-       iRaster => tile_id
-    end if
+    call  assemble_global_array ('GSWP2_soildepth', sf, soildepth= soil_high)
+        
+    raster  => soil_high
+    iRaster => tile_id
     
     ! Interpolation or aggregation on to catchment-tiles
     
-    soildepth =0.
+    soildepth  = 0.
     count_soil = 0.
  
-    do j=1,ny_adj
-       do i=1,nx_adj
+    do j=1,ny
+       do i=1,nx
           if((iRaster(i,j).gt.0).and.(iRaster(i,j).le.maxcat)) then
              if ((raster(i,j).gt.0)) then
                 soildepth(iRaster(i,j)) = &
@@ -499,161 +400,35 @@ contains
     
     deallocate (SOIL_HIGH)
     deallocate (count_soil)
-    NULLIFY(Raster)
+    NULLIFY    (Raster)
     
     ! Reading NGDC-HWSD-STATSGO merged Soil Properties
+
+    allocate(sand_top (1:NX,1:NY))  
+    allocate(clay_top (1:NX,1:NY))  
+    allocate(oc_top   (1:NX,1:NY))  
+    allocate(sand_sub (1:NX,1:NY))  
+    allocate(clay_sub (1:NX,1:NY))  
+    allocate(oc_sub   (1:NX,1:NY))  
+    allocate(grav_grid(1:NX,1:NY))   
+
+    call  assemble_global_array ('SoilProperties', sf, &
+         Clay0_30   = clay_top , &
+         Sand0_30   = sand_top , &
+         OC0_30     = oc_top   , &
+         Clay30_100 = clay_sub , &
+         Sand30_100 = sand_sub , &
+         OC30_100   = oc_sub   , &
+         Gravel     = grav_grid)
     
-    fname =trim(c_data)//'SOIL-DATA/SoilProperties_H11V13.nc'
-    status = NF_OPEN(trim(fname),NF_NOWRITE, ncid); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'i_ind_offset_LL',iLL); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'j_ind_offset_LL',jLL); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lon_global',i_highd); VERIFY_(STATUS)
-    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lat_global',j_highd); VERIFY_(STATUS)
-    status = NF_INQ_DIM (ncid,1,string, nc_10); VERIFY_(STATUS)
-    status = NF_INQ_DIM (ncid,2,string, nr_10); VERIFY_(STATUS)
-    status = NF_CLOSE(ncid)
-    
-    regrid = nx/=i_highd .or. ny/=j_highd
-    allocate(net_data1 (1:nc_10,1:nr_10))
-    allocate(net_data2 (1:nc_10,1:nr_10))
-    allocate(net_data3 (1:nc_10,1:nr_10))
-    allocate(net_data4 (1:nc_10,1:nr_10))
-    allocate(net_data5 (1:nc_10,1:nr_10))
-    allocate(net_data6 (1:nc_10,1:nr_10))
-    allocate(net_data7 (1:nc_10,1:nr_10))
-    
-    allocate(sand_top (1:i_highd,1:j_highd))  
-    allocate(clay_top (1:i_highd,1:j_highd))  
-    allocate(oc_top   (1:i_highd,1:j_highd))  
-    allocate(sand_sub (1:i_highd,1:j_highd))  
-    allocate(clay_sub (1:i_highd,1:j_highd))  
-    allocate(oc_sub   (1:i_highd,1:j_highd))  
-    allocate(grav_grid(1:i_highd,1:j_highd))   
-    
-    sand_top = -9999.
-    clay_top = -9999.
-    oc_top   = -9999.
-    sand_sub = -9999.
-    clay_sub = -9999.
-    oc_sub   = -9999.
-    grav_grid= -9999.
-    
-    do jx = 1,18
-       do ix = 1,36
-          write (vv,'(i2.2)')jx
-          write (hh,'(i2.2)')ix 
-          fname = trim(c_data)//'SOIL-DATA/SoilProperties_H'//hh//'V'//vv//'.nc'
-          status = NF_OPEN(trim(fname),NF_NOWRITE, ncid)
-          if(status == 0) then
-             status = NF_GET_att_INT  (ncid, NF_GLOBAL,'i_ind_offset_LL',iLL); VERIFY_(STATUS)
-             status = NF_GET_att_INT  (ncid, NF_GLOBAL,'j_ind_offset_LL',jLL); VERIFY_(STATUS)
-             status = NF_GET_att_INT  (ncid, 4,'UNDEF',d_undef); VERIFY_(STATUS)
-             status = NF_GET_att_REAL (ncid, 4,'ScaleFactor',sf); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 4,(/1,1/),(/nc_10,nr_10/),net_data1); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 5,(/1,1/),(/nc_10,nr_10/),net_data2); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 6,(/1,1/),(/nc_10,nr_10/),net_data3); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 7,(/1,1/),(/nc_10,nr_10/),net_data4); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 8,(/1,1/),(/nc_10,nr_10/),net_data5); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid, 9,(/1,1/),(/nc_10,nr_10/),net_data6); VERIFY_(STATUS)
-             status = NF_GET_VARA_INT (ncid,10,(/1,1/),(/nc_10,nr_10/),net_data7); VERIFY_(STATUS)
-             do j = jLL,jLL + nr_10 -1 
-                do i = iLL, iLL + nc_10 -1 
-                   if(net_data1(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        clay_top(i,j) = net_data1(i-iLL +1 ,j - jLL +1)
-                   if(net_data2(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        sand_top(i,j) = net_data2(i-iLL +1 ,j - jLL +1)
-                   if(net_data3(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        oc_top  (i,j) = net_data3(i-iLL +1 ,j - jLL +1)
-                   if(net_data4(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        clay_sub(i,j) = net_data4(i-iLL +1 ,j - jLL +1)
-                   if(net_data5(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        sand_sub(i,j) = net_data5(i-iLL +1 ,j - jLL +1)
-                   if(net_data6(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        oc_sub  (i,j) = net_data6(i-iLL +1 ,j - jLL +1)
-                   if(net_data7(i-iLL +1 ,j - jLL +1) /= d_undef) &
-                        grav_grid(i,j) = net_data7(i-iLL +1 ,j - jLL +1)
-                enddo
-             enddo
-             status = NF_CLOSE(ncid)
-          endif
-       end do
-    end do
-    
-    deallocate (net_data1)
-    deallocate (net_data2)
-    deallocate (net_data3)
-    deallocate (net_data4)
-    deallocate (net_data5)
-    deallocate (net_data6)
-    deallocate (net_data7)
-    
-    ! now regridding
-    
-    nx_adj = nx
-    ny_adj = ny
-    
-    regrid = nx/=i_highd .or. ny/=j_highd
-    
-    if(regrid) then
-       if(nx > i_highd) then 
-          allocate(raster1(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(clay_top,raster1)	
-          
-          allocate(raster2(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(sand_top,raster2)	
-          
-          allocate(raster3(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(oc_top,  raster3)	
-          
-          allocate(raster4(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(clay_sub,raster4)	
-          
-          allocate(raster5(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(sand_sub,raster5)	
-          
-          allocate(raster6(nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(oc_sub,  raster6)	
-          
-          allocate(raster (nx,ny),stat=STATUS); VERIFY_(STATUS)
-          call LDT_RegridRaster(grav_grid,raster)
-          
-          iRaster => tile_id
-          
-          if(ny < j_highd) then
-             print *,'nx > i_highd and ny < j_highd'
-             stop 
-          endif
-       else
-          nx_adj = i_highd
-          ny_adj = j_highd
-          if( .not.associated(iraster) ) then
-             allocate(iRaster(i_highd,j_highd),stat=STATUS); VERIFY_(STATUS)
-          endif
-          call LDT_RegridRaster(tile_id,iRaster)	
-          
-          raster1 => clay_top
-          raster2 => sand_top
-          raster3 => oc_top
-          raster4 => clay_sub
-          raster5 => sand_sub
-          raster6 => oc_sub
-          raster  => grav_grid
-          
-          if(ny > j_highd) then
-             print *,'nx < i_highd and ny > j_highd'
-             stop 
-          endif
-       endif
-    else
-       iRaster => tile_id
-       raster1 => clay_top
-       raster2 => sand_top
-       raster3 => oc_top
-       raster4 => clay_sub
-       raster5 => sand_sub
-       raster6 => oc_sub
-       raster  => grav_grid
-    end if
+    iRaster => tile_id
+    raster1 => clay_top
+    raster2 => sand_top
+    raster3 => oc_top
+    raster4 => clay_sub
+    raster5 => sand_sub
+    raster6 => oc_sub
+    raster  => grav_grid
     
     ! Deallocate large arrays
     
@@ -685,8 +460,8 @@ contains
     ncells_sub_pro = 0.
     
     n =1
-    do j=1,ny_adj
-       do i=1,nx_adj
+    do j=1,ny
+       do i=1,nx
           if((iRaster(i,j).ge.1).and.(iRaster(i,j).le.maxcat)) then
              
              tileid_vec (n) =  iRaster(i,j)
@@ -762,462 +537,491 @@ contains
       
     ! Now deriving soil types based on NGDC-HWSD-STATSGO merged soil property maps
       
-      allocate (soil_class_top (1:maxcat))
-      allocate (soil_class_com (1:maxcat))
-      soil_class_top =-9999
-      soil_class_com =-9999
-      
-      allocate(low_ind(n_threads))
-      allocate(upp_ind(n_threads))
-      low_ind(1)         = 1
-      upp_ind(n_threads) = maxcat
-      
-      if (running_omp)  then
-         do i=1,n_threads-1  
-            upp_ind(i)   = low_ind(i) + (maxcat/n_threads) - 1 
-            low_ind(i+1) = upp_ind(i) + 1
-         end do
-      end if
-      
-      !$OMP PARALLELDO DEFAULT(NONE)                          &
-      !$OMP SHARED( n_threads, low_ind, upp_ind, tileid_vec,  &
-      !$OMP         sf,data_vec1,data_vec2,data_vec3,         &
-      !$OMP         data_vec4,data_vec5,data_vec6,cF_lim,     &
-      !$OMP         table_map,soil_class_top,soil_class_com,  &
-      !$OMP         soc_vec,poc_vec,ncells_top,ncells_top_pro,&
-      !$OMP         ncells_sub_pro)    &
-      !$OMP PRIVATE(n,i,j,k,icount,t_count,i1,i2,ss_clay,     &
-      !$OMP         ss_sand,ss_clay_all,ss_sand_all,          &
-      !$OMP         ss_oc_all,cFamily,factor,o_cl,o_clp,ktop, &
-      !$OMP         min_percs, fac_count, write_file)
-      
-      DO t_count = 1,n_threads
-         DO n = low_ind(t_count),upp_ind(t_count)
-            
-            write_file = .false.
-            
-            !	if (n==171010)  write_file = .true.
-            
-            if(n==low_ind(t_count)) then
-               icount = 1
-               do k=1,low_ind(t_count) - 1
-                  do while (tileid_vec(icount)== k)
-                     icount = icount + 1
-                  end do
-               end do
-            endif
-            
-            i1 = icount 
-            
-            loop: do while (tileid_vec(icount)== n)
-               if(icount <= size(tileid_vec,1)) icount = icount + 1
-               if(icount > size(tileid_vec,1)) exit loop
-            end do loop
-            
-            i2 = icount -1
-            i = i2 - i1 + 1
-            
-            allocate(ss_clay    (1:2*i))
-            allocate(ss_sand    (1:2*i))
-            allocate(ss_clay_all(1:2*i))
-            allocate(ss_sand_all(1:2*i))
-            allocate(ss_oc_all  (1:2*i))
-            
-            ss_clay    = 0    
-            ss_sand    = 0	
-            ss_clay_all= 0
-            ss_sand_all= 0
-            ss_oc_all  = 0
-            
-            ss_clay_all (1:i)     = data_vec1(i1:i2)
-            ss_sand_all (1:i)     = data_vec2(i1:i2)
-            ss_oc_all   (1:i)     = data_vec3(i1:i2)	
-            ss_clay_all (1+i:2*i) = data_vec4(i1:i2) 
-            ss_sand_all (1+i:2*i) = data_vec5(i1:i2)
-            ss_oc_all   (1+i:2*i) = data_vec6(i1:i2)	
-            
-            cFamily = 0.
-            
-            do j=1,i
-               if(j <= i) factor = 1.
-               if((ss_oc_all(j)*sf >=  cF_lim(1)).and. (ss_oc_all(j)*sf < cF_lim(2))) cFamily(1) = cFamily(1) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(2)).and. (ss_oc_all(j)*sf < cF_lim(3))) cFamily(2) = cFamily(2) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(3)).and. (ss_oc_all(j)*sf < cF_lim(4))) cFamily(3) = cFamily(3) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(4) ))                                   cFamily(4) = cFamily(4) + factor
-            end do
-            
-            if (sum(cFamily) == 0.) o_cl  = 1
-            if (sum(cFamily)  > 0.) o_cl  = maxloc(cFamily, dim = 1)
-            
-            cFamily = 0.
-            
-            do j=1,2*i
-               if(j <= i) factor = 1.
-               if(j  > i) factor = 2.33
-               if((ss_oc_all(j)*sf >=  cF_lim(1)).and. (ss_oc_all(j)*sf < cF_lim(2))) cFamily(1) = cFamily(1) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(2)).and. (ss_oc_all(j)*sf < cF_lim(3))) cFamily(2) = cFamily(2) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(3)).and. (ss_oc_all(j)*sf < cF_lim(4))) cFamily(3) = cFamily(3) + factor
-               if((ss_oc_all(j)*sf >=  cF_lim(4) ))                                   cFamily(4) = cFamily(4) + factor
-            end do
-            
-            if (sum(cFamily) == 0.) o_clp = 1
-            if (sum(cFamily)  > 0.) o_clp = maxloc(cFamily, dim = 1)
-            
-            if(o_cl == 4) then 
-               soil_class_top(n) = n_SoilClasses
-               ktop = 0
-               do j=1,i
-                  if(ss_oc_all(j)*sf >= cF_lim(4)) then
-                     soc_vec (n) = soc_vec(n) + ss_oc_all(j)*sf
-                     ktop = ktop + 1
-                  endif
-               end do
-               if(ktop.ne.0) soc_vec (n)   = soc_vec(n)/ktop
-               ncells_top(n) = 100.*float(ktop)/float(i)
-            else 
-               k = 1
-               ktop = 1
-               
-               do j=1,i
-                  if((ss_oc_all(j)*sf >= cF_lim(o_cl)).and.(ss_oc_all(j)*sf < cF_lim(o_cl + 1))) then 
-                     if((ss_clay_all(j)*sf >= 0.).and.(ss_sand_all(j)*sf >= 0.)) then   
-                        ss_clay (k) = ss_clay_all(j)
-                        ss_sand (k) = ss_sand_all(j)
-                        if((ss_clay (k) + ss_sand (k)) > 9999) then
-                           if(ss_clay (k) >= ss_sand (k)) then
-                              ss_sand (k) = 10000 - ss_clay (k)
-                           else
-                              ss_clay (k) = 10000 - ss_sand (k)
-                           endif
-                        endif
-                        soc_vec (n) = soc_vec(n) + ss_oc_all(j)*sf
-                        k = k + 1
-                        ktop = ktop + 1
-                     endif
-                  endif
-               end do
-               
-               k = k - 1
-               ktop = ktop -1
-               if(ktop.ne.0) soc_vec (n) = soc_vec(n)/ktop
-               ncells_top(n) = 100.*float(ktop)/float(i)
-               if (write_file) write(80+n,*)ktop,o_cl
-               if(ktop > 0) then 
-                  if (write_file) write (80+n,*)ss_clay(1:ktop)
-                  if (write_file) write (80+n,*)ss_sand(1:ktop)
-               endif
-               j = GDL_center_pix (sf, ktop,ktop, ss_clay(1:ktop),ss_sand(1:ktop))
-               if (write_file) write(80+n,*)j
-               
-               if(j >=1) then 
-                  min_percs%clay_perc = ss_clay(j)*sf
-                  min_percs%sand_perc = ss_sand(j)*sf
-                  min_percs%silt_perc = 100. - ss_clay(j)*sf - ss_sand(j)*sf
-                  soil_class_top (n) = table_map(soil_class (min_percs),o_cl)   
-               endif
-            endif
-            if (write_file) write(80+n,*)soil_class_top (n) 
-            if(o_clp == 4) then 
-               soil_class_com(n) = n_SoilClasses
-               fac_count = 0.
-               k =0
-               ktop =0
-               do j=1,2*i
-                  if(ss_oc_all(j)*sf >= cF_lim(4)) then
-                     if(j <= i) factor = 1.
-                     if(j  > i) factor = 2.33
-                     if(j  > i) k = k + 1
-                     if(j <= i) ktop = ktop + 1
-                     poc_vec (n) = poc_vec(n) + ss_oc_all(j)*sf*factor
-                     fac_count = fac_count + factor
-                  endif
-               end do
-               if(fac_count.ne.0) poc_vec (n) = poc_vec (n)/fac_count
-               ncells_sub_pro(n) = 100.*float(k)/float(i)
-               ncells_top_pro(n) = 100.*float(ktop)/float(i)
-            else
-               k = 1
-               ktop = 1
-               
-               ss_clay=0
-               ss_sand=0
-               fac_count = 0.
-               
-               do j=1,2*i
-                  if((ss_oc_all(j)*sf >=  cF_lim(o_clp)).and.(ss_oc_all(j)*sf < cF_lim(o_clp + 1))) then 
-                     if((ss_clay_all(j)*sf >= 0.).and.(ss_sand_all(j)*sf >= 0.)) then 
-                        if(j <= i) factor = 1.
-                        if(j  > i) factor = 2.33
-                        poc_vec (n) = poc_vec(n) + ss_oc_all(j)*sf*factor
-                        fac_count = fac_count + factor
-                        if(j <= i) then
-                           ss_clay (k) = ss_clay_all(j)
-                           ss_sand (k) = ss_sand_all(j)
-                           if((ss_clay (k) + ss_sand (k)) > 9999) then
-                              if(ss_clay (k) >= ss_sand (k)) then
-                                 ss_sand (k) = 10000 - ss_clay (k)
-                              else
-                                 ss_clay (k) = 10000 - ss_sand (k)
-                              endif
-                           endif
-                           k = k + 1
-                           ktop = ktop + 1
-                     else
-                        ss_clay (k) = ss_clay_all(j)
-                        ss_sand (k) = ss_sand_all(j)
-                        if((ss_clay (k) + ss_sand (k)) > 9999) then
-                           if(ss_clay (k) >= ss_sand (k)) then
-                              ss_sand (k) = 10000 - ss_clay (k)
-                           else
-                              ss_clay (k) = 10000 - ss_sand (k)
-                           endif
-                        endif
-                        k = k + 1                         
-		       endif   
-                     endif
-                  endif
-               end do
-	    
-               k = k - 1
-               ktop = ktop -1
-               if(fac_count.ne.0) poc_vec (n) = poc_vec(n)/fac_count
-               ncells_top_pro(n) = 100.*float(ktop)/float(i)
-               ncells_sub_pro(n) = 100.*float(k-ktop)/float(i)
-               
-               if (write_file) write (80+n,*)ktop,k,o_cl
-               if (write_file) write (80+n,*)ss_clay(1:k)
-               if (write_file) write (80+n,*)ss_sand(1:k)
-               j = GDL_center_pix (sf, ktop,k, ss_clay(1:k),ss_sand(1:k))
-               if (write_file) write(80+n,*) j
-               if(j >=1) then 
-                  min_percs%clay_perc = ss_clay(j)*sf
-                  min_percs%sand_perc = ss_sand(j)*sf
-                  min_percs%silt_perc = 100. - ss_clay(j)*sf - ss_sand(j)*sf
-                  soil_class_com (n) = table_map(soil_class (min_percs),o_clp)  
-               endif
-               if (write_file) write(80+n,*) soil_class_com (n) 
-               if (write_file) close(80+n)          
-            endif
-            deallocate (ss_clay,ss_sand,ss_clay_all,ss_sand_all,ss_oc_all)
-         END DO
-      END DO
-      !$OMP ENDPARALLELDO
-
-      call process_peatmap (nx, ny, gfiler, pmap)
-
-      inquire(file='clsm/catch_params.nc4', exist=file_exists)
-
-      if(file_exists) then
-         status = NF_OPEN ('clsm/catch_params.nc4', NF_WRITE, ncid) ; VERIFY_(STATUS)
-         allocate (parms4file (1:maxcat, 1:10))
-      endif
+    soil_class_top =-9999
+    soil_class_com =-9999
     
-      fname='clsm/catchment.def'
-      open (10,file=fname,status='old',action='read',form='formatted')
-      read(10,*) maxcat
-      fname ='clsm/soil_param.first'
-      open (11,file=trim(fname),form='formatted',status='unknown',action = 'write')
-
-      fname ='clsm/tau_param.dat'
-      open (12,file=trim(fname),form='formatted',status='unknown',action = 'write')
-
-      fname ='clsm/mosaic_veg_typs_fracs'
-      open (13,file=trim(fname),form='formatted',status='old',action = 'read')
-
-      do n = 1, maxcat
-
-      	 read (10,*) tindex,pfafindex
-         read (13,*) tindex,pfafindex,vtype
-
-         ! fill gaps from neighbor for rare missing values came from inconsistent masks
-         if ((soil_class_top (n) == -9999).or.(soil_class_com (n) == -9999)) then
-
-            ! if com-layer has data the issues is only with top-layer
-            ! -------------------------------------------------------
-
-            if(soil_class_com (n) >= 1) soil_class_top (n) = soil_class_com (n)
-
-            ! if there is nothing look for the neighbor
-            ! -----------------------------------------
-            
-            if (soil_class_com (n) == -9999) then
-               do k = 1, maxcat
-                  j  = 0
-                  i1 = n - k
-                  i2 = n + k
-                  if((i1 >=     1).and.(soil_class_com (i1) >=1)) j = i1
-                  if((i2 <=maxcat).and.(soil_class_com (i2) >=1)) j = i2
-
-                  if (j > 0) then
-                     soil_class_com (n) = soil_class_com (j)
-                     soil_class_top (n) = soil_class_com (n)
-                     grav_vec(n)        = grav_vec(j)
-                     soc_vec(n)         = soc_vec (j)
-                     poc_vec(n)         = poc_vec (j)
-                  endif
-
-                  if (soil_class_com (n) >=1) exit
-               end do
-            endif
-
-         endif
-
-         fac_surf = soil_class_top(n)
-	 fac      = soil_class_com(n)
-
-         wp_wetness = a_wp(fac) /a_poros(fac)
-
-         d_poros = a_poros(fac)
-         d_bee   = a_bee(fac)
-         d_psis  = a_psis(fac)  
-         d_ks    = a_aksat(fac)
-
-         if((pmap (n) > pmap_thresh).or.(fac == 253)) then
-            d_poros = p_poros
-            d_bee   = p_bee
-            d_psis  = p_psis 
-            d_ks    = p_ks
-            wp_wetness = a_wp(fac)     /d_poros
-         endif
-
-!         write (11,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4, f8.4)')tindex,pfafindex,      &
-!               soil_class_top(n),soil_class_com(n),d_bee,d_psis,d_poros,               &
-!               d_ks/exp(-1.0*zks*gnu),wp_wetness,soildepth(n),                 &
-!               grav_vec(n),soc_vec(n),poc_vec(n), &
-!               a_sand(fac_surf),a_clay(fac_surf),a_sand(fac),a_clay(fac), &
-!	       a_wpsurf(fac_surf)/a_porosurf(fac_surf),a_porosurf(fac_surf), pmap(n)
-	       	    
-         write (12,'(i8,i8,4f10.7)')tindex,pfafindex, &
-	       atau_2cm(fac_surf),btau_2cm(fac_surf),atau(fac_surf),btau(fac_surf)  
-
-!         if (allocated (parms4file)) then
-!
-!            parms4file (n, 1) = d_bee
-!            parms4file (n, 2) = d_ks /exp(-1.0*zks*gnu)
-!            parms4file (n, 3) = d_poros
-!            parms4file (n, 4) = d_psis
-!            parms4file (n, 5) = wp_wetness
-!            parms4file (n, 6) = soildepth(n)
-!            parms4file (n, 7) = atau_2cm(fac_surf)
-!            parms4file (n, 8) = btau_2cm(fac_surf)
-!            parms4file (n, 9) = atau(fac_surf)
-!            parms4file (n,10) = btau(fac_surf) 
-!  
-!  	 endif
-
-      end do
-      write (11,'(a)')'                    '
-      write (11,'(a)')'FMT=i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,3f7.3,4f7.3,2f10.4'
-      write (11,'(a)')'TileIndex PfafID SoilClassTop SoilClassProfile BEE PSIS POROS Ks_at_SURF WPWET SoilDepth %Grav %OCTop %OCProf %Sand_top %Clay_top %Sand_prof %Clay_prof WPWET_SURF POROS_SURF'
-      close (10, status = 'keep')	            
-      close (11, status = 'keep')	            
-      close (12, status = 'keep')	            
-      close (13, status = 'keep')
-
-      deallocate (data_vec1, data_vec2,data_vec3, data_vec4,data_vec5, data_vec6)
-      deallocate (tileid_vec)
-      deallocate (a_sand,a_clay,a_silt,a_oc,a_bee,a_psis,       &
-            a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, &
-            atau_2cm,btau_2cm)
-      deallocate (soildepth, grav_vec,soc_vec,poc_vec,&
-             ncells_top,ncells_top_pro,ncells_sub_pro,soil_class_top,soil_class_com)
-      if(file_exists) then
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/maxcat/), parms4file (:, 1)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/maxcat/), parms4file (:, 2)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/maxcat/), parms4file (:, 3)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/maxcat/), parms4file (:, 4)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/maxcat/), parms4file (:, 5)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/maxcat/), parms4file (:, 6)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ATAU2') ,(/1/),(/maxcat/), parms4file (:, 7)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BTAU2') ,(/1/),(/maxcat/), parms4file (:, 8)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ATAU5') ,(/1/),(/maxcat/), parms4file (:, 9)) ; VERIFY_(STATUS) 
-         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BTAU5') ,(/1/),(/maxcat/), parms4file (:,10)) ; VERIFY_(STATUS) 
-         STATUS   = NF_CLOSE (NCID) ; VERIFY_(STATUS)
-         DEALLOCATE (parms4file)
-      endif
-
-    END SUBROUTINE derive_CLSM_HWSD_soiltypes
-
-
+    allocate(low_ind(n_threads))
+    allocate(upp_ind(n_threads))
+    low_ind(1)         = 1
+    upp_ind(n_threads) = maxcat
     
-    ! --------------------------------------------------------------------------------------
+    if (running_omp)  then
+       do i=1,n_threads-1  
+          upp_ind(i)   = low_ind(i) + (maxcat/n_threads) - 1 
+          low_ind(i+1) = upp_ind(i) + 1
+       end do
+    end if
+      
+    !$OMP PARALLELDO DEFAULT(NONE)                          &
+    !$OMP SHARED( n_threads, low_ind, upp_ind, tileid_vec,  &
+    !$OMP         sf,data_vec1,data_vec2,data_vec3,         &
+    !$OMP         data_vec4,data_vec5,data_vec6,cF_lim,     &
+    !$OMP         table_map,soil_class_top,soil_class_com,  &
+    !$OMP         soc_vec,poc_vec,ncells_top,ncells_top_pro,&
+    !$OMP         ncells_sub_pro)    &
+    !$OMP PRIVATE(n,i,j,k,icount,t_count,i1,i2,ss_clay,     &
+    !$OMP         ss_sand,ss_clay_all,ss_sand_all,          &
+    !$OMP         ss_oc_all,cFamily,factor,o_cl,o_clp,ktop, &
+    !$OMP         min_percs, fac_count)
+    
+    DO t_count = 1,n_threads
+       DO n = low_ind(t_count),upp_ind(t_count)                                    
+          if(n==low_ind(t_count)) then
+             icount = 1
+             do k=1,low_ind(t_count) - 1
+                do while (tileid_vec(icount)== k)
+                   icount = icount + 1
+                end do
+             end do
+          endif
+          
+          i1 = icount 
+          
+          loop: do while (tileid_vec(icount)== n)
+             if(icount <= size(tileid_vec,1)) icount = icount + 1
+             if(icount > size(tileid_vec,1)) exit loop
+          end do loop
+          
+          i2 = icount -1
+          i = i2 - i1 + 1
+          
+          allocate(ss_clay    (1:2*i))
+          allocate(ss_sand    (1:2*i))
+          allocate(ss_clay_all(1:2*i))
+          allocate(ss_sand_all(1:2*i))
+          allocate(ss_oc_all  (1:2*i))
+          
+          ss_clay    = 0    
+          ss_sand    = 0	
+          ss_clay_all= 0
+          ss_sand_all= 0
+          ss_oc_all  = 0
+          
+          ss_clay_all (1:i)     = data_vec1(i1:i2)
+          ss_sand_all (1:i)     = data_vec2(i1:i2)
+          ss_oc_all   (1:i)     = data_vec3(i1:i2)	
+          ss_clay_all (1+i:2*i) = data_vec4(i1:i2) 
+          ss_sand_all (1+i:2*i) = data_vec5(i1:i2)
+          ss_oc_all   (1+i:2*i) = data_vec6(i1:i2)	
+          
+          cFamily = 0.
+          
+          do j=1,i
+             if(j <= i) factor = 1.
+             if((ss_oc_all(j)*sf >=  cF_lim(1)).and. (ss_oc_all(j)*sf < cF_lim(2))) cFamily(1) = cFamily(1) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(2)).and. (ss_oc_all(j)*sf < cF_lim(3))) cFamily(2) = cFamily(2) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(3)).and. (ss_oc_all(j)*sf < cF_lim(4))) cFamily(3) = cFamily(3) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(4) ))                                   cFamily(4) = cFamily(4) + factor
+          end do
+          
+          if (sum(cFamily) == 0.) o_cl  = 1
+          if (sum(cFamily)  > 0.) o_cl  = maxloc(cFamily, dim = 1)
+          
+          cFamily = 0.
+            
+          do j=1,2*i
+             if(j <= i) factor = 1.
+             if(j  > i) factor = 2.33
+             if((ss_oc_all(j)*sf >=  cF_lim(1)).and. (ss_oc_all(j)*sf < cF_lim(2))) cFamily(1) = cFamily(1) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(2)).and. (ss_oc_all(j)*sf < cF_lim(3))) cFamily(2) = cFamily(2) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(3)).and. (ss_oc_all(j)*sf < cF_lim(4))) cFamily(3) = cFamily(3) + factor
+             if((ss_oc_all(j)*sf >=  cF_lim(4) ))                                   cFamily(4) = cFamily(4) + factor
+          end do
+          
+          if (sum(cFamily) == 0.) o_clp = 1
+          if (sum(cFamily)  > 0.) o_clp = maxloc(cFamily, dim = 1)
+          
+          if(o_cl == 4) then 
+             soil_class_top(n) = n_SoilClasses
+             ktop = 0
+             do j=1,i
+                if(ss_oc_all(j)*sf >= cF_lim(4)) then
+                   soc_vec (n) = soc_vec(n) + ss_oc_all(j)*sf
+                   ktop = ktop + 1
+                endif
+             end do
+             if(ktop.ne.0) soc_vec (n)   = soc_vec(n)/ktop
+             ncells_top(n) = 100.*float(ktop)/float(i)
+          else 
+             k = 1
+             ktop = 1
+             
+             do j=1,i
+                if((ss_oc_all(j)*sf >= cF_lim(o_cl)).and.(ss_oc_all(j)*sf < cF_lim(o_cl + 1))) then 
+                   if((ss_clay_all(j)*sf >= 0.).and.(ss_sand_all(j)*sf >= 0.)) then   
+                      ss_clay (k) = ss_clay_all(j)
+                      ss_sand (k) = ss_sand_all(j)
+                      if((ss_clay (k) + ss_sand (k)) > 9999) then
+                         if(ss_clay (k) >= ss_sand (k)) then
+                            ss_sand (k) = 10000 - ss_clay (k)
+                         else
+                            ss_clay (k) = 10000 - ss_sand (k)
+                         endif
+                      endif
+                      soc_vec (n) = soc_vec(n) + ss_oc_all(j)*sf
+                      k = k + 1
+                      ktop = ktop + 1
+                   endif
+                endif
+             end do
+             
+             k = k - 1
+             ktop = ktop -1
+             if(ktop.ne.0) soc_vec (n) = soc_vec(n)/ktop
+             ncells_top(n) = 100.*float(ktop)/float(i)
+             
+             j = GDL_center_pix (sf, ktop,ktop, ss_clay(1:ktop),ss_sand(1:ktop))
+             
+             if(j >=1) then 
+                min_percs%clay_perc = ss_clay(j)*sf
+                min_percs%sand_perc = ss_sand(j)*sf
+                min_percs%silt_perc = 100. - ss_clay(j)*sf - ss_sand(j)*sf
+                soil_class_top (n) = table_map(soil_class (min_percs),o_cl)   
+             endif
+          endif
+          if(o_clp == 4) then 
+             soil_class_com(n) = n_SoilClasses
+             fac_count = 0.
+             k =0
+             ktop =0
+             do j=1,2*i
+                if(ss_oc_all(j)*sf >= cF_lim(4)) then
+                   if(j <= i) factor = 1.
+                   if(j  > i) factor = 2.33
+                   if(j  > i) k = k + 1
+                   if(j <= i) ktop = ktop + 1
+                   poc_vec (n) = poc_vec(n) + ss_oc_all(j)*sf*factor
+                   fac_count = fac_count + factor
+                endif
+             end do
+             if(fac_count.ne.0) poc_vec (n) = poc_vec (n)/fac_count
+             ncells_sub_pro(n) = 100.*float(k)/float(i)
+             ncells_top_pro(n) = 100.*float(ktop)/float(i)
+          else
+             k = 1
+             ktop = 1
+             
+             ss_clay=0
+             ss_sand=0
+             fac_count = 0.
+             
+             do j=1,2*i
+                if((ss_oc_all(j)*sf >=  cF_lim(o_clp)).and.(ss_oc_all(j)*sf < cF_lim(o_clp + 1))) then 
+                   if((ss_clay_all(j)*sf >= 0.).and.(ss_sand_all(j)*sf >= 0.)) then 
+                      if(j <= i) factor = 1.
+                      if(j  > i) factor = 2.33
+                      poc_vec (n) = poc_vec(n) + ss_oc_all(j)*sf*factor
+                      fac_count = fac_count + factor
+                      if(j <= i) then
+                         ss_clay (k) = ss_clay_all(j)
+                         ss_sand (k) = ss_sand_all(j)
+                         if((ss_clay (k) + ss_sand (k)) > 9999) then
+                            if(ss_clay (k) >= ss_sand (k)) then
+                               ss_sand (k) = 10000 - ss_clay (k)
+                            else
+                               ss_clay (k) = 10000 - ss_sand (k)
+                            endif
+                         endif
+                         k = k + 1
+                         ktop = ktop + 1
+                      else
+                         ss_clay (k) = ss_clay_all(j)
+                         ss_sand (k) = ss_sand_all(j)
+                         if((ss_clay (k) + ss_sand (k)) > 9999) then
+                            if(ss_clay (k) >= ss_sand (k)) then
+                               ss_sand (k) = 10000 - ss_clay (k)
+                            else
+                               ss_clay (k) = 10000 - ss_sand (k)
+                            endif
+                         endif
+                         k = k + 1                         
+                      endif
+                   endif
+                endif
+             end do
+             
+             k = k - 1
+             ktop = ktop -1
+             if(fac_count.ne.0) poc_vec (n) = poc_vec(n)/fac_count
+             ncells_top_pro(n) = 100.*float(ktop)/float(i)
+             ncells_sub_pro(n) = 100.*float(k-ktop)/float(i)
+             
+             j = GDL_center_pix (sf, ktop,k, ss_clay(1:k),ss_sand(1:k))
+             if(j >=1) then 
+                min_percs%clay_perc = ss_clay(j)*sf
+                min_percs%sand_perc = ss_sand(j)*sf
+                min_percs%silt_perc = 100. - ss_clay(j)*sf - ss_sand(j)*sf
+                soil_class_com (n) = table_map(soil_class (min_percs),o_clp)  
+             endif
+          endif
+          deallocate (ss_clay,ss_sand,ss_clay_all,ss_sand_all,ss_oc_all)
+       END DO
+    END DO
+    !$OMP ENDPARALLELDO
 
-    SUBROUTINE process_peatmap (nc, nr, gfiler, pmap)
-      
-      implicit none
-      integer  , parameter                         :: N_lon_pm = 43200, N_lat_pm = 21600
-      integer, intent (in)                         :: nc, nr
-      real, pointer, dimension (:), intent (inout) :: pmap
-      character(*), intent (in)                    :: gfiler
-      integer                                      :: i,j, status, varid, ncid
-      integer                                      :: NTILES        
-      REAL, ALLOCATABLE, dimension (:)             :: count_pix
-      REAL, ALLOCATABLE, dimension (:,:)           :: data_grid, pm_grid
-      INTEGER, ALLOCATABLE, dimension (:,:)        :: tile_id
-      character*100                                :: fout    
-      
-      ! Reading number of tiles
-      ! -----------------------
-      
-      open (20, file = 'clsm/catchment.def', form = 'formatted', status = 'old', action =  'read')
-      
-      read (20, *) NTILES
-      
-      close (20, status = 'keep')
-      
-      ! READ PEATMAP source data files and regrid
-      ! -----------------------------------------
-      
-      status  = NF_OPEN ('data/CATCH/PEATMAP_mask.nc4', NF_NOWRITE, ncid)
-      
-      allocate (pm_grid   (1 : NC      , 1 : NR))
-      allocate (data_grid (1 : N_lon_pm, 1 : N_lat_pm)) 
-      
-      status  = NF_INQ_VARID (ncid,'PEATMAP',VarID) ; VERIFY_(STATUS)
-      status  = NF_GET_VARA_REAL (ncid,VarID, (/1,1/),(/N_lon_pm, N_lat_pm/), data_grid) ; VERIFY_(STATUS)
-      
-      call LDT_RegridRaster (data_grid, pm_grid)
-      
-      status = NF_CLOSE(ncid)
-      
-      ! Grid to tile
-      ! ------------
-      
-      ! Reading tile-id raster file
-      
-      allocate(tile_id(1:nc,1:nr))
-      
-      open (10,file=trim(gfiler)//'.rst',status='old',action='read',  &
-           form='unformatted',convert='little_endian')
-      
-      do j=1,nr
-         read(10)tile_id(:,j)
-      end do
-      
-      close (10,status='keep')     
-      
-      allocate (pmap      (1:NTILES))
-      allocate (count_pix (1:NTILES))
-      
-      pmap      = 0.
-      count_pix = 0.
-      
-      do j = 1,nr
-         do i = 1, nc
-            if((tile_id(i,j).gt.0).and.(tile_id(i,j).le.NTILES)) then                
-               if(pm_grid(i,j) > 0.)  pmap (tile_id(i,j)) = pmap (tile_id(i,j)) + pm_grid(i,j)
-               count_pix (tile_id(i,j)) = count_pix (tile_id(i,j)) + 1. 
-            endif
-         end do
-      end do
-      
-      where (count_pix >   0.) pmap = pmap/count_pix
-      
-      deallocate (count_pix)
-      deallocate (pm_grid)
-      deallocate (tile_id)
-      
-    END SUBROUTINE process_peatmap
+    call process_peatmap (pmap)
+    
+    do n = 1, maxcat
+       
+       ! fill gaps from neighbor for rare missing values came from inconsistent masks
+       if ((soil_class_top (n) == -9999).or.(soil_class_com (n) == -9999)) then
+          
+          ! if com-layer has data the issues is only with top-layer
+          ! -------------------------------------------------------
+          
+          if(soil_class_com (n) >= 1) soil_class_top (n) = soil_class_com (n)
+          
+          ! if there is nothing look for the neighbor
+          ! -----------------------------------------
+          
+          if (soil_class_com (n) == -9999) then
+             do k = 1, maxcat
+                j  = 0
+                i1 = n - k
+                i2 = n + k
+                if((i1 >=     1).and.(soil_class_com (i1) >=1)) j = i1
+                if((i2 <=maxcat).and.(soil_class_com (i2) >=1)) j = i2
+                
+                if (j > 0) then
+                   soil_class_com (n) = soil_class_com (j)
+                   soil_class_top (n) = soil_class_com (n)
+                   grav_vec(n)        = grav_vec(j)
+                   soc_vec(n)         = soc_vec (j)
+                   poc_vec(n)         = poc_vec (j)
+                endif
+                
+                if (soil_class_com (n) >=1) exit
+             end do
+          endif
+          
+       endif
+       
+       fac_surf = soil_class_top(n)
+       fac      = soil_class_com(n)
+       
+       wp_wetness = a_wp(fac) /a_poros(fac)
 
-        
+       !         d_poros = a_poros(fac)
+       !         d_bee   = a_bee(fac)
+       !         d_psis  = a_psis(fac)  
+       !         d_ks    = a_aksat(fac)
+       !
+       !         if((pmap (n) > pmap_thresh).or.(fac == 253)) then
+       !            d_poros = p_poros
+       !            d_bee   = p_bee
+       !            d_psis  = p_psis 
+       !            d_ks    = p_ks
+       !            wp_wetness = a_wp(fac)     /d_poros
+       !         endif
+       
+       BEE(n)  = a_bee(fac)
+       POROS(n)= a_poros(fac)
+       WPWET(n)= wp_wetness
+       PSIS(n) = a_psis(fac)  
+       KS(n)   = a_aksat(fac)
+       ATAU2(n)= atau_2cm(fac_surf)
+       BTAU2(n)= btau_2cm(fac_surf)
+       ATAU5(n)= atau(fac_surf)
+       BTAU5(n)= btau(fac_surf) 
+       
+    end do
+    
+    deallocate (data_vec1, data_vec2,data_vec3, data_vec4,data_vec5, data_vec6)
+    deallocate (tileid_vec)
+    deallocate (a_sand,a_clay,a_silt,a_oc,a_bee,a_psis,       &
+         a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, &
+         atau_2cm,btau_2cm)
+    deallocate (grav_vec,soc_vec,poc_vec,&
+         ncells_top,ncells_top_pro,ncells_sub_pro)
+    
+  END SUBROUTINE derive_CLSM_HWSD_soiltypes
+  
+  ! --------------------------------------------------------------------------------------
+  
+  SUBROUTINE assemble_global_array (data_label, sf, soildepth, Clay0_30, Sand0_30, OC0_30, Clay30_100,Sand30_100,OC30_100,Gravel)
+    
+    implicit none
+    character (*), intent (in) :: data_label
+    real         , intent(out) :: sf
+    integer (kind=2), dimension (:,:), allocatable, intent (out), optional ::  soildepth, Clay0_30, Sand0_30,&
+         OC0_30, Clay30_100,Sand30_100,OC30_100,Gravel
+    integer (kind=2), dimension (:,:), allocatable               ::  soil, Clay0, Sand0, OC0, Clay3, &
+         Sand3,OC3,Gr
+    integer, allocatable, dimension (:,:) :: &
+         net_data1,net_data2,net_data3,net_data4,net_data5,net_data6 ,net_data7, net_data8    
+    character*10 :: string
+    character*2 :: VV,HH
+    integer :: status,ncid, iLL,jLL,ix,jx,nc_10,nr_10,d_undef, i1,i2, i_highd, j_highd, i,j
+    
+    status = NF_OPEN(trim(c_data)//'SOIL-DATA/'//trim(data_label)//'_H11V13.nc',NF_NOWRITE,ncid); VERIFY_(STATUS)
+    status = NF_GET_att_INT(ncid,NF_GLOBAL,'i_ind_offset_LL',iLL)                          ; VERIFY_(STATUS)
+    status = NF_GET_att_INT(ncid,NF_GLOBAL,'j_ind_offset_LL',jLL)                          ; VERIFY_(STATUS)
+    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lon_global',i_highd)                         ; VERIFY_(STATUS)
+    status = NF_GET_att_INT(ncid,NF_GLOBAL,'N_lat_global',j_highd)                         ; VERIFY_(STATUS)
+    status = NF_INQ_DIM (ncid,1,string, nc_10)                                             ; VERIFY_(STATUS)
+    status = NF_INQ_DIM (ncid,2,string, nr_10)                                             ; VERIFY_(STATUS)
+    status = NF_CLOSE(ncid); VERIFY_(STATUS)        
+    ASSERT_(NX - i_highd)
+    ASSERT_(NY - j_highd)
+    
+    if(present (soildepth )) allocate (soil  (1:NX, 1: NY))
+    if(present (Clay0_30  )) allocate (Clay0 (1:NX, 1: NY))
+    if(present (Sand0_30  )) allocate (Sand0 (1:NX, 1: NY))
+    if(present (OC0_30    )) allocate (OC0   (1:NX, 1: NY))
+    if(present (Clay30_100)) allocate (Clay3 (1:NX, 1: NY))
+    if(present (Sand30_100)) allocate (Sand3 (1:NX, 1: NY))
+    if(present (OC30_100  )) allocate (OC3   (1:NX, 1: NY))
+    if(present (Gravel    )) allocate (Gr    (1:NX, 1: NY))
+    
+    if(present (soildepth )) allocate (net_data1 (1:nc_10,1:nr_10))
+    if(present (Clay0_30  )) allocate (net_data2 (1:nc_10,1:nr_10)) 
+    if(present (Sand0_30  )) allocate (net_data3 (1:nc_10,1:nr_10)) 
+    if(present (OC0_30    )) allocate (net_data4 (1:nc_10,1:nr_10)) 
+    if(present (Clay30_100)) allocate (net_data5 (1:nc_10,1:nr_10)) 
+    if(present (Sand30_100)) allocate (net_data6 (1:nc_10,1:nr_10)) 
+    if(present (OC30_100  )) allocate (net_data7 (1:nc_10,1:nr_10)) 
+    if(present (Gravel    )) allocate (net_data8 (1:nc_10,1:nr_10)) 
+    
+    if(allocated (soil )) soil  = -9999.
+    if(allocated (Clay0)) Clay0 = -9999.
+    if(allocated (Sand0)) Sand0 = -9999.
+    if(allocated (OC0  )) OC0   = -9999.
+    if(allocated (Clay3)) Clay3 = -9999.
+    if(allocated (Sand3)) Sand3 = -9999.
+    if(allocated (OC3  )) OC3   = -9999.
+    if(allocated (Gr   )) Gr    = -9999.
+    
+    do jx = 1,18
+       do ix = 1,36
+          write (vv,'(i2.2)')jx
+          write (hh,'(i2.2)')ix 
+          
+          status = NF_OPEN(trim(c_data)//'SOIL-DATA/'//trim(data_label)//'_H'//hh//'V'//vv//'.nc',NF_NOWRITE, ncid) 
+          
+          if (status == 0) then            
+             status = NF_GET_att_INT  (ncid,NF_GLOBAL,'i_ind_offset_LL',iLL); VERIFY_(STATUS)
+             status = NF_GET_att_INT  (ncid,NF_GLOBAL,'j_ind_offset_LL',jLL); VERIFY_(STATUS)
+             
+             if(present(soildepth)) then
+                status = NF_GET_att_INT  (ncid,NC_VarID(ncid,'SoilDepth'), 'UNDEF',d_undef); VERIFY_(STATUS)
+                status = NF_GET_att_REAL (ncid,NC_VarID(ncid,'SoilDepth'),'ScaleFactor',sf); VERIFY_(STATUS)
+             else
+                status = NF_GET_att_INT  (ncid,NC_VarID(ncid,'Clay0_30'), 'UNDEF',d_undef); VERIFY_(STATUS)
+                status = NF_GET_att_REAL (ncid,NC_VarID(ncid,'Clay0_30'),'ScaleFactor',sf); VERIFY_(STATUS)
+             endif
+             
+             if(present (soildepth )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'SoilDepth' ),(/1,1/),(/nc_10,nr_10/),net_data1); VERIFY_(STATUS)
+             if(present (Clay0_30  )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'Clay0_30'  ),(/1,1/),(/nc_10,nr_10/),net_data2); VERIFY_(STATUS)             
+             if(present (Sand0_30  )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'Sand0_30'  ),(/1,1/),(/nc_10,nr_10/),net_data3); VERIFY_(STATUS) 
+             if(present (OC0_30    )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'OC0_30'    ),(/1,1/),(/nc_10,nr_10/),net_data4); VERIFY_(STATUS) 
+             if(present (Clay30_100)) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'Clay30_100'),(/1,1/),(/nc_10,nr_10/),net_data5); VERIFY_(STATUS) 
+             if(present (Sand30_100)) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'Sand30_100'),(/1,1/),(/nc_10,nr_10/),net_data6); VERIFY_(STATUS) 
+             if(present (OC30_100  )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'OC30_100'  ),(/1,1/),(/nc_10,nr_10/),net_data7); VERIFY_(STATUS) 
+             if(present (Gravel    )) status = NF_GET_VARA_INT (ncid,NC_VarID(ncid,'Gravel'    ),(/1,1/),(/nc_10,nr_10/),net_data8); VERIFY_(STATUS) 
+             
+             do j = jLL,jLL + nr_10 -1 
+                do i = iLL, iLL + nc_10 -1 
+                   if((present (soildepth )).and.(net_data1(i-iLL +1 ,j - jLL +1) /= d_undef)) soil (i,j) = net_data1(i-iLL +1 ,j - jLL +1)
+                   if((present (Clay0_30  )).and.(net_data2(i-iLL +1 ,j - jLL +1) /= d_undef)) Clay0(i,j) = net_data2(i-iLL +1 ,j - jLL +1)  
+                   if((present (Sand0_30  )).and.(net_data3(i-iLL +1 ,j - jLL +1) /= d_undef)) Sand0(i,j) = net_data3(i-iLL +1 ,j - jLL +1)  
+                   if((present (OC0_30    )).and.(net_data4(i-iLL +1 ,j - jLL +1) /= d_undef)) OC0  (i,j) = net_data4(i-iLL +1 ,j - jLL +1)  
+                   if((present (Clay30_100)).and.(net_data5(i-iLL +1 ,j - jLL +1) /= d_undef)) Clay3(i,j) = net_data5(i-iLL +1 ,j - jLL +1)  
+                   if((present (Sand30_100)).and.(net_data6(i-iLL +1 ,j - jLL +1) /= d_undef)) Sand3(i,j) = net_data6(i-iLL +1 ,j - jLL +1)  
+                   if((present (OC30_100  )).and.(net_data7(i-iLL +1 ,j - jLL +1) /= d_undef)) OC3  (i,j) = net_data7(i-iLL +1 ,j - jLL +1)  
+                   if((present (Gravel    )).and.(net_data8(i-iLL +1 ,j - jLL +1) /= d_undef)) Gr   (i,j) = net_data8(i-iLL +1 ,j - jLL +1)  
+                enddo
+             enddo
+             status = NF_CLOSE(ncid)
+          endif
+       end do
+    end do
+    
+    if(present (soildepth )) soildepth   = soil 
+    if(present (Clay0_30  )) Clay0_30    = Clay0
+    if(present (Sand0_30  )) Sand0_30    = Sand0
+    if(present (OC0_30    )) OC0_30      = OC0
+    if(present (Clay30_100)) Clay30_100  = Clay3
+    if(present (Sand30_100)) Sand30_100  = Sand3
+    if(present (OC30_100  )) OC30_100    = OC3  
+    if(present (Gravel    )) Gravel      = Gr   
+    
+    if(allocated (soil )) deallocate (soil )
+    if(allocated (Clay0)) deallocate (Clay0)
+    if(allocated (Sand0)) deallocate (Sand0)
+    if(allocated (OC0  )) deallocate (OC0  )
+    if(allocated (Clay3)) deallocate (Clay3)
+    if(allocated (Sand3)) deallocate (Sand3)
+    if(allocated (OC3  )) deallocate (OC3  )
+    if(allocated (Gr   )) deallocate (Gr   )
+    
+    if(allocated (net_data1)) deallocate (net_data1)
+    if(allocated (net_data2)) deallocate (net_data2)
+    if(allocated (net_data3)) deallocate (net_data3)
+    if(allocated (net_data4)) deallocate (net_data4)
+    if(allocated (net_data5)) deallocate (net_data5)
+    if(allocated (net_data6)) deallocate (net_data6)
+    if(allocated (net_data7)) deallocate (net_data7)
+    if(allocated (net_data8)) deallocate (net_data8)
+    
+  end SUBROUTINE assemble_global_array
+    
+  ! --------------------------------------------------------------------------------------
+
+  SUBROUTINE process_peatmap (pmap)
+    
+    implicit none
+    integer  , parameter                         :: N_lon_pm = 43200, N_lat_pm = 21600
+    real, pointer, dimension (:), intent (inout) :: pmap
+    integer                                      :: i,j, status, varid, ncid
+    integer                                      :: NTILES        
+    REAL, ALLOCATABLE, dimension (:)             :: count_pix
+    REAL, ALLOCATABLE, dimension (:,:)           :: data_grid, pm_grid
+    INTEGER, ALLOCATABLE, dimension (:,:)        :: tile_id
+    
+    NTILES = LDT_g5map%NT_GEOS 
+    
+    
+    ! READ PEATMAP source data files and regrid
+    ! -----------------------------------------
+    
+    status  = NF_OPEN (trim(c_data)//'PEATMAP_mask.nc4', NF_NOWRITE, ncid)
+    
+    allocate (pm_grid   (1 : NX      , 1 : NY))
+    
+    status  = NF_INQ_VARID (ncid,'PEATMAP',VarID) ; VERIFY_(STATUS)
+    status  = NF_GET_VARA_REAL (ncid,VarID, (/1,1/),(/N_lon_pm, N_lat_pm/), pm_grid) ; VERIFY_(STATUS)
+    
+    status = NF_CLOSE(ncid)
+    
+    ! Grid to tile
+    ! ------------
+    
+    ! Reading tile-id raster file
+    
+    allocate(tile_id(1:NX,1:NY))
+    tile_id = LDT_g5map%rst
+    
+    allocate (pmap      (1:NTILES))
+    allocate (count_pix (1:NTILES))
+    
+    pmap      = 0.
+    count_pix = 0.
+    
+    do j = 1,NY
+       do i = 1, NX
+          if((tile_id(i,j).gt.0).and.(tile_id(i,j).le.NTILES)) then                
+             if(pm_grid(i,j) > 0.)  pmap (tile_id(i,j)) = pmap (tile_id(i,j)) + pm_grid(i,j)
+             count_pix (tile_id(i,j)) = count_pix (tile_id(i,j)) + 1. 
+          endif
+       end do
+    end do
+    
+    where (count_pix >   0.) pmap = pmap/count_pix
+    
+    deallocate (count_pix)
+    deallocate (pm_grid)
+    deallocate (tile_id)
+    
+  END SUBROUTINE process_peatmap
+      
 end module mod_HWSD_STATSGO2_texture

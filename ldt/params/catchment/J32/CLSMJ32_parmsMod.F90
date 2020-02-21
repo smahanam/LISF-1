@@ -34,8 +34,10 @@ module CLSMJ32_parmsMod
   use LDT_paramDataMod
   use LDT_logMod
   use CLSM_util, only : init_geos2lis_mapping, LDT_g5map, G52LIS, LISv2g
-  use CLSM_param_routines, only : &
-       gnu
+  use CLSM_param_routines, only : create_CLSM_parameters
+  use mod_HWSD_STATSGO2_texture, ONLY : &
+       derive_CLSM_HWSD_soiltypes
+  
 
   implicit none
 
@@ -145,8 +147,9 @@ contains
     real         :: catchparms_gridDesc(LDT_rc%nnest, 20)
     real         :: param_grid(20)
     real, pointer, dimension (:) :: ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
-         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2,       &
-         ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH
+         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2, GNU,  &
+         ATAU2, BTAU2, ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH
+    integer, pointer, dimension (:) :: SOIL_TOP, SOIL_COM
 
 ! ________________________________________________________
 
@@ -162,8 +165,52 @@ contains
     ! (2) Derive soil types, atau and btau
     ! ------------------------------------
 
+    NTILES = LDT_g5map%NT_GEOS
+ 
+    allocate (BEE       (1:NTILES))
+    allocate (POROS     (1:NTILES))
+    allocate (WPWET     (1:NTILES))
+    allocate (PSIS      (1:NTILES))
+    allocate (KS        (1:NTILES))
+    allocate (SOILDEPTH (1:NTILES))
+    allocate (ATAU2     (1:NTILES))
+    allocate (BTAU2     (1:NTILES))
+    allocate (ATAU      (1:NTILES))
+    allocate (BTAU      (1:NTILES))
+    allocate (SOIL_TOP  (1:NTILES))
+    allocate (SOIL_COM  (1:NTILES))
+
+    call derive_CLSM_HWSD_soiltypes (NTILES, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, &
+         ATAU2, BTAU2, ATAU, BTAU, SOIL_TOP, SOIL_COM)
+
+
     ! (3) Derive CLSM model - the parameters that were in ar.new, bf.dat, ts.dat 
     ! ---------------------------------------------------------------------------
+
+    allocate (GNU  (1:NTILES))
+    allocate (ARS1 (1:NTILES))
+    allocate (ARS2 (1:NTILES))
+    allocate (ARS3 (1:NTILES))
+    allocate (ARA1 (1:NTILES))
+    allocate (ARA2 (1:NTILES))
+    allocate (ARA3 (1:NTILES))
+    allocate (ARA4 (1:NTILES))
+    allocate (ARW1 (1:NTILES))
+    allocate (ARW2 (1:NTILES))
+    allocate (ARW3 (1:NTILES))
+    allocate (ARW4 (1:NTILES))
+    allocate (BF1  (1:NTILES))
+    allocate (BF2  (1:NTILES))
+    allocate (BF3  (1:NTILES))
+    allocate (TSA1 (1:NTILES))
+    allocate (TSA2 (1:NTILES))
+    allocate (TSB1 (1:NTILES))
+    allocate (TSB2 (1:NTILES))
+
+    call create_CLSM_parameters (NTILES, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, & 
+         SOIL_TOP, SOIL_COM, GNU, ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4,           &
+         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2)
+    
 
     ! (4) write out gridded arrays in LIS input file
     ! ----------------------------------------------
@@ -179,6 +226,7 @@ contains
 
        call set_param_attribs(CLSMJ32_struc(n)%bexp,"BEXP", &
             full_name="CLSM Bexp Clapp-Hornberger parameter")
+
        call set_param_attribs(CLSMJ32_struc(n)%psisat,"PSISAT", &
             full_name="CLSM saturated soil moisture potential")
 
@@ -478,8 +526,7 @@ contains
        CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (Ks))
        CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
        CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
-       soildepth(:) = gnu
-       CLSMJ32_struc(n)%gnu%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
+       CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (gnu))
        
        call populate_param_attribs( "ALBNIRDIFF", &
            "Alb near-IR diffuse scale factor", "-",  &
