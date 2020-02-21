@@ -29,17 +29,19 @@ module mod_HWSD_STATSGO2_texture
        PI => LDT_CONST_PI
   use CLSM_util, only : LDT_RegridRaster, NC_VarID, GEOS2LIS, &
        c_data => G5_BCSDIR
-  use get_DeLannoy_SoilClass, ONLY :  &
-       mineral_perc, GDL_center_pix, &
+  use get_DeLannoy_SoilClass, ONLY :        &
+       mineral_perc, GDL_center_pix,        &
        n_SoilClasses => n_DeLannoy_classes, & 
-       soil_class => DeLannoy_class
+       soil_class    => DeLannoy_class,     &
+       cf_lim        => OC_LIMITS,          &
+       mineral_perc, get_GDL_soil_table
 
   implicit none
   include 'netcdf.inc'	
 
   private
-  public  read_HWSD_STATSGO2_texture
-  
+  public  read_HWSD_STATSGO2_texture, derive_CLSM_HWSD_soiltypes
+ 
 contains
 
   subroutine read_HWSD_STATSGO2_texture ( n, num_bins, fgrd, texture_layers )
@@ -264,7 +266,7 @@ contains
 
   !----------------------------------------------------------------------  
 
-  SUBROUTINE soil_para_hwsd (nx,ny,gfiler)
+  SUBROUTINE derive_CLSM_HWSD_soiltypes (nx,ny,gfiler)
     
     ! Processing NGDC-HWSD-STATSGO merged soil properties with Woesten Soil
     ! Parameters and produces tau_param.dat and soil_param.dat files
@@ -272,18 +274,17 @@ contains
     implicit none	    
     integer, intent (in) :: nx, ny 
     character(*)  :: gfiler
-    real, dimension (:), allocatable ::           &
+    real, dimension (:), pointer ::              &
          a_sand,a_clay,a_silt,a_oc,a_bee,a_psis, &
          a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, &
          atau_2cm,btau_2cm 
     integer, dimension (100,3) :: table_map
-    integer, dimension (3) :: nsoil_pcarbon 
-    type (mineral_perc) :: min_percs
+    type (mineral_perc)        :: min_percs
     
     integer :: n,maxcat,i,j,k,ktop,ncid,i_highd,j_highd,nx_adj,ny_adj
     integer :: status,iLL,jLL,ix,jx,vid,nc_10,nr_10,d_undef,   &
          i1,i2,icount
-    character*100 :: fname,fout
+    character*100 :: fname
     character*10 :: string
     character*2 :: VV,HH
     
@@ -362,15 +363,12 @@ contains
     if (first_entry) then
        nullify(iraster) ; first_entry = .false.
     endif
-    cF_lim(1) =  0.
-    cF_lim(2) =  0.4      ! 0.365    ! 0.3
-    cF_lim(3) =  0.64     ! 0.585    ! 4.0	   
-    cF_lim(4) =  15./1.72 ! 9.885    ! 8.5
-    cF_lim(5) =  100.0
-    
-    nsoil_pcarbon(1) = 84 ! 84
-    nsoil_pcarbon(2) = nsoil_pcarbon(1) + 84 ! 84
-    nsoil_pcarbon(3) = nsoil_pcarbon(2) + 84 ! 57
+
+ !   cf_lim = OC_LIMITS
+ !   
+ !   nsoil_pcarbon(1) = 84 ! 84
+ !   nsoil_pcarbon(2) = nsoil_pcarbon(1) + 84 ! 84
+ !   nsoil_pcarbon(3) = nsoil_pcarbon(2) + 84 ! 57
     
     fname='clsm/catchment.def'
     !
@@ -759,94 +757,10 @@ contains
     
     ! Reading Woesten Soil Parameters and CLSM tau parameters
 
-    allocate(a_sand  (1:n_SoilClasses))
-    allocate(a_clay  (1:n_SoilClasses))
-    allocate(a_silt  (1:n_SoilClasses))
-    allocate(a_oc    (1:n_SoilClasses))
-    allocate(a_bee   (1:n_SoilClasses))
-    allocate(a_psis  (1:n_SoilClasses))
-    allocate(a_poros (1:n_SoilClasses))
-    allocate(a_wp    (1:n_SoilClasses))
-    allocate(a_aksat (1:n_SoilClasses))
-    allocate(atau    (1:n_SoilClasses))
-    allocate(btau    (1:n_SoilClasses))
-    allocate(atau_2cm(1:n_SoilClasses))
-    allocate(btau_2cm(1:n_SoilClasses))
-    allocate(a_wpsurf(1:n_SoilClasses))
-    allocate(a_porosurf(1:n_SoilClasses))
-    
-    fname = trim(c_data)//'SoilClasses-SoilHyd-TauParam.dat'
-    table_map = 0
-    open (11, file=trim(fname), form='formatted',status='old', &
-         action = 'read')
-    read (11,'(a)')fout
-    do n =1,n_SoilClasses 
-       read (11,'(4f7.3,4f8.4,e13.5,2f12.7,2f8.4,4f12.7)')a_sand(n),a_clay(n),a_silt(n),a_oc(n),a_bee(n),a_psis(n), &
-            a_poros(n),a_wp(n),a_aksat(n),atau(n),btau(n),a_wpsurf(n),a_porosurf(n),atau_2cm(n),btau_2cm(n)
-       
-       min_percs%clay_perc = a_clay(n)
-       min_percs%silt_perc = a_silt(n)
-       min_percs%sand_perc = a_sand(n)
-       if(n <= nsoil_pcarbon(1))                              table_map(soil_class (min_percs),1) = n  
-       if((n > nsoil_pcarbon(1)).and.(n <= nsoil_pcarbon(2))) table_map(soil_class (min_percs),2) = n  
-       if((n > nsoil_pcarbon(2)).and.(n <= nsoil_pcarbon(3))) table_map(soil_class (min_percs),3) = n 
-       
-    end do
-    close (11,status='keep') 
-    
-    !  When Woesten Soil Parameters are not available for a particular Soil Class
-    !  ,as assumed by tiny triangles in HWSD soil triangle, Woesten Soil
-    !  parameters from the nearest available tiny triangle will be substituted.
-    	     	  
-      do n =1,10
-         do k=1,n*2 -1
-            
-            min_percs%clay_perc = 100. -((n-1)*10 + 5)
-            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
-            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
-            
-            i = soil_class (min_percs)
-            
-            if(table_map (i,1)== 0) then
-               j = GDL_center_pix (a_clay(1:nsoil_pcarbon(1)),a_sand(1:nsoil_pcarbon(1)), &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)         
-               min_percs%clay_perc = a_clay(j)
-               min_percs%silt_perc = a_silt(j)
-               min_percs%sand_perc = a_sand(j)		   
-               table_map (i,1)= table_map (soil_class (min_percs),1)
-            endif
-            
-            min_percs%clay_perc = 100. -((n-1)*10 + 5)
-            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
-            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
-            
-            if(table_map (i,2)== 0) then   
-               j = GDL_center_pix(a_clay(nsoil_pcarbon(1)+1 : nsoil_pcarbon(2)),         &
-                    a_sand(nsoil_pcarbon(1)+1 : nsoil_pcarbon(2)),         &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.) 
-               min_percs%clay_perc = a_clay(j + nsoil_pcarbon(1))
-               min_percs%silt_perc = a_silt(j + nsoil_pcarbon(1))
-               min_percs%sand_perc = a_sand(j + nsoil_pcarbon(1))		   
-               table_map (i,2)= table_map (soil_class (min_percs),2)	         
-            endif
-            
-            min_percs%clay_perc = 100. -((n-1)*10 + 5)
-            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
-            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
-            
-            if(table_map (i,3)== 0) then   
-               j = GDL_center_pix (a_clay(nsoil_pcarbon(2)+1 : nsoil_pcarbon(3)),         &
-                    a_sand(nsoil_pcarbon(2)+1 : nsoil_pcarbon(3)),         &
-                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.) 
-               min_percs%clay_perc = a_clay(j + nsoil_pcarbon(2))
-               min_percs%silt_perc = a_silt(j + nsoil_pcarbon(2))
-               min_percs%sand_perc = a_sand(j + nsoil_pcarbon(2))		   
-               table_map (i,3)= table_map (soil_class (min_percs),3)	         	         
-            endif
-         end do
-      end do
+    call get_GDL_soil_table (table_map,a_sand,a_clay,a_silt,a_oc,a_bee,a_psis, &
+         a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, atau_2cm,btau_2cm)
       
-      ! Now deriving soil types based on NGDC-HWSD-STATSGO merged soil property maps
+    ! Now deriving soil types based on NGDC-HWSD-STATSGO merged soil property maps
       
       allocate (soil_class_top (1:maxcat))
       allocate (soil_class_com (1:maxcat))
@@ -1222,7 +1136,7 @@ contains
          DEALLOCATE (parms4file)
       endif
 
-    END SUBROUTINE soil_para_hwsd
+    END SUBROUTINE derive_CLSM_HWSD_soiltypes
 
 
     

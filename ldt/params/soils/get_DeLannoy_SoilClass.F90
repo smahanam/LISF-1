@@ -1,11 +1,14 @@
 module get_DeLannoy_SoilClass
 
+  use CLSM_util, only : c_data => G5_BCSDIR
+
   implicit none
 
   private
 
-  public mineral_perc,  n_DeLannoy_classes, DeLannoy_class, GDL_center_pix
-  
+  public mineral_perc,  n_DeLannoy_classes, DeLannoy_class, GDL_center_pix, GDL_TABLE, OC_LIMITS, &
+       get_GDL_soil_table
+
   type :: mineral_perc
      real :: clay_perc
      real :: silt_perc
@@ -18,8 +21,114 @@ module get_DeLannoy_SoilClass
   end interface
 
   integer, parameter :: n_DeLannoy_classes = 253
+  character*300, parameter       :: GDL_TABLE = 'SoilClasses-SoilHyd-TauParam.dat' 
+  real, parameter, dimension (5) :: OC_LIMITS = (/0., 0.4, 0.64, 15./1.72, 100.0/)
+  integer, dimension (3)         :: nsoil_pcarbon = (/84, 2*84, 3*84/)
+
   contains
   
+    !-------------------------------------------------------------
+
+    subroutine get_GDL_soil_table (table_map,a_sand, a_clay,a_silt,a_oc,a_bee,a_psis, &
+         a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, atau_2cm,btau_2cm)
+
+      implicit none
+      integer, dimension (100,3), intent (inout) :: table_map
+      real, dimension(:),pointer, intent (inout) :: a_sand,a_clay,a_silt,a_oc,a_bee,a_psis, &
+           a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, atau_2cm,btau_2cm 
+
+      character*100 :: fout
+      integer       :: i,j,k,n, n_SoilClasses = n_DeLannoy_classes
+      type (mineral_perc)        :: min_percs
+     
+      allocate(a_sand  (1:n_SoilClasses))
+      allocate(a_clay  (1:n_SoilClasses))
+      allocate(a_silt  (1:n_SoilClasses))
+      allocate(a_oc    (1:n_SoilClasses))
+      allocate(a_bee   (1:n_SoilClasses))
+      allocate(a_psis  (1:n_SoilClasses))
+      allocate(a_poros (1:n_SoilClasses))
+      allocate(a_wp    (1:n_SoilClasses))
+      allocate(a_aksat (1:n_SoilClasses))
+      allocate(atau    (1:n_SoilClasses))
+      allocate(btau    (1:n_SoilClasses))
+      allocate(atau_2cm(1:n_SoilClasses))
+      allocate(btau_2cm(1:n_SoilClasses))
+      allocate(a_wpsurf(1:n_SoilClasses))
+      allocate(a_porosurf(1:n_SoilClasses))    
+      table_map = 0
+
+      open (11, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', action = 'read')      
+      read (11,'(a)')fout
+
+      do n =1,n_SoilClasses 
+         read (11,'(4f7.3,4f8.4,e13.5,2f12.7,2f8.4,4f12.7)')a_sand(n),a_clay(n),a_silt(n),a_oc(n),a_bee(n),a_psis(n), &
+              a_poros(n),a_wp(n),a_aksat(n),atau(n),btau(n),a_wpsurf(n),a_porosurf(n),atau_2cm(n),btau_2cm(n)
+         
+         min_percs%clay_perc = a_clay(n)
+         min_percs%silt_perc = a_silt(n)
+         min_percs%sand_perc = a_sand(n)
+         if(n <= nsoil_pcarbon(1))                              table_map(DeLannoy_class (min_percs),1) = n  
+         if((n > nsoil_pcarbon(1)).and.(n <= nsoil_pcarbon(2))) table_map(DeLannoy_class (min_percs),2) = n  
+         if((n > nsoil_pcarbon(2)).and.(n <= nsoil_pcarbon(3))) table_map(DeLannoy_class (min_percs),3) = n 
+         
+      end do
+      close (11,status='keep') 
+      
+      !  When Woesten Soil Parameters are not available for a particular Soil Class
+      !  ,as assumed by tiny triangles in HWSD soil triangle, Woesten Soil
+      !  parameters from the nearest available tiny triangle will be substituted.
+      
+      do n =1,10
+         do k=1,n*2 -1
+            
+            min_percs%clay_perc = 100. -((n-1)*10 + 5)
+            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
+            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
+            
+            i = DeLannoy_class (min_percs)
+            
+            if(table_map (i,1)== 0) then
+               j = GDL_center_pix (a_clay(1:nsoil_pcarbon(1)),a_sand(1:nsoil_pcarbon(1)), &
+                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.)         
+               min_percs%clay_perc = a_clay(j)
+               min_percs%silt_perc = a_silt(j)
+               min_percs%sand_perc = a_sand(j)		   
+               table_map (i,1)= table_map (DeLannoy_class (min_percs),1)
+            endif
+            
+            min_percs%clay_perc = 100. -((n-1)*10 + 5)
+            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
+            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
+            
+            if(table_map (i,2)== 0) then   
+               j = GDL_center_pix(a_clay(nsoil_pcarbon(1)+1 : nsoil_pcarbon(2)),         &
+                    a_sand(nsoil_pcarbon(1)+1 : nsoil_pcarbon(2)),         &
+                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.) 
+               min_percs%clay_perc = a_clay(j + nsoil_pcarbon(1))
+               min_percs%silt_perc = a_silt(j + nsoil_pcarbon(1))
+               min_percs%sand_perc = a_sand(j + nsoil_pcarbon(1))		   
+               table_map (i,2)= table_map (DeLannoy_class (min_percs),2)	         
+            endif
+            
+            min_percs%clay_perc = 100. -((n-1)*10 + 5)
+            min_percs%sand_perc = 100. -  min_percs%clay_perc -2.-(k-1)*5.
+            min_percs%silt_perc = 100. -  min_percs%clay_perc - min_percs%sand_perc
+            
+            if(table_map (i,3)== 0) then   
+               j = GDL_center_pix (a_clay(nsoil_pcarbon(2)+1 : nsoil_pcarbon(3)),         &
+                    a_sand(nsoil_pcarbon(2)+1 : nsoil_pcarbon(3)),         &
+                    min_percs%clay_perc,min_percs%sand_perc,min_percs%silt_perc,.true.) 
+               min_percs%clay_perc = a_clay(j + nsoil_pcarbon(2))
+               min_percs%silt_perc = a_silt(j + nsoil_pcarbon(2))
+               min_percs%sand_perc = a_sand(j + nsoil_pcarbon(2))		   
+               table_map (i,3)= table_map (DeLannoy_class (min_percs),3)	         	         
+            endif
+         end do
+      end do
+
+    END subroutine get_GDL_soil_table
+
     !-------------------------------------------------------------
     
     

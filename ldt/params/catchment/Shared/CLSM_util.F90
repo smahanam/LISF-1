@@ -14,10 +14,6 @@ module CLSM_util
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
   use LDT_paramDataMod
-  use get_DeLannoy_SoilClass, ONLY:  & 
-       mineral_perc, GDL_center_pix,         &
-       n_SoilClasses => n_DeLannoy_classes,  &
-       soil_class => DeLannoy_class
 
   implicit none
   include 'netcdf.inc'	

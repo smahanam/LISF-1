@@ -23,88 +23,54 @@ module CLSM_param_routines
   logical, parameter :: error_file=.false. 
   real, parameter :: slice=0.1, lim =5.,grzdep =1.1
 
-  contains
+contains
 
-!----------------------------------------------------------------------
+  !--------------------------------------------------------------------
 
-  SUBROUTINE read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
-
-    IMPLICIT NONE
-    real, dimension (:), intent (inout) :: TOPMEAN, TOPVAR, TOPSKEW
-    INTEGER, PARAMETER :: nofvar= 3
-    INTEGER :: n, i, ncat,idum2
-    REAL, allocatable, dimension (:,:) :: var
-    real :: dum1,dum2,dum3,dum4,dum5,dum6
-    INTEGER*8 :: idum8
-
-    open (10,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
-         form='formatted', status='old',action='read')
-
-    read (10,*)ncat
-    allocate(var(1:ncat,1:nofvar))
-
-    do i = 1, ncat
-       read(10,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
-          var(i,1)=dum1
-          var(i,2)=dum2
-          var(i,3)=dum5
-    end do
-
-    close (10,status='keep')
-
-    do i = 1,LDT_g5map%NT_GEOS 
-       TOPMEAN(i) = var(LDT_g5map%catid_index(i),1)
-       TOPVAR (i) = var(LDT_g5map%catid_index(i),2) * var(LDT_g5map%catid_index(i),2)
-       TOPSKEW(i) = var(LDT_g5map%catid_index(i),3) * var(LDT_g5map%catid_index(i),2) * TOPVAR (i)
-    end do
-
-  END SUBROUTINE read_cti_stats
- 
-!--------------------------------------------------------------------
-
-  SUBROUTINE create_model_para_woesten (Maskfile)
+  SUBROUTINE create_CLSM_parameters 
 
     implicit none
-      real, allocatable, dimension (:)  :: a_sand,a_clay,a_silt,a_oc,  &
-          atile_sand,atile_clay, tile_lon, tile_lat, grav_vec, soc_vec,&
-	  poc_vec,a_sand_surf,a_clay_surf,wpwet_surf,poros_surf, pmap
 
-      real, allocatable, dimension (:,:) :: good_clay, good_sand
-      integer, allocatable, dimension (:,:) :: tile_add, tile_pick
-      type (mineral_perc) :: min_percs
-      integer :: CF1, CF2, CF3, CF4
-      integer i,j,n,k, tindex1,pfaf1,nbcatch
-      integer soil_gswp
-      real meanlu,stdev,minlu,maxlu,coesk,rzdep
-      real minlat,maxlat,minlon,maxlon
-      real,allocatable, dimension (:) ::   &
-             BEE, PSIS,POROS,COND,WPWET,soildepth
-      REAL, allocatable, dimension(:) :: TOPMEAN, TOPVAR, TOPSKEW
-      REAL ST(NAR), AC(NAR),COESKEW
-      REAL, allocatable, dimension (:) ::   &
-	    ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
-	    ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3,   &
-	    tsa1, tsa2,tsb1, tsb2,               &
-	    taberr1,taberr2,normerr1,normerr2,   &
-	    taberr3,taberr4,normerr3,normerr4
+    REAL, allocatable, dimension(:) :: TOPMEAN, TOPVAR, TOPSKEW
+    real, allocatable, dimension (:)  :: a_sand,a_clay,a_silt,a_oc,  &
+         atile_sand,atile_clay, tile_lon, tile_lat, grav_vec, soc_vec,&
+         poc_vec,a_sand_surf,a_clay_surf,wpwet_surf,poros_surf, pmap
+    
+    real, allocatable, dimension (:,:) :: good_clay, good_sand
+    integer, allocatable, dimension (:,:) :: tile_add, tile_pick
+    type (mineral_perc) :: min_percs
+    integer :: CF1, CF2, CF3, CF4
+    integer i,j,n,k, tindex1,pfaf1,nbcatch
+    integer soil_gswp
+    real meanlu,stdev,minlu,maxlu,coesk,rzdep
+    real minlat,maxlat,minlon,maxlon
+    real,allocatable, dimension (:) ::   &
+         BEE, PSIS,POROS,COND,WPWET,soildepth
+    
+    REAL ST(NAR), AC(NAR),COESKEW
+    REAL, allocatable, dimension (:) ::   &
+         ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
+         ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3,   &
+         tsa1, tsa2,tsb1, tsb2,               &
+         taberr1,taberr2,normerr1,normerr2,   &
+         taberr3,taberr4,normerr3,normerr4
 
-      integer, allocatable, dimension (:) :: soil_class_com,tindex2,pfaf2, &
-                                             soil_class_top
-      real watdep(nwt,nrz),wan(nwt,nrz),rzexcn(nwt,nrz),frc(nwt,nrz)
-      real, allocatable, dimension  (:,:,:) :: &
-      gwatdep,gwan,grzexcn,gfrc
-      real :: wtdep,wanom,rzaact,fracl,profdep,dist_save,     &
-             ncells_top, ncells_top_pro,ncells_sub_pro,tile_distance
-      character*100 :: pathout,fname,fout,losfile
-      character*10 :: dline
-      CHARACTER*20 :: version,resoln,continent
-      character*6 rdep,ext
-      character (*) :: MaskFile
-      integer :: iwt,irz,group
-      logical :: picked
-      logical :: file_exists
-      REAL, ALLOCATABLE, DIMENSION (:,:) :: parms4file
-      integer :: ncid, status
+    integer, allocatable, dimension (:) :: soil_class_com,tindex2,pfaf2, &
+         soil_class_top
+    real watdep(nwt,nrz),wan(nwt,nrz),rzexcn(nwt,nrz),frc(nwt,nrz)
+    real, allocatable, dimension  (:,:,:) :: &
+         gwatdep,gwan,grzexcn,gfrc
+    real :: wtdep,wanom,rzaact,fracl,profdep,dist_save,     &
+         ncells_top, ncells_top_pro,ncells_sub_pro,tile_distance
+    character*100 :: pathout,fname,fout,losfile
+    character*10 :: dline
+    CHARACTER*20 :: version,resoln,continent
+    character*6 rdep,ext
+    integer :: iwt,irz,group
+    logical :: picked
+    logical :: file_exists
+    REAL, ALLOCATABLE, DIMENSION (:,:) :: parms4file
+    integer :: ncid, status
  
 ! --------- VARIABLES FOR *OPENMP* PARALLEL ENVIRONMENT ------------
 !
@@ -313,12 +279,7 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
            stop
         endif
 
-        if (index(MaskFile,'GEOS5_10arcsec_mask') /= 0) then
-           TOPMEAN(n) = meanlu
-        else
-           TOPMEAN(n) = 0.961*meanlu-1.957                       
-        endif
-
+        TOPMEAN(n) = meanlu
         TOPVAR(n)  = stdev*stdev                                
         TOPSKEW(n) = coesk*stdev*stdev*stdev                   
         
@@ -689,62 +650,45 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       endif
    endif
    
-      if (error_file) then
-	 write(21,*)tindex2(n),pfaf2(n),taberr1(n),taberr2(n),taberr3(n),taberr4(n), &
-		normerr1(n),normerr2(n),normerr3(n),normerr4(n)
-	 write(31,*)tindex2(n),pfaf2(n),taberr1(n),taberr2(n),normerr1(n),normerr2(n)
-      endif 
-
-      END DO
+END DO
       
-!      Write(*,*) 'END COMPUTING MODEL PARA'
+END SUBROUTINE create_CLSM_parameters
 
-      close(10,status='keep')
-      close(11,status='keep')
-      close(12,status='keep')
-      close(20,status='keep')
-      close(30,status='keep')
-      close(40,status='keep')
-      close(42,status='keep')
+!----------------------------------------------------------------------
 
+  SUBROUTINE read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
 
-      if (error_file) then
-	 close(21,status='delete')
-	 close(31,status='delete')
-         close(41,status='keep')
-      endif
+    IMPLICIT NONE
+    real, dimension (:), intent (inout) :: TOPMEAN, TOPVAR, TOPSKEW
+    INTEGER, PARAMETER :: nofvar= 3
+    INTEGER :: n, i, ncat,idum2
+    REAL, allocatable, dimension (:,:) :: var
+    real :: dum1,dum2,dum3,dum4,dum5,dum6
+    INTEGER*8 :: idum8
 
-!      if(file_exists) then
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA1' ) ,(/1/),(/nbcatch/), parms4file (:, 1)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA2' ) ,(/1/),(/nbcatch/), parms4file (:, 2)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA3' ) ,(/1/),(/nbcatch/), parms4file (:, 3)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARA4' ) ,(/1/),(/nbcatch/), parms4file (:, 4)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS1' ) ,(/1/),(/nbcatch/), parms4file (:, 5)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS2' ) ,(/1/),(/nbcatch/), parms4file (:, 6)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARS3' ) ,(/1/),(/nbcatch/), parms4file (:, 7)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW1' ) ,(/1/),(/nbcatch/), parms4file (:, 8)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW2' ) ,(/1/),(/nbcatch/), parms4file (:, 9)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW3' ) ,(/1/),(/nbcatch/), parms4file (:,10)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'ARW4' ) ,(/1/),(/nbcatch/), parms4file (:,11)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BEE'  ) ,(/1/),(/nbcatch/), parms4file (:,12)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF1'  ) ,(/1/),(/nbcatch/), parms4file (:,13)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF2'  ) ,(/1/),(/nbcatch/), parms4file (:,14)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'BF3'  ) ,(/1/),(/nbcatch/), parms4file (:,15)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'COND' ) ,(/1/),(/nbcatch/), parms4file (:,16)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'GNU'  ) ,(/1/),(/nbcatch/), parms4file (:,17)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'POROS') ,(/1/),(/nbcatch/), parms4file (:,18)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'PSIS' ) ,(/1/),(/nbcatch/), parms4file (:,19)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA1' ) ,(/1/),(/nbcatch/), parms4file (:,20)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSA2' ) ,(/1/),(/nbcatch/), parms4file (:,21)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB1' ) ,(/1/),(/nbcatch/), parms4file (:,22)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'TSB2' ) ,(/1/),(/nbcatch/), parms4file (:,23)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'WPWET') ,(/1/),(/nbcatch/), parms4file (:,24)) ; VERIFY_(STATUS) 
-!         status = NF_PUT_VARA_REAL(NCID,NC_VarID(NCID,'DP2BR') ,(/1/),(/nbcatch/), parms4file (:,25)) ; VERIFY_(STATUS) 
-!         STATUS   = NF_CLOSE (NCID) ; VERIFY_(STATUS)
-!         DEALLOCATE (parms4file)
-!      endif
+    open (10,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
+         form='formatted', status='old',action='read')
 
-  END SUBROUTINE create_model_para_woesten
+    read (10,*)ncat
+    allocate(var(1:ncat,1:nofvar))
+
+    do i = 1, ncat
+       read(10,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
+          var(i,1)=dum1
+          var(i,2)=dum2
+          var(i,3)=dum5
+    end do
+
+    close (10,status='keep')
+
+    do i = 1,LDT_g5map%NT_GEOS 
+       TOPMEAN(i) = var(LDT_g5map%catid_index(i),1)
+       TOPVAR (i) = var(LDT_g5map%catid_index(i),2) * var(LDT_g5map%catid_index(i),2)
+       TOPSKEW(i) = var(LDT_g5map%catid_index(i),3) * var(LDT_g5map%catid_index(i),2) * TOPVAR (i)
+    end do
+
+  END SUBROUTINE read_cti_stats
+ 
 
 
 !---------------------------------------------------------------------
