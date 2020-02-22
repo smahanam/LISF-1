@@ -5,7 +5,8 @@ module CLSM_param_routines
 
   use CLSM_util, ONLY: NC_VarID, &
        c_data => G5_BCSDIR,      &
-       LDT_g5map
+       LDT_g5map, write_clsm_files
+
   use get_DeLannoy_SoilClass, ONLY:          & 
        mineral_perc, GDL_center_pix,         &
        n_SoilClasses => n_DeLannoy_classes,  &
@@ -41,7 +42,7 @@ contains
     integer, dimension (:), intent (inout) :: SOIL_CLASS_TOP, SOIL_CLASS_COM  
 
     REAL, allocatable, dimension(:) :: TOPMEAN, TOPVAR, TOPSKEW
-    real, allocatable, dimension (:)  :: a_sand,a_clay,a_silt,a_oc,  &
+    real, allocatable, dimension(:) :: a_sand,a_clay,a_silt,a_oc,  &
          tile_lon, tile_lat
     
     real, allocatable, dimension (:,:)    :: good_clay, good_sand
@@ -251,14 +252,21 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
           tsa1(n),tsa2(n),tsb1(n),tsb2(n)  &
           )
 
-     END DO
-     END DO
+   END DO
+   END DO
           !$OMP ENDPARALLELDO
 
      CF1 =0
      CF2 =0
      CF3 =0
      CF4 =0
+
+     if (write_clsm_files) then
+        open (10, file = 'LDT/clsm/ar.new'        , form = 'formatted', action = 'write')
+        open (11, file = 'LDT/clsm/ts.dat'        , form = 'formatted', action = 'write')
+        open (12, file = 'LDT/clsm/bf.dat'        , form = 'formatted', action = 'write')
+        open (13, file = 'LDT/clsm/soil_param.dat', form = 'formatted', action = 'write')
+     endif
 
      DO n=1,nbcatch
         atile_clay = a_clay(SOIL_CLASS_COM(n))
@@ -358,6 +366,32 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
                end select
                print *,'NO Similar SoilClass :',soil_class (min_percs),group,n,k            
             endif
+
+            BEE(n)      =  BEE(k)       
+            PSIS(n)     =  PSIS(k)      
+            POROS(n)    =  POROS(k)     
+            COND(n)     =  COND(k)      
+            WPWET(n)    =  WPWET(k)     
+            soildepth(n)=  soildepth(k) 
+            ars1(n)     =  ars1(k)      
+            ars2(n)     =  ars2(k)      
+            ars3(n)     =  ars3(k)                  
+            ara1(n)     =  ara1(k)      
+            ara2(n)     =  ara2(k)      
+            ara3(n)     =  ara3(k)      
+            ara4(n)     =  ara4(k)      
+            arw1(n)     =  arw1(k)      
+            arw2(n)     =  arw2(k)      
+            arw3(n)     =  arw3(k)      
+            arw4(n)     =  arw4(k)      
+            bf1(n)      =  bf1(k)       
+            bf2(n)      =  bf2(k)       
+            bf3(n)      =  bf3(k)       
+            tsa1(n)     =  tsa1(k)      
+            tsa2(n)     =  tsa2(k)      
+            tsb1(n)     =  tsb1(k)      
+            tsb2(n)     =  tsb2(k)      
+
          else 
             dist_save = 1000000.
             k = 0
@@ -375,9 +409,60 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
                endif
             enddo
          endif
+
+         BEE(n)      =  BEE(k)       
+         PSIS(n)     =  PSIS(k)      
+         POROS(n)    =  POROS(k)     
+         COND(n)     =  COND(k)      
+         WPWET(n)    =  WPWET(k)     
+         soildepth(n)=  soildepth(k) 
+         ars1(n)     =  ars1(k)      
+         ars2(n)     =  ars2(k)      
+         ars3(n)     =  ars3(k)                  
+         ara1(n)     =  ara1(k)      
+         ara2(n)     =  ara2(k)      
+         ara3(n)     =  ara3(k)      
+         ara4(n)     =  ara4(k)      
+         arw1(n)     =  arw1(k)      
+         arw2(n)     =  arw2(k)      
+         arw3(n)     =  arw3(k)      
+         arw4(n)     =  arw4(k)      
+         bf1(n)      =  bf1(k)       
+         bf2(n)      =  bf2(k)       
+         bf3(n)      =  bf3(k)       
+         tsa1(n)     =  tsa1(k)      
+         tsa2(n)     =  tsa2(k)      
+         tsb1(n)     =  tsb1(k)      
+         tsb2(n)     =  tsb2(k)      
+         
       endif
-      
+
+      if (write_clsm_files) then
+         write(10,'(i8,i8,f5.2,11(2x,e14.7))')           &
+              n,LDT_g5map%catid_index(n), gnu,           &
+              ars1(n),ars2(n),ars3(n),                   &
+              ara1(n),ara2(n),ara3(n),ara4(n),           &
+              arw1(n),arw2(n),arw3(n),arw4(n) 
+         write(11,'(i8,i8,f5.2,4(2x,e13.7))')            &
+              n,LDT_g5map%catid_index(n), gnu,           &
+              tsa1(n),tsa2(n),tsb1(n),tsb2(n)
+         write(12,'(i8,i8,f5.2,3(2x,e13.7))')            &
+              n,LDT_g5map%catid_index(n), gnu,           &
+              bf1(n),bf2(n),bf3(n)
+         write(13,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
+              n,LDT_g5map%catid_index(n),                              &
+              soil_class_top(k),soil_class_com(k),                     &
+              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),  &
+              atile_sand, atile_clay
+      endif
    END DO
+
+   if (write_clsm_files) then
+      close (10, status = 'keep')
+      close (11, status = 'keep')
+      close (12, status = 'keep')
+      close (13, status = 'keep')
+   endif
       
 END SUBROUTINE create_CLSM_parameters
 
