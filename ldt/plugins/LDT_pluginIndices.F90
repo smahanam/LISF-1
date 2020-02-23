@@ -201,6 +201,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_ALMIPIIlcId    = "ALMIPII"
    character*50, public,  parameter :: LDT_isalcId        = "ISA"
    character*50, public,  parameter :: LDT_clsmf25lcId    = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_clsmj32lcId    = "CLSMJ3.2"
    character*50, public,  parameter :: LDT_vic411lcId     = "VIC411"
    character*50, public,  parameter :: LDT_vic412lcId     = "VIC412"
    character*50, public,  parameter :: LDT_clm45lcId      = "CLM45"

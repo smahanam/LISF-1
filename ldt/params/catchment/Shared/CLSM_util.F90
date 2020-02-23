@@ -20,7 +20,7 @@ module CLSM_util
 
   private
   public  LDT_RegridRaster, NC_VarID, GEOS2LIS, LDT_g5map, init_geos2lis_mapping, SRTM_maxcat, & 
-       nc_g5_rst, nr_g5_rst, G5_BCSDIR, G52LIS, LISv2g, write_clsm_files
+       nc_g5_rst, nr_g5_rst, G5_BCSDIR, G52LIS, LISv2g, write_clsm_files, histogram
   
   interface LDT_RegridRaster
      module procedure RegridRaster
