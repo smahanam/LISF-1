@@ -160,7 +160,7 @@ contains
     ! (1) initialize LDT_g5map
     ! ------------------------
 
-    call init_geos2lis_mapping 
+    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
     
     ! (2) Derive soil types, atau and btau
     ! ------------------------------------

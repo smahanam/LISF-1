@@ -38,6 +38,7 @@ module CLSM_util
      integer :: NY
      integer :: NT_LIS
      integer :: NT_GEOS
+     logical :: init = .false.
      real,    allocatable, dimension (:)   :: lat, lon
      integer, allocatable, dimension (:)   :: ID_LOC, catid_index
      integer, allocatable, dimension (:,:) :: rst
@@ -80,6 +81,7 @@ module CLSM_util
       ! Talk to Kristi about the right full domain
       ! ------------------------------------------
 
+      LDT_g5map%init = .true.
       i = 1 ! for now 1 nest
       param_grid(:) = LDT_rc%mask_gridDesc(i,:)
       glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1

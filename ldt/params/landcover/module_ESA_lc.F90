@@ -31,7 +31,7 @@ module mod_ESA_lc
        NC_VarID, LDT_g5map,                 &
        c_data => G5_BCSDIR,                 &
        NX => nc_g5_rst,                     &
-       NY => nr_g5_rst, histogram 
+       NY => nr_g5_rst, histogram , write_clsm_files, init_geos2lis_mapping
   use LDT_numericalMethodsMod, only : LDT_quicksort
 
   implicit none
@@ -320,7 +320,7 @@ module mod_ESA_lc
     integer*2, allocatable, target, dimension (:,:) :: esa_veg
     integer*2, pointer    , dimension (:,:) :: subset
     integer  , allocatable, dimension (:)   :: tile_id
-    integer :: i,j, k, status, ncid, maxcat, dx,dy, esa_type, tid, cid
+    integer :: i,j, k, status, ncid, maxcat, dx,dy, esa_type, tid, cid, fmos
     integer :: mos1, mos2
     real    :: mfrac, sfrac, tfrac, tem (6)
     integer, allocatable, dimension (:) :: density, loc_int
@@ -328,6 +328,8 @@ module mod_ESA_lc
     logical, allocatable, dimension (:) :: unq_mask
     real   , allocatable       :: veg (:,:)
     integer :: NBINS, NPLUS
+
+    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
 
     ! Reading ESA vegetation types
     !-----------------------------
@@ -459,12 +461,15 @@ module mod_ESA_lc
 ! Now create mosaic_veg_fracs file
 ! --------------------------------
 
+    if (write_clsm_files) then
+       fmos = LDT_getNextUnitNumber()
+       open (fmos, file = 'LDT_clsm/mosaic_veg_typs_fracs', form = 'formatted', action = 'write')
+    endif
+
     do k = 1, maxcat
 
-       read (11,'(i8,i8,5(2x,f9.4))') tid,cid
        tem = 0.
        tem(1:6)=veg (k,1:6)
-
        if(sum(tem).gt.0)then
 
           mfrac = -10.
@@ -502,9 +507,15 @@ module mod_ESA_lc
           if (sfrac == 0.) mos2 = mos1 ! No secondary type
 !          if(.not.jpl_height) z2(k) = VGZ2(mos1)
           ityp (k) = mos1
+          if (write_clsm_files) write(fmos,'(i8,i8,i4)') k,LDT_g5map%catid_index(k),ityp (k)
        endif
     end do
 
+    if (write_clsm_files) then
+       close (fmos, status = 'keep')
+       call LDT_releaseUnitNumber(fmos)
+    endif
+    
     deallocate (veg)
    
   END SUBROUTINE ESA2MOSAIC

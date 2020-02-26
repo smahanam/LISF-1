@@ -268,12 +268,12 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
      CF3 =0
      CF4 =0
 
-     far = LDT_getNextUnitNumber()
-     fts = LDT_getNextUnitNumber()
-     fbf = LDT_getNextUnitNumber()
-     fso = LDT_getNextUnitNumber()
-
      if (write_clsm_files) then
+        far = LDT_getNextUnitNumber()
+        fts = LDT_getNextUnitNumber()
+        fbf = LDT_getNextUnitNumber()
+        fso = LDT_getNextUnitNumber()
+
         open (far, file = 'LDT_clsm/ar.new'        , form = 'formatted', action = 'write')
         open (fts, file = 'LDT_clsm/ts.dat'        , form = 'formatted', action = 'write')
         open (fbf, file = 'LDT_clsm/bf.dat'        , form = 'formatted', action = 'write')
