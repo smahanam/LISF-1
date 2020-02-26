@@ -291,7 +291,7 @@ contains
          atau_2cm,btau_2cm 
     integer, dimension (100,3) :: table_map
     type (mineral_perc)        :: min_percs    
-    integer :: n,i,j,k,ktop,icount, i1, i2
+    integer :: n,i,j,k,ktop,icount, i1, i2, ftau, fsoi
     logical, allocatable, dimension(:,:) :: land_pixels
     integer (kind=2) , allocatable, target, dimension (:,:) :: SOIL_HIGH,  &
          sand_top,clay_top,oc_top,sand_sub,clay_sub,oc_sub, grav_grid
@@ -765,8 +765,10 @@ contains
     call process_peatmap (pmap)
 
     if (write_clsm_files) then 
-       open (12, file = 'LDT_clsm/tau_param.dat'   , form = 'formatted', action = 'write')
-       open (13, file = 'LDT_clsm/soil_param.first', form = 'formatted', action = 'write')
+       ftau = LDT_getNextUnitNumber()
+       fsoi  = LDT_getNextUnitNumber()
+       open (ftau, file = 'LDT_clsm/tau_param.dat'   , form = 'formatted', action = 'write')
+       open (fsoi, file = 'LDT_clsm/soil_param.first', form = 'formatted', action = 'write')
     endif
 
     do n = 1, maxcat
@@ -833,9 +835,9 @@ contains
        BTAU5(n)= btau(fac_surf) 
 
        if (write_clsm_files) then
-         write (12,'(i8,i8,4f10.7)')n, LDT_g5map%catid_index(n), &
+         write (ftau,'(i8,i8,4f10.7)')n, LDT_g5map%catid_index(n), &
 	       atau_2cm(fac_surf),btau_2cm(fac_surf),atau(fac_surf),btau(fac_surf)           
-         write(13,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
+         write(fsoi,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
               n,LDT_g5map%catid_index(n),                              &
               soil_class_top(n),soil_class_com(n),                     &
               BEE(n), PSIS(n),POROS(n),Ks(n),WPWET(n),soildepth(n),    &
@@ -843,7 +845,13 @@ contains
        endif
 
     end do
-    if (write_clsm_files) close (13, status = 'keep')
+    if (write_clsm_files) then
+       close (ftau, status = 'keep')
+       close (fsoi, status = 'keep')
+       call LDT_releaseUnitNumber(ftau)
+       call LDT_releaseUnitNumber(fsoi)
+    endif
+
     deallocate (data_vec1, data_vec2,data_vec3, data_vec4,data_vec5, data_vec6)
     deallocate (tileid_vec)
     deallocate (a_sand,a_clay,a_silt,a_oc,a_bee,a_psis,       &

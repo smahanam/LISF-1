@@ -214,7 +214,9 @@ contains
 
     ! (4) write out gridded arrays in LIS input file
     ! ----------------------------------------------
-    
+
+    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file ...'
+
     do n=1,LDT_rc%nnest  
 
        param_grid(:) = LDT_rc%mask_gridDesc(n,:)
@@ -464,6 +466,7 @@ contains
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%btau%vlevels))
     enddo
+    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file2...'
 
 !    call ESMF_ConfigFindLabel(LDT_config,"CLSMJ32 top soil layer depth:",rc=rc)
 !    do n=1,LDT_rc%nnest
@@ -540,6 +543,8 @@ contains
 
     enddo
 
+    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file3 ...'
+
     call ESMF_ConfigFindLabel(LDT_config,"Albedo NIR factor file:",rc=rc)
     do n=1,LDT_rc%nnest
        call ESMF_ConfigGetAttribute(LDT_config,&
@@ -575,6 +580,7 @@ contains
        LDT_albedo_struc(n)%albInterval = "monthly"
        LDT_gfrac_struc(n)%gfracInterval = "monthly"
     enddo
+    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] leaving ...'
 
   end subroutine catchmentParms_init_J32
 

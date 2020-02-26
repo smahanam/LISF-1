@@ -14,7 +14,8 @@ module CLSM_util
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
   use LDT_paramDataMod
-  use LDT_logMod
+  use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
+       LDT_releaseUnitNumber
   use LDT_domainMod
 
   implicit none
@@ -58,7 +59,7 @@ module CLSM_util
 
       real                             :: dx, dy, x0, y0
       integer                          :: i, j, n, r, c, status, ncid, dx_esa, dy_esa, NBINS, &
-           NPLUS, nc_global,nr_global,msk2rst, catNo,ix1,ix2,iy1,iy2, ii, jj, catCount,ncells,  glpnr, glpnc
+           NPLUS, nc_global,nr_global,msk2rst, catNo,ix1,ix2,iy1,iy2, ii, jj, catCount,ncells,  glpnr, glpnc, ftil
       real   , dimension (:), allocatable           :: lat, lon, lat_g5, lon_g5
       integer, allocatable, target, dimension (:,:) :: geos_msk, high_msk 
       real (kind =8)                                :: dxh, dyh
@@ -225,11 +226,13 @@ module CLSM_util
       end do
 
       if (write_clsm_files) then
-         open (10, file = 'LDT_clsm/CLSM.til', form = 'formatted', action = 'write')
+         ftil = LDT_getNextUnitNumber()
+         open (ftil, file = 'LDT_clsm/CLSM.til', form = 'formatted', action = 'write')
          do n = 1,  LDT_g5map%NT_GEOS
-            write (10, '(2i10, 2f10.4)') n, LDT_g5map%catid_index(n), LDT_g5map%lon(n), LDT_g5map%lat(n)
+            write (ftil, '(2i10, 2f10.4)') n, LDT_g5map%catid_index(n), LDT_g5map%lon(n), LDT_g5map%lat(n)
          end do
-         close (10, status = 'keep')
+         close (ftil, status = 'keep')
+         call LDT_releaseUnitNumber(ftil)
       endif
 
       ncells = ncells - 1

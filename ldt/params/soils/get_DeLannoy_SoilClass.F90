@@ -1,6 +1,8 @@
 module get_DeLannoy_SoilClass
 
   use CLSM_util, only : c_data => G5_BCSDIR
+  use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
+       LDT_releaseUnitNumber
 
   implicit none
 
@@ -38,7 +40,7 @@ module get_DeLannoy_SoilClass
            a_poros,a_wp,a_aksat,atau,btau,a_wpsurf,a_porosurf, atau_2cm,btau_2cm 
 
       character*100 :: fout
-      integer       :: i,j,k,n, n_SoilClasses = n_DeLannoy_classes
+      integer       :: i,j,k,n,ftbl, n_SoilClasses = n_DeLannoy_classes
       type (mineral_perc)        :: min_percs
      
       allocate(a_sand  (1:n_SoilClasses))
@@ -58,11 +60,12 @@ module get_DeLannoy_SoilClass
       allocate(a_porosurf(1:n_SoilClasses))    
       table_map = 0
 
-      open (11, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', action = 'read')      
-      read (11,'(a)')fout
+      ftbl = LDT_getNextUnitNumber()
+      open (ftbl, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', action = 'read')      
+      read (ftbl,'(a)')fout
 
       do n =1,n_SoilClasses 
-         read (11,'(4f7.3,4f8.4,e13.5,2f12.7,2f8.4,4f12.7)')a_sand(n),a_clay(n),a_silt(n),a_oc(n),a_bee(n),a_psis(n), &
+         read (ftbl,'(4f7.3,4f8.4,e13.5,2f12.7,2f8.4,4f12.7)')a_sand(n),a_clay(n),a_silt(n),a_oc(n),a_bee(n),a_psis(n), &
               a_poros(n),a_wp(n),a_aksat(n),atau(n),btau(n),a_wpsurf(n),a_porosurf(n),atau_2cm(n),btau_2cm(n)
          
          min_percs%clay_perc = a_clay(n)
@@ -73,8 +76,9 @@ module get_DeLannoy_SoilClass
          if((n > nsoil_pcarbon(2)).and.(n <= nsoil_pcarbon(3))) table_map(DeLannoy_class (min_percs),3) = n 
          
       end do
-      close (11,status='keep') 
-      
+      close (ftbl,status='keep') 
+      call LDT_releaseUnitNumber(ftbl)
+
       !  When Woesten Soil Parameters are not available for a particular Soil Class
       !  ,as assumed by tiny triangles in HWSD soil triangle, Woesten Soil
       !  parameters from the nearest available tiny triangle will be substituted.

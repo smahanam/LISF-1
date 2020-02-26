@@ -12,7 +12,8 @@ module CLSM_param_routines
        n_SoilClasses => n_DeLannoy_classes,  &
        soil_class    => DeLannoy_class,      &
        GDL_TABLE
-  use LDT_logMod
+  use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
+       LDT_releaseUnitNumber
   
   implicit none
 
@@ -51,7 +52,7 @@ contains
     integer, allocatable, dimension (:,:) :: tile_add, tile_pick
     type (mineral_perc) :: min_percs
     integer :: CF1, CF2, CF3, CF4
-    integer i,j,n,k
+    integer i,j,n,k,ftbl, far, fbf, fts, fso, ftcl
     integer soil_gswp
     real rzdep, atile_sand,atile_clay 
      
@@ -115,7 +116,7 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       
 !c-------------------------------------------------------------------------
 
-      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM create_CLSM_parameters] creating model paramss .....'
+      write(LDT_logunit,'(A60)')'[CLSM create_CLSM_parameters] creating model params .....'
 
       ! Scale saturated hydraulic conductivity  to surface 
       ! --------------------------------------------------
@@ -127,10 +128,10 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       allocate (TOPVAR  (1: nbcatch))
       allocate (TOPSKEW (1: nbcatch))
       call read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
-
-      open (11, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', &
+      ftbl = LDT_getNextUnitNumber()
+      open (ftbl, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', &
            action = 'read')
-      read (11,'(a)')fout           
+      read (ftbl,'(a)')fout           
       losfile =trim(c_data)//'/Woesten_SoilParam/loss_pd_top/loss_perday_rz1m_'
 
       allocate (a_sand (1:n_SoilClasses))
@@ -143,14 +144,15 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       allocate (gfrc   (1:nwt,1:nrz,1:n_SoilClasses))
       
       do n =1,n_SoilClasses
-         read (11,'(4f7.3)')a_sand(n),a_clay(n),a_silt(n),a_oc(n)
+         read (ftbl,'(4f7.3)')a_sand(n),a_clay(n),a_silt(n),a_oc(n)
          write (fout,'(i2.2,i2.2,i4.4)')nint(a_sand(n)),nint(a_clay(n)),nint(100*a_oc(n))
-         open (120,file=trim(losfile)//trim(fout),  &
+         ftcl = LDT_getNextUnitNumber()
+         open (ftcl,file=trim(losfile)//trim(fout),  &
               form='formatted',status='old')
          
          do iwt=1,nwt
             do irz=1,nrz
-               read(120,2000) wtdep,wanom,rzaact,fracl
+               read(ftcl,2000) wtdep,wanom,rzaact,fracl
 2000           format(1x,4e16.8)
                gwatdep(iwt,irz,n)= wtdep
                gwan(iwt,irz,n)   = wanom
@@ -158,9 +160,11 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
                gfrc(iwt,irz,n)   = amin1(fracl,1.)
             enddo
          enddo
-         close (120,status='keep')	   
+         close (ftcl,status='keep')	   
+         call LDT_releaseUnitNumber(ftcl)
       end do
-      close (11,status='keep')  
+      close (ftbl,status='keep')  
+      call LDT_releaseUnitNumber(ftbl)
 
       allocate (tile_lon  (1:nbcatch))
       allocate (tile_lat  (1:nbcatch))
@@ -264,11 +268,16 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
      CF3 =0
      CF4 =0
 
+     far = LDT_getNextUnitNumber()
+     fts = LDT_getNextUnitNumber()
+     fbf = LDT_getNextUnitNumber()
+     fso = LDT_getNextUnitNumber()
+
      if (write_clsm_files) then
-        open (10, file = 'LDT_clsm/ar.new'        , form = 'formatted', action = 'write')
-        open (11, file = 'LDT_clsm/ts.dat'        , form = 'formatted', action = 'write')
-        open (12, file = 'LDT_clsm/bf.dat'        , form = 'formatted', action = 'write')
-        open (13, file = 'LDT_clsm/soil_param.dat', form = 'formatted', action = 'write')
+        open (far, file = 'LDT_clsm/ar.new'        , form = 'formatted', action = 'write')
+        open (fts, file = 'LDT_clsm/ts.dat'        , form = 'formatted', action = 'write')
+        open (fbf, file = 'LDT_clsm/bf.dat'        , form = 'formatted', action = 'write')
+        open (fso, file = 'LDT_clsm/soil_param.dat', form = 'formatted', action = 'write')
      endif
 
      DO n=1,nbcatch
@@ -417,18 +426,18 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       endif
 
       if (write_clsm_files) then
-         write(10,'(i8,i8,f5.2,11(2x,e14.7))')           &
+         write(far,'(i8,i8,f5.2,11(2x,e14.7))')           &
               n,LDT_g5map%catid_index(n), gnu,           &
               ars1(n),ars2(n),ars3(n),                   &
               ara1(n),ara2(n),ara3(n),ara4(n),           &
               arw1(n),arw2(n),arw3(n),arw4(n) 
-         write(11,'(i8,i8,f5.2,4(2x,e13.7))')            &
+         write(fts,'(i8,i8,f5.2,4(2x,e13.7))')            &
               n,LDT_g5map%catid_index(n), gnu,           &
               tsa1(n),tsa2(n),tsb1(n),tsb2(n)
-         write(12,'(i8,i8,f5.2,3(2x,e13.7))')            &
+         write(fbf,'(i8,i8,f5.2,3(2x,e13.7))')            &
               n,LDT_g5map%catid_index(n), gnu,           &
               bf1(n),bf2(n),bf3(n)
-         write(13,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
+         write(fso,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
               n,LDT_g5map%catid_index(n),                              &
               soil_class_top(k),soil_class_com(k),                     &
               BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),  &
@@ -437,10 +446,14 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
    END DO
 
    if (write_clsm_files) then
-      close (10, status = 'keep')
-      close (11, status = 'keep')
-      close (12, status = 'keep')
-      close (13, status = 'keep')
+      close (far, status = 'keep')
+      close (fts, status = 'keep')
+      close (fbf, status = 'keep')
+      close (fso, status = 'keep')
+      call LDT_releaseUnitNumber(far)
+      call LDT_releaseUnitNumber(fts)
+      call LDT_releaseUnitNumber(fbf)
+      call LDT_releaseUnitNumber(fso)
    endif
       
 END SUBROUTINE create_CLSM_parameters
@@ -457,20 +470,20 @@ END SUBROUTINE create_CLSM_parameters
     real :: dum1,dum2,dum3,dum4,dum5,dum6
     INTEGER*8 :: idum8
 
-    open (10,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
+    open (1010,file=trim(c_data)//'/SRTM-TopoData/SRTM_cti_stats.dat',       &
          form='formatted', status='old',action='read')
 
-    read (10,*)ncat
+    read (1010,*)ncat
     allocate(var(1:ncat,1:nofvar))
 
     do i = 1, ncat
-       read(10,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
+       read(1010,'(i8,i15,5(1x,f8.4),i5,e18.3)')n,idum8,dum1,dum2,dum3,dum4,dum5,idum2,dum6
           var(i,1)=dum1
           var(i,2)=dum2
           var(i,3)=dum5
     end do
 
-    close (10,status='keep')
+    close (1010,status='keep')
 
     do i = 1,LDT_g5map%NT_GEOS 
        TOPMEAN(i) = var(LDT_g5map%catid_index(i),1)
