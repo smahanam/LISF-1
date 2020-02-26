@@ -178,6 +178,8 @@ module LDT_rstProcMod
             model_name = "NOAHMP401"
          elseif(LDT_rc%lsm.eq."CLSMF2.5") then 
             model_name = "CLSMF25"
+         elseif(LDT_rc%lsm.eq."CLSMJ3.2") then 
+            model_name = "CLSMJ32"
          elseif(LDT_rc%lsm.eq."RUC.3.7") then 
             model_name = "RUC37"
          elseif(LDT_rc%lsm.eq."VIC.4.1.1") then 
@@ -186,7 +188,7 @@ module LDT_rstProcMod
             model_name = "VIC412"
          else
             write(LDT_logunit,*) "[INFO] Climatological Restart File Generation - LSMs supported: "
-            write(LDT_logunit,*) "  -- CLSMF2.5, Noah.3.2, Noah.3.3, Noah.3.6, Noah.3.9, "
+            write(LDT_logunit,*) "  -- CLSMF2.5, CLSMJ3.2, Noah.3.2, Noah.3.3, Noah.3.6, Noah.3.9, "
             write(LDT_logunit,*) "  -- Noah-MP.3.6, Noah-MP.4.0.1, "
             write(LDT_logunit,*) "     Noah.2.7.1, RUC.3.7, VIC.4.1.1, VIC.4.1.2 "
             write(LDT_logunit,*) "[ERR] No other LSMs supported at this time ... stopping."
@@ -374,6 +376,8 @@ module LDT_rstProcMod
               model_name = "NOAHMP401"
            elseif(LDT_rc%lsm.eq."CLSMF2.5") then 
               model_name = "CLSMF25"
+           elseif(LDT_rc%lsm.eq."CLSMJ3.2") then 
+              model_name = "CLSMJ32"
            elseif(LDT_rc%lsm.eq."RUC.3.7") then    
               model_name = "RUC37"
            elseif(LDT_rc%lsm.eq."VIC.4.1.1") then
@@ -382,7 +386,7 @@ module LDT_rstProcMod
               model_name = "VIC412"
            else
               write(LDT_logunit,*) "[INFO] Climatological Restart File Generation - LSMs supported: "
-              write(LDT_logunit,*) "  -- CLSMF2.5, Noah.3.2, Noah.3.3, Noah.3.6, Noah.3.9, "
+              write(LDT_logunit,*) "  -- CLSMF2.5, CLSMJ3.2, Noah.3.2, Noah.3.3, Noah.3.6, Noah.3.9, "
               write(LDT_logunit,*) "  -- Noah-MP.3.6, Noah-MP.4.0.1, "
               write(LDT_logunit,*) "     Noah.2.7.1, RUC.3.7, VIC.4.1.1, VIC.4.1.2 "
               write(LDT_logunit,*) "[ERR] No other LSMs supported at this time ... stopping."

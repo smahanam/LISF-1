@@ -12,6 +12,8 @@ module CLSM_param_routines
        n_SoilClasses => n_DeLannoy_classes,  &
        soil_class    => DeLannoy_class,      &
        GDL_TABLE
+  use LDT_logMod
+  
   implicit none
 
   private
@@ -63,7 +65,7 @@ contains
          gwatdep,gwan,grzexcn,gfrc
     real :: wtdep,wanom,rzaact,fracl,profdep,dist_save,     &
          ncells_top, ncells_top_pro,ncells_sub_pro,tile_distance
-    character*100 :: fname,fout,losfile
+    character*400 :: fname,fout,losfile
     character*6 rdep,ext
     integer :: iwt,irz,group
     logical :: picked
@@ -113,6 +115,8 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       
 !c-------------------------------------------------------------------------
 
+      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM create_CLSM_parameters] creating model paramss .....'
+
       ! Scale saturated hydraulic conductivity  to surface 
       ! --------------------------------------------------
 
@@ -124,8 +128,7 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
       allocate (TOPSKEW (1: nbcatch))
       call read_cti_stats (TOPMEAN, TOPVAR, TOPSKEW)
 
-      fname = trim(c_data)//trim(GDL_TABLE)
-      open (11, file=trim(fname), form='formatted',status='old', &
+      open (11, file=trim(c_data)//trim(GDL_TABLE), form='formatted',status='old', &
            action = 'read')
       read (11,'(a)')fout           
       losfile =trim(c_data)//'/Woesten_SoilParam/loss_pd_top/loss_perday_rz1m_'
@@ -262,10 +265,10 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
      CF4 =0
 
      if (write_clsm_files) then
-        open (10, file = 'LDT/clsm/ar.new'        , form = 'formatted', action = 'write')
-        open (11, file = 'LDT/clsm/ts.dat'        , form = 'formatted', action = 'write')
-        open (12, file = 'LDT/clsm/bf.dat'        , form = 'formatted', action = 'write')
-        open (13, file = 'LDT/clsm/soil_param.dat', form = 'formatted', action = 'write')
+        open (10, file = 'LDT_clsm/ar.new'        , form = 'formatted', action = 'write')
+        open (11, file = 'LDT_clsm/ts.dat'        , form = 'formatted', action = 'write')
+        open (12, file = 'LDT_clsm/bf.dat'        , form = 'formatted', action = 'write')
+        open (13, file = 'LDT_clsm/soil_param.dat', form = 'formatted', action = 'write')
      endif
 
      DO n=1,nbcatch
@@ -325,7 +328,8 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
    DO n=1,nbcatch
       atile_clay = a_clay(SOIL_CLASS_COM(n))
       atile_sand = a_sand(SOIL_CLASS_COM(n))
-      if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then   
+      if((ars1(n).ne.9999.).and.(arw1(n).ne.9999.))then 
+         k = n
       else
          if(preserve_soiltype) then 
             if ((soil_class_com(n)>=1).and.(soil_class_com(n)<=84)) then	
@@ -366,31 +370,6 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
                end select
                print *,'NO Similar SoilClass :',soil_class (min_percs),group,n,k            
             endif
-
-            BEE(n)      =  BEE(k)       
-            PSIS(n)     =  PSIS(k)      
-            POROS(n)    =  POROS(k)     
-            COND(n)     =  COND(k)      
-            WPWET(n)    =  WPWET(k)     
-            soildepth(n)=  soildepth(k) 
-            ars1(n)     =  ars1(k)      
-            ars2(n)     =  ars2(k)      
-            ars3(n)     =  ars3(k)                  
-            ara1(n)     =  ara1(k)      
-            ara2(n)     =  ara2(k)      
-            ara3(n)     =  ara3(k)      
-            ara4(n)     =  ara4(k)      
-            arw1(n)     =  arw1(k)      
-            arw2(n)     =  arw2(k)      
-            arw3(n)     =  arw3(k)      
-            arw4(n)     =  arw4(k)      
-            bf1(n)      =  bf1(k)       
-            bf2(n)      =  bf2(k)       
-            bf3(n)      =  bf3(k)       
-            tsa1(n)     =  tsa1(k)      
-            tsa2(n)     =  tsa2(k)      
-            tsb1(n)     =  tsb1(k)      
-            tsb2(n)     =  tsb2(k)      
 
          else 
             dist_save = 1000000.
@@ -452,7 +431,7 @@ integer, dimension(:), allocatable :: low_ind, upp_ind
          write(13,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
               n,LDT_g5map%catid_index(n),                              &
               soil_class_top(k),soil_class_com(k),                     &
-              BEE(k), PSIS(k),POROS(k),COND(k),WPWET(k),soildepth(k),  &
+              BEE(n), PSIS(n),POROS(n),COND(n),WPWET(n),soildepth(n),  &
               atile_sand, atile_clay
       endif
    END DO

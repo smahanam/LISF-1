@@ -32,7 +32,7 @@ module mod_HWSD_STATSGO2_texture
        NC_VarID, LDT_g5map,                 &
        c_data => G5_BCSDIR,                 &
        NX => nc_g5_rst,                     &
-       NY => nr_g5_rst
+       NY => nr_g5_rst, write_clsm_files
 
   use get_DeLannoy_SoilClass, ONLY :        &
        mineral_perc, GDL_center_pix,        &
@@ -40,6 +40,7 @@ module mod_HWSD_STATSGO2_texture
        soil_class    => DeLannoy_class,     &
        cf_lim        => OC_LIMITS,          &
        mineral_perc, get_GDL_soil_table
+  use LDT_logMod
 
   implicit none
   include 'netcdf.inc'	
@@ -355,7 +356,9 @@ contains
     !$OMP BARRIER
     !
     !$OMP ENDPARALLEL
-    
+
+    write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM derive_CLSM_HWSD_soiltypes] deriving soil params ...'
+
     if (first_entry) then
        nullify(iraster) ; first_entry = .false.
     endif
@@ -760,7 +763,12 @@ contains
     !$OMP ENDPARALLELDO
 
     call process_peatmap (pmap)
-    
+
+    if (write_clsm_files) then 
+       open (12, file = 'LDT_clsm/tau_param.dat'   , form = 'formatted', action = 'write')
+       open (13, file = 'LDT_clsm/soil_param.first', form = 'formatted', action = 'write')
+    endif
+
     do n = 1, maxcat
        
        ! fill gaps from neighbor for rare missing values came from inconsistent masks
@@ -823,9 +831,19 @@ contains
        BTAU2(n)= btau_2cm(fac_surf)
        ATAU5(n)= atau(fac_surf)
        BTAU5(n)= btau(fac_surf) 
-       
+
+       if (write_clsm_files) then
+         write (12,'(i8,i8,4f10.7)')n, LDT_g5map%catid_index(n), &
+	       atau_2cm(fac_surf),btau_2cm(fac_surf),atau(fac_surf),btau(fac_surf)           
+         write(13,'(i8,i8,i4,i4,3f8.4,f12.8,f7.4,f10.4,2f7.3)')        &
+              n,LDT_g5map%catid_index(n),                              &
+              soil_class_top(n),soil_class_com(n),                     &
+              BEE(n), PSIS(n),POROS(n),Ks(n),WPWET(n),soildepth(n),    &
+              a_sand(fac), a_clay(fac)          
+       endif
+
     end do
-    
+    if (write_clsm_files) close (13, status = 'keep')
     deallocate (data_vec1, data_vec2,data_vec3, data_vec4,data_vec5, data_vec6)
     deallocate (tileid_vec)
     deallocate (a_sand,a_clay,a_silt,a_oc,a_bee,a_psis,       &
@@ -861,8 +879,8 @@ contains
     status = NF_INQ_DIM (ncid,1,string, nc_10)                                             ; VERIFY_(STATUS)
     status = NF_INQ_DIM (ncid,2,string, nr_10)                                             ; VERIFY_(STATUS)
     status = NF_CLOSE(ncid); VERIFY_(STATUS)        
-    ASSERT_(NX - i_highd)
-    ASSERT_(NY - j_highd)
+    ASSERT_(NX == i_highd)
+    ASSERT_(NY == j_highd)
     
     if(present (soildepth )) allocate (soil  (1:NX, 1: NY))
     if(present (Clay0_30  )) allocate (Clay0 (1:NX, 1: NY))
@@ -921,14 +939,30 @@ contains
              
              do j = jLL,jLL + nr_10 -1 
                 do i = iLL, iLL + nc_10 -1 
-                   if((present (soildepth )).and.(net_data1(i-iLL +1 ,j - jLL +1) /= d_undef)) soil (i,j) = net_data1(i-iLL +1 ,j - jLL +1)
-                   if((present (Clay0_30  )).and.(net_data2(i-iLL +1 ,j - jLL +1) /= d_undef)) Clay0(i,j) = net_data2(i-iLL +1 ,j - jLL +1)  
-                   if((present (Sand0_30  )).and.(net_data3(i-iLL +1 ,j - jLL +1) /= d_undef)) Sand0(i,j) = net_data3(i-iLL +1 ,j - jLL +1)  
-                   if((present (OC0_30    )).and.(net_data4(i-iLL +1 ,j - jLL +1) /= d_undef)) OC0  (i,j) = net_data4(i-iLL +1 ,j - jLL +1)  
-                   if((present (Clay30_100)).and.(net_data5(i-iLL +1 ,j - jLL +1) /= d_undef)) Clay3(i,j) = net_data5(i-iLL +1 ,j - jLL +1)  
-                   if((present (Sand30_100)).and.(net_data6(i-iLL +1 ,j - jLL +1) /= d_undef)) Sand3(i,j) = net_data6(i-iLL +1 ,j - jLL +1)  
-                   if((present (OC30_100  )).and.(net_data7(i-iLL +1 ,j - jLL +1) /= d_undef)) OC3  (i,j) = net_data7(i-iLL +1 ,j - jLL +1)  
-                   if((present (Gravel    )).and.(net_data8(i-iLL +1 ,j - jLL +1) /= d_undef)) Gr   (i,j) = net_data8(i-iLL +1 ,j - jLL +1)  
+                   if(present (soildepth )) then
+                      if (net_data1(i-iLL +1 ,j - jLL +1) /= d_undef) soil (i,j) = net_data1(i-iLL +1 ,j - jLL +1)
+                   endif
+                   if(present (Clay0_30  )) then
+                      if (net_data2(i-iLL +1 ,j - jLL +1) /= d_undef) Clay0(i,j) = net_data2(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (Sand0_30  )) then
+                      if (net_data3(i-iLL +1 ,j - jLL +1) /= d_undef) Sand0(i,j) = net_data3(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (OC0_30    )) then
+                      if (net_data4(i-iLL +1 ,j - jLL +1) /= d_undef) OC0  (i,j) = net_data4(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (Clay30_100)) then
+                      if (net_data5(i-iLL +1 ,j - jLL +1) /= d_undef) Clay3(i,j) = net_data5(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (Sand30_100)) then
+                      if (net_data6(i-iLL +1 ,j - jLL +1) /= d_undef) Sand3(i,j) = net_data6(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (OC30_100  )) then
+                      if (net_data7(i-iLL +1 ,j - jLL +1) /= d_undef) OC3  (i,j) = net_data7(i-iLL +1 ,j - jLL +1)  
+                   endif
+                   if(present (Gravel    )) then
+                      if (net_data8(i-iLL +1 ,j - jLL +1) /= d_undef) Gr   (i,j) = net_data8(i-iLL +1 ,j - jLL +1)  
+                   endif
                 enddo
              enddo
              status = NF_CLOSE(ncid)

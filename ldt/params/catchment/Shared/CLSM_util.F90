@@ -14,6 +14,8 @@ module CLSM_util
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
   use LDT_paramDataMod
+  use LDT_logMod
+  use LDT_domainMod
 
   implicit none
   include 'netcdf.inc'	
@@ -92,14 +94,19 @@ module CLSM_util
       allocate (lat    (1: LDT_g5map%NT_LIS))
       allocate (lon    (1: LDT_g5map%NT_LIS))
 
+      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM INIT GEOS2LIS] # of LIS grid cells in the domain : ',LDT_g5map%NT_LIS
+      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM INIT GEOS2LIS] # of columns in the domain and DX : ',glpnc, DX
+      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM INIT GEOS2LIS] # of rows in the domain and DY    : ',glpnr, DY
+
       n = 0
 
       do r = 1, glpnr
          do c = 1, glpnc
-            if( LDT_rc%global_mask(c,r) > 0. ) then 
-               n = n + 1
-               lat(n) = LDT_LSMparam_struc(i)%xlat%value(c,r,i)
-               lon(n) = LDT_LSMparam_struc(i)%xlon%value(c,r,i)               
+            if( LDT_LSMparam_struc(i)%landmask%value(c, r,i) > 0. ) then 
+               j = (r-1)*glpnc + c
+               n = n+1
+               lat(n) = LDT_domain(i)%lat(j)
+               lon(n) = LDT_domain(i)%lon(j)
             endif
          end do
       end do
@@ -108,7 +115,6 @@ module CLSM_util
       ! ----------------------------
       
       status    = NF_OPEN (trim(G5_BCSDIR)//'GEOS5_10arcsec_mask.nc', NF_NOWRITE, ncid) ; VERIFY_(STATUS)
-
       
       x0 = -180. + dx/2.
       y0 = -90.  + dy/2.
@@ -157,7 +163,7 @@ module CLSM_util
          do jj = iy1,iy2
             do ii = ix1,ix2
                status  = NF_GET_VARA_INT (ncid,4,(/(ii-1)*msk2rst+1,(jj-1)*msk2rst +1/),  &
-                    (/msk2rst,msk2rst/),high_msk) 
+                    (/msk2rst,msk2rst/),high_msk);  VERIFY_(STATUS)
                if(count(high_msk >= 1 .and. high_msk <= SRTM_maxcat) > 0) then
                   if (.not. counted) catCount       = catCount + 1
                   LDT_g5map%rst (ii,jj) = catCount
@@ -219,7 +225,7 @@ module CLSM_util
       end do
 
       if (write_clsm_files) then
-         open (10, file = 'LDT/clsm/CLSM.til', form = 'formatted', action = 'write')
+         open (10, file = 'LDT_clsm/CLSM.til', form = 'formatted', action = 'write')
          do n = 1,  LDT_g5map%NT_GEOS
             write (10, '(2i10, 2f10.4)') n, LDT_g5map%catid_index(n), LDT_g5map%lon(n), LDT_g5map%lat(n)
          end do
@@ -227,6 +233,8 @@ module CLSM_util
       endif
 
       ncells = ncells - 1
+
+      write(LDT_logunit,'(A60, i7, f6.3)')'[CLSM INIT GEOS2LIS] # of G5  grid cells in the domain : ',LDT_g5map%NT_GEOS
 
       if (LDT_g5map%NT_GEOS == LDT_g5map%NT_LIS) then 
 
@@ -237,9 +245,12 @@ module CLSM_util
 
       else
 
+         write(LDT_logunit,*)'[CLSM INIT GEOS2LIS] filling GEOS5 gaps ... '
          ! (2) gap filling
          ! ---------------
-         
+         allocate (tid_geos (1: LDT_g5map%NT_GEOS))
+         allocate (mask     (1: LDT_g5map%NT_GEOS))
+
          LDT_g5map%ID_LOC(:) = 9999
          
          LIS_TILES : do n = 1,  LDT_g5map%NT_LIS
@@ -271,7 +282,7 @@ module CLSM_util
                allocate (sub_lat (1:nplus))
                allocate (rev_dist  (1:nplus))
                
-               sub_tid = PACK (tid_geos    , mask= mask) 
+               sub_tid = PACK (tid_geos  , mask= mask) 
                sub_lon = PACK (lon_g5    , mask= mask)
                sub_lat = PACK (lat_g5    , mask= mask)
                

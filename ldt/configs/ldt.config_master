@@ -178,6 +178,7 @@ Surface model types:  "LSM"
 #latex: Mosaic      & Mosaic              \\
 #latex: HySSIB      & HySSIB              \\
 #latex: CLSMF2.5    & Catchment, Fortuna 2.5 \\
+#latex: CLSMJ3.2    & Catchment, Jason 3.2 \\
 #latex: SAC.3.5.6   & Sacramento          \\
 #latex: SNOW17      & Snow17              \\
 #latex: RDHM.3.5.6  & Sacramento+snow17   \\
@@ -1001,6 +1002,7 @@ Run domain resolution:                40
 #latex: ALMIPII       & AMMA/ALMIP Phase-2 landcover input option.  For more info:    \\ 
 #latex:               &   http://www.cnrm.meteo.fr/amma-moana/amma\_surf/almip2/input.html \\
 #latex: CLSMF2.5      & CLSM Fortuna 2.5 landcover dataset.  \\
+#latex: CLSMJ3.2      & CLSM Jason 3.2 landcover dataset.  \\
 #latex: VIC412        & Variable Infiltration Capacity model, v4.1.2, UMD land cover.  \\
 #latex: ISA           & Impervious Surface Area (ISA) landcover dataset.  \\
 #latex: CLM45         & CLM-4.5 landcover dataset.  \\
@@ -1705,6 +1707,7 @@ Irrigation fraction spatial transform:     none
 #latex: Value      & Description    \\
 #latex: FAO          &  LIS-team produced soil porosity data source. \\
 #latex: CLSMF2.5     &  Similar to the above option but for CLSM F2.5 model. \\
+#latex: CLSMJ3.2     &  Similar to the above option but for CLSM J3.2 model. \\
 #latex: CONSTANT     &  User can select a constant value. \\
 #latex: \end{tabular}
 #latex:
@@ -3203,6 +3206,7 @@ CLSMF25 spatial transform:     none
 #latex: END_DESCRIPTION
 #latex: BEGIN_CONFIG
 CLSMF25 map projection:       latlon
+CLSMJ32 map projection:       latlon
 CLSMF25 lower left lat:       25.0625
 CLSMF25 lower left lon:     -124.9375
 CLSMF25 upper right lat:      52.9375
