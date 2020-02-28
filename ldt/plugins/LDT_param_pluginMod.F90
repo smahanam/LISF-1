@@ -69,6 +69,7 @@ contains
     use Mosaic_parmsMod
     use RUC_parmsMod
     use JULES50_parmsMod
+    use CLSM_param_routines, only : catchmentParms_writeHeader, catchmentParms_writeData
 
   ! Noah 2.7.1 LSM:
     call registerlsmparamprocinit(trim(LDT_noah271Id)//char(0),&
@@ -128,19 +129,19 @@ contains
 
   ! CLSM F2.5 LSM:
     call registerlsmparamprocinit(trim(LDT_clsmf25Id)//char(0),&
-         catchmentParms_init)
+         catchmentParms_init_f25)
     call registerlsmparamprocwriteheader(trim(LDT_clsmf25Id)//char(0),&
          catchmentParms_writeHeader)
     call registerlsmparamprocwritedata(trim(LDT_clsmf25Id)//char(0),&
          catchmentParms_writeData)
 
-! CLSM J3.2 LSM:
+  ! CLSM J3.2 LSM:
     call registerlsmparamprocinit(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_init_J32)
+         catchmentParms_init_j32)
     call registerlsmparamprocwriteheader(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_writeHeader_J32)
+         catchmentParms_writeHeader)
     call registerlsmparamprocwritedata(trim(LDT_clsmj32Id)//char(0),&
-         catchmentParms_writeData_J32)
+         catchmentParms_writeData)
 
   ! RDHM:
 
