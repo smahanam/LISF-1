@@ -17,8 +17,8 @@
   use LDT_coreMod, only : LDT_rc, LDT_domain
   use LDT_logMod,  only : LDT_logunit, LDT_getNextUnitNumber, &
                           LDT_releaseUnitNumber, LDT_endrun
-  use CLSMF25_parmsMod
   use map_utils
+  use CLSM_param_routines, only : clsm_type_dec, CLSMF25_struc
 
   implicit none
 

@@ -33,6 +33,8 @@ module CLSMF25_parmsMod
   use LDT_albedoMod
   use LDT_paramDataMod
   use LDT_logMod
+  use CLSM_param_routines, only : clsm_type_dec, CLSMF25_struc,       &
+       set_param_attribs => set_CLSM_param_attribs
 
   implicit none
 
@@ -41,80 +43,77 @@ module CLSMF25_parmsMod
 !------------------------------------------------------------------------------
 ! !PUBLIC MEMBER FUNCTIONS:
 !------------------------------------------------------------------------------
-  public :: catchmentParms_init    !allocates memory for required structures
-  public :: catchmentParms_writeHeader
-  public :: catchmentParms_writeData
+  public :: catchmentParms_init_f25  !allocates memory for required structures
 
 !------------------------------------------------------------------------------
 ! !PUBLIC TYPES:
 !------------------------------------------------------------------------------
-  public :: CLSMF25_struc
 
-  type, public :: clsmf25_type_dec
+!  type, public :: clsmf25_type_dec
+!
+!     character*100 :: albnirfile
+!     character*100 :: albvisfile
+!     real          :: catchparms_gridDesc(20)
+!     character*50  :: catchparms_proj
+!     character*50  :: catchparms_gridtransform
+!!  - Catchment (F2.5):
+!!     character*100 :: modisdir        ! sub-directory for MODIS files
+!!     character*140 :: tile_coord_file ! tile coordinate file
+!!     character*140 :: tile_veg_file   ! tile vegetation file
+!     character*140 :: soilparamfile   ! soil parameters file
+!     character*140 :: sltsfile        ! surface layer timescales file
+!     character*140 :: topo_ar_file    ! topography parameters file
+!     character*140 :: topo_bf_file    ! topography parameters file
+!     character*140 :: topo_ts_file    ! topography parameters file
+!     character*140 :: catchgreenfile  ! greenness climatology file
+!     character*140 :: catchlaifile    ! LAI climatology file
+!     real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
+!     real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config!
+!
+!     type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
+!     type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
+!     type(LDT_paramEntry) :: wpwet       ! wilting point wetness
+!     type(LDT_paramEntry) :: bdrckdpth   ! depth to bedrock 
+!     type(LDT_paramEntry) :: ksat        ! saturated hydraulic conductivity (SATDK; m s-1)
+!     type(LDT_paramEntry) :: gnu         ! vertical decay factor for transmissivity
+!     type(LDT_paramEntry) :: ars1        ! Wetness parameters
+!     type(LDT_paramEntry) :: ars2         
+!     type(LDT_paramEntry) :: ars3
+!     type(LDT_paramEntry) :: ara1        ! Shape parameters
+!     type(LDT_paramEntry) :: ara2
+!     type(LDT_paramEntry) :: ara3
+!     type(LDT_paramEntry) :: ara4
+!     type(LDT_paramEntry) :: arw1        ! Minimum Theta parameters:
+!     type(LDT_paramEntry) :: arw2
+!     type(LDT_paramEntry) :: arw3
+!     type(LDT_paramEntry) :: arw4
+!     type(LDT_paramEntry) :: bf1         ! Baseflow topographic params
+!     type(LDT_paramEntry) :: bf2
+!     type(LDT_paramEntry) :: bf3
+!     type(LDT_paramEntry) :: tsa1        ! Water transfer parameters
+!     type(LDT_paramEntry) :: tsa2
+!     type(LDT_paramEntry) :: tsb1        
+!     type(LDT_paramEntry) :: tsb2
+!     type(LDT_paramEntry) :: atau
+!     type(LDT_paramEntry) :: btau
+!     type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
+!     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
+!     type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
+!     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM F2.5)
+!
+!  end type clsmf25_type_dec
 
-     character*100 :: albnirfile
-     character*100 :: albvisfile
-     real          :: catchparms_gridDesc(20)
-     character*50  :: catchparms_proj
-     character*50  :: catchparms_gridtransform
-!  - Catchment (F2.5):
-!     character*100 :: modisdir        ! sub-directory for MODIS files
-!     character*140 :: tile_coord_file ! tile coordinate file
-!     character*140 :: tile_veg_file   ! tile vegetation file
-     character*140 :: soilparamfile   ! soil parameters file
-     character*140 :: sltsfile        ! surface layer timescales file
-     character*140 :: topo_ar_file    ! topography parameters file
-     character*140 :: topo_bf_file    ! topography parameters file
-     character*140 :: topo_ts_file    ! topography parameters file
-     character*140 :: catchgreenfile  ! greenness climatology file
-     character*140 :: catchlaifile    ! LAI climatology file
-     real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
-     real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config
-
-     type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
-     type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
-     type(LDT_paramEntry) :: wpwet       ! wilting point wetness
-     type(LDT_paramEntry) :: bdrckdpth   ! depth to bedrock 
-     type(LDT_paramEntry) :: ksat        ! saturated hydraulic conductivity (SATDK; m s-1)
-     type(LDT_paramEntry) :: gnu         ! vertical decay factor for transmissivity
-     type(LDT_paramEntry) :: ars1        ! Wetness parameters
-     type(LDT_paramEntry) :: ars2         
-     type(LDT_paramEntry) :: ars3
-     type(LDT_paramEntry) :: ara1        ! Shape parameters
-     type(LDT_paramEntry) :: ara2
-     type(LDT_paramEntry) :: ara3
-     type(LDT_paramEntry) :: ara4
-     type(LDT_paramEntry) :: arw1        ! Minimum Theta parameters:
-     type(LDT_paramEntry) :: arw2
-     type(LDT_paramEntry) :: arw3
-     type(LDT_paramEntry) :: arw4
-     type(LDT_paramEntry) :: bf1         ! Baseflow topographic params
-     type(LDT_paramEntry) :: bf2
-     type(LDT_paramEntry) :: bf3
-     type(LDT_paramEntry) :: tsa1        ! Water transfer parameters
-     type(LDT_paramEntry) :: tsa2
-     type(LDT_paramEntry) :: tsb1        
-     type(LDT_paramEntry) :: tsb2
-     type(LDT_paramEntry) :: atau
-     type(LDT_paramEntry) :: btau
-     type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM F2.5)
-
-  end type clsmf25_type_dec
-
-  type(clsmf25_type_dec), allocatable :: CLSMF25_struc(:)
+! type(clsmf25_type_dec), allocatable :: CLSMF25_struc(:)
 
 contains
 
 !BOP
 ! 
-! !ROUTINE: catchmentParms_init
+! !ROUTINE: catchmentParms_init_f25
 ! \label{catchmentParms_init}
 ! 
 ! !INTERFACE:
-  subroutine catchmentParms_init
+  subroutine catchmentParms_init_f25
 ! !USES:
     use LDT_fileIOMod, only : LDT_readDomainConfigSpecs
     use LDT_logMod,    only : LDT_verify
@@ -145,61 +144,61 @@ contains
 
     do n=1,LDT_rc%nnest
 
-       call set_param_attribs(CLSMF25_struc(n)%bexp,"BEXP", &
+       call set_param_attribs(CLSMF25_struc(n)%bexp,"BEXP", "CLSMF2.5", &
             full_name="CLSMF2.5 Bexp Clapp-Hornberger parameter")
 
-       call set_param_attribs(CLSMF25_struc(n)%psisat,"PSISAT", &
+       call set_param_attribs(CLSMF25_struc(n)%psisat,"PSISAT", "CLSMF2.5", &
             full_name="CLSMF2.5 saturated soil moisture potential")
 
-       call set_param_attribs(CLSMF25_struc(n)%wpwet,"WPWET", &
+       call set_param_attribs(CLSMF25_struc(n)%wpwet,"WPWET", "CLSMF2.5", &
             full_name="CLSMF2.5 wilting point wetness")
 
-       call set_param_attribs(CLSMF25_struc(n)%ksat,"KSAT",&
+       call set_param_attribs(CLSMF25_struc(n)%ksat,"KSAT", "CLSMF2.5",&
             units="ms-1",full_name="CLSMF2.5 saturated hydraulic conductivity")
 
-       call set_param_attribs(CLSMF25_struc(n)%gnu,"GNUCLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%gnu,"GNUCLSM", "CLSMF2.5",&
             units="m-1", &
             full_name="CLSMF2.5 vertical transm. decay term")
 
-       call set_param_attribs(CLSMF25_struc(n)%ars1,"ARS1CLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%ars1,"ARS1CLSM", "CLSMF2.5",&
             units="m2kg-1", &
             full_name="CLSMF2.5 (ARS) wetness parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%ara1,"ARA1CLSM", &
+       call set_param_attribs(CLSMF25_struc(n)%ara1,"ARA1CLSM", "CLSMF2.5", &
             units="m2kg-1", &
             full_name="CLSMF2.5 (ARA) topographic shape parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%arw1,"ARW1CLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%arw1,"ARW1CLSM", "CLSMF2.5",&
             units="m2kg-1", &
             full_name="CLSMF2.5 (ARW) minimum theta parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%bf1,"BF1CLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%bf1,"BF1CLSM", "CLSMF2.5",&
             units="kgm-4", &
             full_name="CLSMF2.5 (BF) baseflow topographic parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%tsa1,"TSA1CLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%tsa1,"TSA1CLSM", "CLSMF2.5",&
             full_name="CLSMF2.5 (TS) water transfer parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%atau,"ATAUCLSM",&
+       call set_param_attribs(CLSMF25_struc(n)%atau,"ATAUCLSM", "CLSMF2.5",&
             full_name="CLSMF2.5 (TAU) topographic tau parameters" )
 
-       call set_param_attribs(CLSMF25_struc(n)%bdrckdpth,"BEDROCKDEPTH",&
+       call set_param_attribs(CLSMF25_struc(n)%bdrckdpth,"BEDROCKDEPTH", "CLSMF2.5",&
             units="mm", &
             full_name="CLSMF2.5 depth to bedrock" )
 
-       call set_param_attribs(CLSMF25_struc(n)%albnirdir,"ALBNIRDIR",&
+       call set_param_attribs(CLSMF25_struc(n)%albnirdir,"ALBNIRDIR", "CLSMF2.5",&
             vlevels=12, &
             full_name="CLSMF2.5 alb near-IR (direct) scale factor" )
 
-       call set_param_attribs(CLSMF25_struc(n)%albvisdir,"ALBVISDIR",&
+       call set_param_attribs(CLSMF25_struc(n)%albvisdir,"ALBVISDIR", "CLSMF2.5",&
             vlevels=12, &
             full_name="CLSMF2.5 alb visible (direct) scale factor" )
 
-       call set_param_attribs(CLSMF25_struc(n)%albnirdif,"ALBNIRDIF",&
+       call set_param_attribs(CLSMF25_struc(n)%albnirdif,"ALBNIRDIF", "CLSMF2.5",&
             vlevels=12, &
             full_name="CLSMF2.5 alb near-IR (diffuse) scale factor" )
 
-       call set_param_attribs(CLSMF25_struc(n)%albvisdif,"ALBVISDIF",&
+       call set_param_attribs(CLSMF25_struc(n)%albvisdif,"ALBVISDIF", "CLSMF2.5",&
             vlevels=12, &
             full_name="CLSMF2.5 alb near-IR (diffuse) scale factor" )
 
@@ -609,214 +608,16 @@ contains
        LDT_gfrac_struc(n)%gfracInterval = "monthly"
     enddo
 
-  end subroutine catchmentParms_init
-
-  subroutine catchmentParms_writeHeader(n,ftn,dimID,monthID)
-
-    integer     :: n
-    integer     :: ftn
-    integer     :: dimID(3)
-    integer     :: monthID
-
-    integer     :: t_dimID(3)
-    integer     :: tdimID(3)
-
-    tdimID(1) = dimID(1)
-    tdimID(2) = dimID(2)
-
-    t_dimID(1) = dimID(1)
-    t_dimID(2) = dimID(2)
-
-    if(LDT_gfrac_struc(n)%gfrac%selectOpt.gt.0) then
-       if(LDT_gfrac_struc(n)%gfracInterval.eq."monthly") then !monthly
-          t_dimID(3) = monthID
-       endif
-    end if
-
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%gnu)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ars1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ars2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ars3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ara1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ara2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ara3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%ara4)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%arw1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%arw2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%arw3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%arw4)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%bf1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%bf2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%bf3)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%tsa1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%tsa2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%tsb1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%tsb2)
-
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%atau)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMF25_struc(n)%btau)
-
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMF25_struc(n)%psisat)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMF25_struc(n)%ksat)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMF25_struc(n)%bexp)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMF25_struc(n)%wpwet)
-!    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-!         LDT_LSMparam_struc(n)%quartz)
-!    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-!         LDT_LSMparam_struc(n)%soildepth)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMF25_struc(n)%bdrckdpth)
-
- !- Albedo NIR scale factors:
-    if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMF25_struc(n)%albnirdir)
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMF25_struc(n)%albnirdif)
-    
- !- Albedo VIS scale factors:
-    if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMF25_struc(n)%albvisdir)
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMF25_struc(n)%albvisdif)
-
-    call LDT_verify(nf90_put_att(ftn,NF90_GLOBAL,"ALBEDO_DATA_INTERVAL", &
-         LDT_albedo_struc(n)%albInterval))
-    
-  end subroutine catchmentParms_writeHeader
-
-  subroutine catchmentParms_writeData(n,ftn)
-
-    integer   :: n 
-    integer   :: ftn
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%gnu)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ars1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ars2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ars3)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ara1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ara2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ara3)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ara4)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%arw1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%arw2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%arw3)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%arw4)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%bf1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%bf2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%bf3)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%tsa1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%tsa2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%tsb1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%tsb2)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%atau)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%btau)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%psisat)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%ksat)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%bexp)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%wpwet)
-!    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%quartz)
-!    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%soildepth)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%bdrckdpth)
-
-    
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%albnirdir)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%albnirdif)
-    
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%albvisdir)
-    call LDT_writeNETCDFdata(n,ftn,CLSMF25_struc(n)%albvisdif)
-
-  end subroutine catchmentParms_writeData
-
-
-!BOP
-! !ROUTINE:  set_param_attribs
-! \label{set_param_attribs}
-!
-! !INTERFACE:
-  subroutine set_param_attribs(paramEntry, short_name, vlevels, &
-                 units, full_name )
-
-! !DESCRIPTION:
-!   This routine reads over the parameter attribute entries
-!   in the param_attribs.txt file.
-!
-! !USES:
-   type(LDT_paramEntry),intent(inout) :: paramEntry
-   character(len=*),    intent(in)    :: short_name
-   integer, optional                  :: vlevels
-   character(len=*),     optional     :: units 
-   character(len=*),     optional     :: full_name
-
-   integer   :: v_temp
-   character(20) :: unit_temp
-   character(100):: name_temp
-
-! ____________________________________________________
-    
-   if(present(vlevels)) then 
-      v_temp = vlevels
-   else
-      v_temp = 1
-   endif
-
-   if(present(units)) then
-      unit_temp = units
-   else
-      unit_temp = "none"
-   endif
-
-   if(present(full_name)) then
-      name_temp = full_name
-   else
-      name_temp = trim(short_name)
-   endif
-
-   paramEntry%short_name = trim(short_name)
-   paramEntry%vlevels = v_temp
-   paramEntry%selectOpt = 1
-   paramEntry%source = "CLSMF2.5"
-   paramEntry%units = trim(unit_temp)
-   paramEntry%num_times = 1
-   paramEntry%num_bins = 1
-   paramEntry%standard_name = trim(name_temp)
-
-  end subroutine set_param_attribs
+  end subroutine catchmentParms_init_f25
 
 end module CLSMF25_parmsMod
+
+
+
+
+
+
+
+
+
+
