@@ -1,3 +1,4 @@
+
 !-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
 ! NASA Goddard Space Flight Center Land Data Toolkit (LDT) v1.0
 !-------------------------END NOTICE -- DO NOT EDIT-----------------------
@@ -17,7 +18,7 @@ subroutine read_CLSMF25_bfparams(n,array1,array2,array3,maskarray)
   use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
        LDT_releaseUnitNumber, LDT_endrun
   use map_utils
-  use CLSMF25_parmsMod
+  use CLSM_param_routines, only : clsm_type_dec, CLSMF25_struc
 !EOP      
   implicit none
 ! !ARGUMENTS: 

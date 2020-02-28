@@ -17,7 +17,8 @@ subroutine read_CLSMF25_tauparams(n,array1,array2,maskarray)
   use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
        LDT_releaseUnitNumber, LDT_endrun
   use map_utils
-  use CLSMF25_parmsMod
+  use CLSM_param_routines, only : clsm_type_dec, CLSMF25_struc
+
 !EOP      
   implicit none
 ! !ARGUMENTS: 
