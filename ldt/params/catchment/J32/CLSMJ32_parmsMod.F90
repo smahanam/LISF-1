@@ -34,11 +34,12 @@ module CLSMJ32_parmsMod
   use LDT_paramDataMod
   use LDT_logMod
   use CLSM_util, only : init_geos2lis_mapping, LDT_g5map, G52LIS, LISv2g
-  use CLSM_param_routines, only : create_CLSM_parameters
+  use CLSM_param_routines, only : create_CLSM_parameters,    &
+       clsm_type_dec, CLSMJ32_struc,                         &
+       set_param_attribs => set_CLSM_param_attribs
   use mod_HWSD_STATSGO2_texture, ONLY : &
        derive_CLSM_HWSD_soiltypes
   
-
   implicit none
 
   PRIVATE
@@ -47,70 +48,10 @@ module CLSMJ32_parmsMod
 ! !PUBLIC MEMBER FUNCTIONS:
 !------------------------------------------------------------------------------
   public :: catchmentParms_init_J32    !allocates memory for required structures
-  public :: catchmentParms_writeHeader_J32
-  public :: catchmentParms_writeData_J32
 
 !------------------------------------------------------------------------------
 ! !PUBLIC TYPES:
 !------------------------------------------------------------------------------
-  public :: CLSMJ32_struc
-
-  type, public :: clsmJ32_type_dec
-
-     character*100 :: albnirfile
-     character*100 :: albvisfile
-     real          :: catchparms_gridDesc(20)
-     character*50  :: catchparms_proj
-     character*50  :: catchparms_gridtransform
-!  - Catchment (J3.2):
-!     character*100 :: modisdir        ! sub-directory for MODIS files
-!     character*140 :: tile_coord_file ! tile coordinate file
-!     character*140 :: tile_veg_file   ! tile vegetation file
-     character*140 :: soilparamfile   ! soil parameters file
-     character*140 :: sltsfile        ! surface layer timescales file
-     character*140 :: topo_ar_file    ! topography parameters file
-     character*140 :: topo_bf_file    ! topography parameters file
-     character*140 :: topo_ts_file    ! topography parameters file
-     character*140 :: catchgreenfile  ! greenness climatology file
-     character*140 :: catchlaifile    ! LAI climatology file
-     real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
-     real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config
-
-     type(LDT_paramEntry) :: porosity       ! Soil porosity
-     type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
-     type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
-     type(LDT_paramEntry) :: wpwet       ! wilting point wetness
-     type(LDT_paramEntry) :: bdrckdpth   ! depth to bedrock 
-     type(LDT_paramEntry) :: ksat        ! saturated hydraulic conductivity (SATDK; m s-1)
-     type(LDT_paramEntry) :: gnu         ! vertical decay factor for transmissivity
-     type(LDT_paramEntry) :: ars1        ! Wetness parameters
-     type(LDT_paramEntry) :: ars2         
-     type(LDT_paramEntry) :: ars3
-     type(LDT_paramEntry) :: ara1        ! Shape parameters
-     type(LDT_paramEntry) :: ara2
-     type(LDT_paramEntry) :: ara3
-     type(LDT_paramEntry) :: ara4
-     type(LDT_paramEntry) :: arw1        ! Minimum Theta parameters:
-     type(LDT_paramEntry) :: arw2
-     type(LDT_paramEntry) :: arw3
-     type(LDT_paramEntry) :: arw4
-     type(LDT_paramEntry) :: bf1         ! Baseflow topographic params
-     type(LDT_paramEntry) :: bf2 
-     type(LDT_paramEntry) :: bf3 
-     type(LDT_paramEntry) :: tsa1        ! Water transfer parameters
-     type(LDT_paramEntry) :: tsa2
-     type(LDT_paramEntry) :: tsb1        
-     type(LDT_paramEntry) :: tsb2
-     type(LDT_paramEntry) :: atau
-     type(LDT_paramEntry) :: btau
-     type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
-     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM F2.5)
-
-  end type clsmJ32_type_dec
-
-  type(clsmJ32_type_dec), allocatable :: CLSMJ32_struc(:)
 
 contains
 
@@ -183,7 +124,6 @@ contains
     call derive_CLSM_HWSD_soiltypes (NTILES, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, &
          ATAU2, BTAU2, ATAU, BTAU, SOIL_TOP, SOIL_COM)
 
-
     ! (3) Derive CLSM model - the parameters that were in ar.new, bf.dat, ts.dat 
     ! ---------------------------------------------------------------------------
 
@@ -223,64 +163,64 @@ contains
        glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
        glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9))  + 1
 
-       call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY", &
-            full_name="CLSM soil porosity")
+!       call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY","CLSMJ3.2", &
+!            full_name="CLSM soil porosity")
 
-       call set_param_attribs(CLSMJ32_struc(n)%bexp,"BEXP", &
+       call set_param_attribs(CLSMJ32_struc(n)%bexp,"BEXP", "CLSMJ3.2",&
             full_name="CLSM Bexp Clapp-Hornberger parameter")
 
-       call set_param_attribs(CLSMJ32_struc(n)%psisat,"PSISAT", &
+       call set_param_attribs(CLSMJ32_struc(n)%psisat,"PSISAT", "CLSMJ3.2",&
             full_name="CLSM saturated soil moisture potential")
 
-       call set_param_attribs(CLSMJ32_struc(n)%wpwet,"WPWET", &
+       call set_param_attribs(CLSMJ32_struc(n)%wpwet,"WPWET", "CLSMJ3.2",&
             full_name="CLSM wilting point wetness")
 
-       call set_param_attribs(CLSMJ32_struc(n)%ksat,"KSAT",&
+       call set_param_attribs(CLSMJ32_struc(n)%ksat,"KSAT","CLSMJ3.2",&
             units="ms-1",full_name="CLSM saturated hydraulic conductivity")
 
-       call set_param_attribs(CLSMJ32_struc(n)%gnu,"GNUCLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%gnu,"GNUCLSM","CLSMJ3.2",&
             units="m-1", &
             full_name="CLSM vertical transm. decay term")
 
-       call set_param_attribs(CLSMJ32_struc(n)%ars1,"ARS1CLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%ars1,"ARS1CLSM","CLSMJ3.2",&
             units="m2kg-1", &
             full_name="CLSM (ARS) wetness parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%ara1,"ARA1CLSM", &
+       call set_param_attribs(CLSMJ32_struc(n)%ara1,"ARA1CLSM", "CLSMJ3.2",&
             units="m2kg-1", &
             full_name="CLSM (ARA) topographic shape parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%arw1,"ARW1CLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%arw1,"ARW1CLSM","CLSMJ3.2",&
             units="m2kg-1", &
             full_name="CLSM (ARW) minimum theta parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%bf1,"BF1CLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%bf1,"BF1CLSM","CLSMJ3.2",&
             units="kgm-4", &
             full_name="CLSM (BF) baseflow topographic parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%tsa1,"TSA1CLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%tsa1,"TSA1CLSM","CLSMJ3.2",&
             full_name="CLSM (TS) water transfer parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%atau,"ATAUCLSM",&
+       call set_param_attribs(CLSMJ32_struc(n)%atau,"ATAUCLSM","CLSMJ3.2",&
             full_name="CLSM (TAU) topographic tau parameters" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%bdrckdpth,"BEDROCKDEPTH",&
+       call set_param_attribs(CLSMJ32_struc(n)%bdrckdpth,"BEDROCKDEPTH","CLSMJ3.2",&
             units="mm", &
             full_name="CLSM depth to bedrock" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%albnirdir,"ALBNIRDIR",&
+       call set_param_attribs(CLSMJ32_struc(n)%albnirdir,"ALBNIRDIR","CLSMJ3.2",&
             vlevels=12, &
             full_name="CLSM alb near-IR (direct) scale factor" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%albvisdir,"ALBVISDIR",&
+       call set_param_attribs(CLSMJ32_struc(n)%albvisdir,"ALBVISDIR","CLSMJ3.2",&
             vlevels=12, &
             full_name="CLSM alb visible (direct) scale factor" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%albnirdif,"ALBNIRDIF",&
+       call set_param_attribs(CLSMJ32_struc(n)%albnirdif,"ALBNIRDIF","CLSMJ3.2",&
             vlevels=12, &
             full_name="CLSM alb near-IR (diffuse) scale factor" )
 
-       call set_param_attribs(CLSMJ32_struc(n)%albvisdif,"ALBVISDIF",&
+       call set_param_attribs(CLSMJ32_struc(n)%albvisdif,"ALBVISDIF","CLSMJ3.2",&
             vlevels=12, &
             full_name="CLSM alb near-IR (diffuse) scale factor" )
 
@@ -466,23 +406,22 @@ contains
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%btau%vlevels))
     enddo
-    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file2...'
 
-!    call ESMF_ConfigFindLabel(LDT_config,"CLSMJ32 top soil layer depth:",rc=rc)
-!    do n=1,LDT_rc%nnest
-!       call ESMF_ConfigGetAttribute(LDT_config,CLSMJ32_struc(n)%dzsfcrd,rc=rc)
-!       call LDT_verify(rc,'CLSMJ32 top soil layer depth: not specified')
-!    enddo
+    call ESMF_ConfigFindLabel(LDT_config,"CLSMJ32 top soil layer depth:",rc=rc)
+    do n=1,LDT_rc%nnest
+       call ESMF_ConfigGetAttribute(LDT_config,CLSMJ32_struc(n)%dzsfcrd, label="CLSMJ32 top soil layer depth:", DEFAULT = 0.05, rc=rc)
+       call LDT_verify(rc,'CLSMJ32 top soil layer depth: not specified')
+    enddo
 
     call ESMF_ConfigGetAttribute(LDT_config,catchparms_proj,&
-         label="CLSMJ32 map projection:",rc=rc)
+         label="CLSMJ32 map projection:",DEFAULT="latlon", RC=RC)
     call LDT_verify(rc,'CLSMJ32 map projection: option not specified in the config file')
     CLSMJ32_struc(:)%catchparms_proj = catchparms_proj
 
     call ESMF_ConfigFindLabel(LDT_config,"CLSMJ32 spatial transform:",rc=rc)
     do n=1,LDT_rc%nnest
        call ESMF_ConfigGetAttribute(LDT_config,&
-            CLSMJ32_struc(n)%catchparms_gridtransform,&
+            CLSMJ32_struc(n)%catchparms_gridtransform,label="CLSMJ32 spatial transform:",DEFAULT="none", &
             rc=rc)
        call LDT_verify(rc,'CLSMJ32 transform: option not specified in the config file')
     enddo
@@ -528,7 +467,7 @@ contains
        CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (wpwet))
        CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (Ks))
        CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
-       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
+!       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
        CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (gnu))
        
        call populate_param_attribs( "ALBNIRDIFF", &
@@ -542,8 +481,6 @@ contains
             CLSMJ32_struc(n)%albvisdif )
 
     enddo
-
-    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file3 ...'
 
     call ESMF_ConfigFindLabel(LDT_config,"Albedo NIR factor file:",rc=rc)
     do n=1,LDT_rc%nnest
@@ -560,247 +497,27 @@ contains
        call LDT_verify(rc,"Albedo VIS factor file: not specified")
     enddo
     
-    do n=1,LDT_rc%nnest
-       write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albnirfile)
-       call read_CLSMF25_albnir(&
-            n,CLSMJ32_struc(n)%albnirdir%value, &   ! Direct
-            CLSMJ32_struc(n)%albnirdif%value, &   ! Diffuse
-            LDT_LSMparam_struc(n)%landmask%value )
-       write(LDT_logunit,*) 'Done reading '//&
-            trim(CLSMJ32_struc(n)%albnirfile)
-       
-       write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albvisfile)
-       call read_CLSMF25_albvis(&
-            n,CLSMJ32_struc(n)%albvisdir%value, &   ! Direct
-            CLSMJ32_struc(n)%albvisdif%value, &   ! Diffuse
-            LDT_LSMparam_struc(n)%landmask%value )
-       write(LDT_logunit,*) 'Done reading '//trim(CLSMJ32_struc(n)%albvisfile)
-
-       LDT_rc%monthlyData(n) = .true.
-       LDT_albedo_struc(n)%albInterval = "monthly"
-       LDT_gfrac_struc(n)%gfracInterval = "monthly"
-    enddo
-    write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] leaving ...'
+ !   do n=1,LDT_rc%nnest
+ !      write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albnirfile)
+ !      call read_CLSMF25_albnir(&
+ !           n,CLSMJ32_struc(n)%albnirdir%value, &   ! Direct
+ !           CLSMJ32_struc(n)%albnirdif%value, &   ! Diffuse
+ !           LDT_LSMparam_struc(n)%landmask%value )
+ !      write(LDT_logunit,*) 'Done reading '//&
+ !           trim(CLSMJ32_struc(n)%albnirfile)
+ !      
+ !      write(LDT_logunit,*) 'Reading '//trim(CLSMJ32_struc(n)%albvisfile)
+ !      call read_CLSMF25_albvis(&
+ !           n,CLSMJ32_struc(n)%albvisdir%value, &   ! Direct
+ !           CLSMJ32_struc(n)%albvisdif%value, &   ! Diffuse
+ !           LDT_LSMparam_struc(n)%landmask%value )
+ !      write(LDT_logunit,*) 'Done reading '//trim(CLSMJ32_struc(n)%albvisfile)
+ !
+ !      LDT_rc%monthlyData(n) = .true.
+ !      LDT_albedo_struc(n)%albInterval = "monthly"
+ !      LDT_gfrac_struc(n)%gfracInterval = "monthly"
+ !   enddo
 
   end subroutine catchmentParms_init_J32
-
-  subroutine catchmentParms_writeHeader_J32(n,ftn,dimID,monthID)
-
-    integer     :: n
-    integer     :: ftn
-    integer     :: dimID(3)
-    integer     :: monthID
-
-    integer     :: t_dimID(3)
-    integer     :: tdimID(3)
-
-    tdimID(1) = dimID(1)
-    tdimID(2) = dimID(2)
-
-    t_dimID(1) = dimID(1)
-    t_dimID(2) = dimID(2)
-
-    if(LDT_gfrac_struc(n)%gfrac%selectOpt.gt.0) then
-       if(LDT_gfrac_struc(n)%gfracInterval.eq."monthly") then !monthly
-          t_dimID(3) = monthID
-       endif
-    end if
-
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%gnu)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ars1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ars2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ars3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ara1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ara2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ara3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%ara4)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%arw1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%arw2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%arw3)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%arw4)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%bf1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%bf2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%bf3)
-    
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%tsa1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%tsa2)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%tsb1)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%tsb2)
-
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%atau)
-    call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
-         CLSMJ32_struc(n)%btau)
-
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMJ32_struc(n)%psisat)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMJ32_struc(n)%ksat)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMJ32_struc(n)%bexp)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMJ32_struc(n)%wpwet)
-!    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-!         LDT_LSMparam_struc(n)%quartz)
-!    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-!         LDT_LSMparam_struc(n)%soildepth)
-    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-         CLSMJ32_struc(n)%bdrckdpth)
-
- !- Albedo NIR scale factors:
-    if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMJ32_struc(n)%albnirdif)
-    
- !- Albedo VIS scale factors:
-    if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
-    call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
-         CLSMJ32_struc(n)%albvisdif)
-
-    call LDT_verify(nf90_put_att(ftn,NF90_GLOBAL,"ALBEDO_DATA_INTERVAL", &
-         LDT_albedo_struc(n)%albInterval))
-    
-  end subroutine catchmentParms_writeHeader_J32
-
-  subroutine catchmentParms_writeData_J32(n,ftn)
-
-    integer   :: n 
-    integer   :: ftn
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%gnu)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ars1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ars2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ars3)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ara1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ara2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ara3)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ara4)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%arw1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%arw2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%arw3)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%arw4)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bf1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bf2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bf3)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%tsa1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%tsa2)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%tsb1)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%tsb2)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%atau)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%btau)
-
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%psisat)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%ksat)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bexp)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%wpwet)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%porosity)  ! overwriting LDT_soil_struc.F90 created variable
-
-!    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%quartz)
-!    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%soildepth)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%bdrckdpth)
-
-    
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%albnirdir)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%albnirdif)
-    
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%albvisdir)
-    call LDT_writeNETCDFdata(n,ftn,CLSMJ32_struc(n)%albvisdif)
-
-  end subroutine catchmentParms_writeData_J32
-
-
-!BOP
-! !ROUTINE:  set_param_attribs
-! \label{set_param_attribs}
-!
-! !INTERFACE:
-  subroutine set_param_attribs(paramEntry, short_name, vlevels, &
-                 units, full_name )
-
-! !DESCRIPTION:
-!   This routine reads over the parameter attribute entries
-!   in the param_attribs.txt file.
-!
-! !USES:
-   type(LDT_paramEntry),intent(inout) :: paramEntry
-   character(len=*),    intent(in)    :: short_name
-   integer, optional                  :: vlevels
-   character(len=*),     optional     :: units 
-   character(len=*),     optional     :: full_name
-
-   integer   :: v_temp
-   character(20) :: unit_temp
-   character(100):: name_temp
-
-! ____________________________________________________
-    
-   if(present(vlevels)) then 
-      v_temp = vlevels
-   else
-      v_temp = 1
-   endif
-
-   if(present(units)) then
-      unit_temp = units
-   else
-      unit_temp = "none"
-   endif
-
-   if(present(full_name)) then
-      name_temp = full_name
-   else
-      name_temp = trim(short_name)
-   endif
-
-   paramEntry%short_name = trim(short_name)
-   paramEntry%vlevels = v_temp
-   paramEntry%selectOpt = 1
-   paramEntry%source = "CLSMJ3.2"
-   paramEntry%units = trim(unit_temp)
-   paramEntry%num_times = 1
-   paramEntry%num_bins = 1
-   paramEntry%standard_name = trim(name_temp)
-
-  end subroutine set_param_attribs
-
-  ! ---------------------------------------
-
-  SUBROUTINE create_CLSM_PARAMS
-
-    implicit none
-
-    real, dimension (:), allocatable :: TOPMEAN, TOPVAR, TOPSKEW
-      
-!         ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4,ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3,   &
-!         tsa1, tsa2,tsb1, tsb2, 
-
-  end SUBROUTINE create_CLSM_PARAMS
 
 end module CLSMJ32_parmsMod

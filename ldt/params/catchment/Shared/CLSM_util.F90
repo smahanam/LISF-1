@@ -92,7 +92,8 @@ module CLSM_util
             
       LDT_g5map%NX = nc_g5_rst
       LDT_g5map%NY = nr_g5_rst
-      LDT_g5map%NT_LIS = NINT(SUM (LDT_LSMparam_struc(i)%landmask%value(:, :,i)))
+      LDT_g5map%NT_LIS = NINT(SUM (LDT_rc%global_mask (:, :))) 
+                         ! LDT_LSMparam_struc(i)%landmask%value(:, :,i)))
       
       allocate (lat    (1: LDT_g5map%NT_LIS))
       allocate (lon    (1: LDT_g5map%NT_LIS))
@@ -105,7 +106,8 @@ module CLSM_util
 
       do r = 1, glpnr
          do c = 1, glpnc
-            if( LDT_LSMparam_struc(i)%landmask%value(c, r,i) > 0. ) then 
+!            if( LDT_LSMparam_struc(i)%landmask%value(c, r,i) > 0. ) then 
+           if( LDT_rc%global_mask (c, r) > 0. ) then 
                j = (r-1)*glpnc + c
                n = n+1
                lat(n) = LDT_domain(i)%lat(j)

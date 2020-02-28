@@ -1,7 +1,18 @@
 #define VERIFY_(A)   IF(A/=0)THEN;PRINT *,'ERROR AT LINE ', __LINE__;STOP;ENDIF
 #define ASSERT_(A)   if(.not.A)then;print *,'Error:',__FILE__,__LINE__;stop;endif
-
+#include "LDT_misc.h"
 module CLSM_param_routines
+
+#if(defined USE_NETCDF3 || defined USE_NETCDF4)
+  use netcdf
+#endif
+
+  use ESMF
+  use LDT_coreMod
+  use LDT_historyMod
+  use LDT_gfracMod
+  use LDT_albedoMod
+  use LDT_paramDataMod
 
   use CLSM_util, ONLY: NC_VarID, &
        c_data => G5_BCSDIR,      &
@@ -13,14 +24,69 @@ module CLSM_param_routines
        soil_class    => DeLannoy_class,      &
        GDL_TABLE
   use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
-       LDT_releaseUnitNumber
+       LDT_releaseUnitNumber,LDT_verify 
   
   implicit none
 
   private
 
-  public create_CLSM_parameters 
-  
+  public create_CLSM_parameters, catchmentParms_writeHeader, catchmentParms_writeData,  clsm_type_dec, &
+       set_CLSM_param_attribs, CLSMF25_struc, CLSMJ32_struc
+
+  type :: clsm_type_dec
+
+     character*100 :: albnirfile
+     character*100 :: albvisfile
+     real          :: catchparms_gridDesc(20)
+     character*50  :: catchparms_proj
+     character*50  :: catchparms_gridtransform
+!  - Catchment (F2.5):
+!     character*100 :: modisdir        ! sub-directory for MODIS files
+!     character*140 :: tile_coord_file ! tile coordinate file
+!     character*140 :: tile_veg_file   ! tile vegetation file
+     character*140 :: soilparamfile   ! soil parameters file
+     character*140 :: sltsfile        ! surface layer timescales file
+     character*140 :: topo_ar_file    ! topography parameters file
+     character*140 :: topo_bf_file    ! topography parameters file
+     character*140 :: topo_ts_file    ! topography parameters file
+     character*140 :: catchgreenfile  ! greenness climatology file
+     character*140 :: catchlaifile    ! LAI climatology file
+     real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
+     real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config
+
+     type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
+     type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
+     type(LDT_paramEntry) :: wpwet       ! wilting point wetness
+     type(LDT_paramEntry) :: bdrckdpth   ! depth to bedrock 
+     type(LDT_paramEntry) :: ksat        ! saturated hydraulic conductivity (SATDK; m s-1)
+     type(LDT_paramEntry) :: gnu         ! vertical decay factor for transmissivity
+     type(LDT_paramEntry) :: ars1        ! Wetness parameters
+     type(LDT_paramEntry) :: ars2         
+     type(LDT_paramEntry) :: ars3
+     type(LDT_paramEntry) :: ara1        ! Shape parameters
+     type(LDT_paramEntry) :: ara2
+     type(LDT_paramEntry) :: ara3
+     type(LDT_paramEntry) :: ara4
+     type(LDT_paramEntry) :: arw1        ! Minimum Theta parameters:
+     type(LDT_paramEntry) :: arw2
+     type(LDT_paramEntry) :: arw3
+     type(LDT_paramEntry) :: arw4
+     type(LDT_paramEntry) :: bf1         ! Baseflow topographic params
+     type(LDT_paramEntry) :: bf2
+     type(LDT_paramEntry) :: bf3
+     type(LDT_paramEntry) :: tsa1        ! Water transfer parameters
+     type(LDT_paramEntry) :: tsa2
+     type(LDT_paramEntry) :: tsb1        
+     type(LDT_paramEntry) :: tsb2
+     type(LDT_paramEntry) :: atau
+     type(LDT_paramEntry) :: btau
+     type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
+     type(LDT_paramEntry) :: albvisdif   ! Albedo VIS diffuse scale factor (CLSM F2.5)
+
+  end type clsm_type_dec
+  type(clsm_type_dec), save, allocatable :: CLSMF25_struc(:), CLSMJ32_struc(:)
   real, parameter :: gnu = 1.0, zks = 2.0
   integer, PARAMETER :: nbdep=150, NAR=1000,nwt=81,nrz=41
   logical :: preserve_soiltype = .false.
@@ -493,7 +559,242 @@ END SUBROUTINE create_CLSM_parameters
 
   END SUBROUTINE read_cti_stats
  
+! ----------------------------------------------------------------
 
+!BOP
+! !ROUTINE:  set_CLSM_param_attribs
+! \label{set_param_attribs}
+!
+! !INTERFACE:
+  subroutine set_CLSM_param_attribs(paramEntry, short_name, source, vlevels, &
+                 units, full_name )
+
+! !DESCRIPTION:
+!   This routine reads over the parameter attribute entries
+!   in the param_attribs.txt file.
+!
+! !USES:
+   type(LDT_paramEntry),intent(inout) :: paramEntry
+   character(len=*),    intent(in)    :: short_name, source
+   integer, optional                  :: vlevels
+   character(len=*),     optional     :: units 
+   character(len=*),     optional     :: full_name
+
+   integer   :: v_temp
+   character(20) :: unit_temp
+   character(100):: name_temp
+
+! ____________________________________________________
+    
+   if(present(vlevels)) then 
+      v_temp = vlevels
+   else
+      v_temp = 1
+   endif
+
+   if(present(units)) then
+      unit_temp = units
+   else
+      unit_temp = "none"
+   endif
+
+   if(present(full_name)) then
+      name_temp = full_name
+   else
+      name_temp = trim(short_name)
+   endif
+
+   paramEntry%short_name = trim(short_name)
+   paramEntry%vlevels = v_temp
+   paramEntry%selectOpt = 1
+   paramEntry%source = trim(source)
+   paramEntry%units = trim(unit_temp)
+   paramEntry%num_times = 1
+   paramEntry%num_bins = 1
+   paramEntry%standard_name = trim(name_temp)
+
+ end subroutine set_CLSM_param_attribs
+
+! -----------------------------------------------------------------
+
+  subroutine catchmentParms_writeHeader (n,ftn,dimID,monthID)
+
+    integer     :: n
+    integer     :: ftn
+    integer     :: dimID(3)
+    integer     :: monthID
+
+    if (LDT_rc%lsm.eq."CLSMF2.5") call writeHeader (n,CLSMF25_struc(:),ftn,dimID,monthID)
+    if (LDT_rc%lsm.eq."CLSMJ3.2") call writeHeader (n,CLSMJ32_struc(:),ftn,dimID,monthID)
+
+    contains 
+
+      subroutine writeHeader (n, CLSM_struc, ftn,dimID,monthID)
+
+        type (clsm_type_dec), intent (in) ::  CLSM_struc(:)
+        integer     :: n
+        integer     :: ftn
+        integer     :: dimID(3)
+        integer     :: monthID
+        
+        integer     :: t_dimID(3)
+        integer     :: tdimID(3)
+        
+        tdimID(1) = dimID(1)
+        tdimID(2) = dimID(2)
+        
+        t_dimID(1) = dimID(1)
+        t_dimID(2) = dimID(2)
+
+        if(LDT_gfrac_struc(n)%gfrac%selectOpt.gt.0) then
+           if(LDT_gfrac_struc(n)%gfracInterval.eq."monthly") then !monthly
+              t_dimID(3) = monthID
+           endif
+        end if
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%gnu)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ars1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ars2)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ars3)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ara1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ara2)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ara3)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%ara4)
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%arw1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             clsm_struc(n)%arw2)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             cLSM_struc(n)%arw3)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%arw4)
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%bf1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%bf2)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%bf3)
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%tsa1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%tsa2)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%tsb1)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%tsb2)
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%atau)
+        call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
+             Clsm_struc(N)%btau)
+        
+        call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%psisat)
+        call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%ksat)
+        call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%bexp)
+        call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%wpwet)
+        !    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+        !         LDT_LSMparam_struc(n)%quartz)
+        !    call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+        !         LDT_LSMparam_struc(n)%soildepth)
+        call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%bdrckdpth)
+        
+        !- Albedo NIR scale factors:
+        if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
+        call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
+             Clsm_struc(N)%albnirdir)
+        call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
+             Clsm_struc(N)%albnirdif)
+        
+        !- Albedo VIS scale factors:
+        if(LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
+        call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
+             Clsm_struc(N)%albvisdir)
+        call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
+             Clsm_struc(N)%albvisdif)
+        
+        call LDT_verify(nf90_put_att(ftn,NF90_GLOBAL,"ALBEDO_DATA_INTERVAL", &
+             LDT_albedo_struc(n)%albInterval))
+      end subroutine writeHeader
+  end subroutine catchmentParms_writeHeader
+
+ ! ----------------------------------------------------------------------------------
+
+  subroutine catchmentParms_writeData (n,ftn)
+
+    integer   :: ftn
+    integer   :: n
+    
+    if (LDT_rc%lsm.eq."CLSMF2.5") call writeData (n,ftn,  CLSMF25_struc(:))
+    if (LDT_rc%lsm.eq."CLSMJ3.2") call writeData (n,ftn,  CLSMJ32_struc(:))
+
+    CONTAINS 
+
+      subroutine writeData (n,ftn, CLSM_struc)
+
+        integer :: ftn, n
+        type(clsm_type_dec), intent (in) :: CLSM_struc(:)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%gnu)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ars1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ars2)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ars3)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ara1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ara2)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ara3)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ara4)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%arw1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%arw2)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%arw3)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%arw4)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bf1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bf2)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bf3)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%tsa1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%tsa2)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%tsb1)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%tsb2)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%atau)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%btau)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%psisat)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ksat)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bexp)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%wpwet)
+        !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%quartz)
+        !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%soildepth)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bdrckdpth)
+        
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%albnirdir)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%albnirdif)
+        
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%albvisdir)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%albvisdif)
+      END subroutine writeData
+
+  end subroutine catchmentParms_writeData
 
 !---------------------------------------------------------------------
 
