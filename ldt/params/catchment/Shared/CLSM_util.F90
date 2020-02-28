@@ -553,7 +553,8 @@ module CLSM_util
      real, dimension (:), intent (in) :: lis_array
      real, dimension (nc,nr)          :: lis_2D
      integer                          :: c, r, i
-     
+
+     lis_2D = -9999.
      i = 1
      do r = 1, nr
         do c = 1, nc
