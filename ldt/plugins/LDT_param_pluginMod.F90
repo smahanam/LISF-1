@@ -351,7 +351,7 @@ contains
 !EOP
 
     use Monfredaetal08_crops_module, only : read_Monfredaetal08_croptype
-    use mod_ESA_lc, only : read_ESA_lc, ESA2MOSAIC
+    use mod_ESA_lc, only : read_ESA_lc, ESA2MOSAIC, ESA2CLM4, ESA2CLM45
 
     external set_AVHRR_lc_attribs
     external read_avhrr_lc
@@ -422,7 +422,10 @@ contains
     call registerreadlc(trim(LDT_clsmf25lcId)//char(0), read_CLSMF25_lc)
   ! Catchment LSM - J3.2
     call registerreadlc(trim(LDT_clsmj32lcId)//char(0), ESA2MOSAIC)
-
+  ! ESA CLM4
+    call registerreadlc(trim(LDT_esaclm4lcId)//char(0), ESA2CLM4)
+  ! ESA CLM45
+    call registerreadlc(trim(LDT_esaclm45lcId)//char(0), ESA2CLM45)
   ! VIC-4.1.1:
     call registerreadlc(trim(LDT_vic411lcId)//char(0), read_VIC411_lc)
   ! VIC-4.1.2:

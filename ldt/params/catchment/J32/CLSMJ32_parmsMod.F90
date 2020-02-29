@@ -460,8 +460,13 @@ contains
        CLSMJ32_struc(n)%tsa2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsa2))
        CLSMJ32_struc(n)%tsb1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb1))
        CLSMJ32_struc(n)%tsb2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb2))
-       CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau))
-       CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau))
+       if(CLSMJ32_struc(n)%dzsfcrd == 0.02) then
+          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau2))
+          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau2))
+       else
+          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau))
+          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau))          
+       endif
        CLSMJ32_struc(n)%psisat%value   (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (psis))
        CLSMJ32_struc(n)%bexp%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bee ))
        CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (wpwet))

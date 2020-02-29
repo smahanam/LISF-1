@@ -37,7 +37,7 @@ module mod_ESA_lc
   implicit none
   include 'netcdf.inc'	
   integer,  parameter   :: nc_esa = 129600, nr_esa = 64800
-
+  character*100         :: ESA_FILE = '/ESA_GlobalCover.nc'
   contains
 
     subroutine read_ESA_lc(n, num_types, fgrd, maskarray )
@@ -344,7 +344,7 @@ module mod_ESA_lc
 
     allocate (esa_veg (1:nc_esa, 1: nr_esa))
 
-    status    = NF_OPEN (trim(c_data)//'/ESA_GlobalCover.nc', NF_NOWRITE, ncid)  ; VERIFY_(STATUS) 
+    status    = NF_OPEN (trim(c_data)//trim(ESA_FILE), NF_NOWRITE, ncid)  ; VERIFY_(STATUS) 
 
     do j = 1,nr_esa
        status  = NF_GET_VARA_INT2 (ncid,3,(/1,j/),(/nc_esa,1/),esa_veg(:,j)) ; VERIFY_(STATUS) 
@@ -516,7 +516,7 @@ module mod_ESA_lc
           if (sfrac == 0.) mos2 = mos1 ! No secondary type
 !          if(.not.jpl_height) z2(k) = VGZ2(mos1)
           ityp (k) = real(mos1)
-          if (write_clsm_files) write(fmos,'(i8,i8,i4)') k,LDT_g5map%catid_index(k),mos1
+          if (write_clsm_files) write(fmos,'(i8,i8,2(2x,i3),2(2x,f6.2))') k,LDT_g5map%catid_index(k),mos1, mos2,100.*mfrac,100.*sfrac
        endif
     end do
 
@@ -530,6 +530,1425 @@ module mod_ESA_lc
     deallocate (veg, ityp, maskarray)
    
   END SUBROUTINE ESA2MOSAIC
+
+!
+! ---------------------------------------------------------------------
+!
+
+  SUBROUTINE ESA2CLM45 (nc, nr, gfile)
+
+    implicit none
+
+    integer  , intent (in) :: nc, nr
+    character (*)          :: gfile
+    
+    integer  , parameter   :: N_lon_clm = 7200, N_lat_clm = 3600, lsmpft = 25
+    integer*2, allocatable, target, dimension (:,:) :: esa_veg
+    integer*2, pointer    , dimension (:,:) :: subset
+    integer  , allocatable, dimension (:)   :: tile_id, i_esa2clm, j_esa2clm
+    integer :: i,j, k,n, status, ncid, varid, maxcat, dx,dy, esa_type, tid, cid, ii, jj   
+    real    :: dx_clm, dy_clm, x_min_clm (N_lon_clm), y_min_clm (N_lat_clm), clm_fracs(lsmpft)
+    real    :: minlon,maxlon,minlat,maxlat,tile_lat, scale, ftot
+    integer :: cpt1, cpt2, cst1, cst2  ! CLM-carbon types
+    real    :: cpf1, cpf2, csf1, csf2  ! CLM-carbon fractions
+    DOUBLE PRECISION,  allocatable, dimension (:) :: lon_esa, lat_esa
+    DOUBLE PRECISION       :: EDGEN, EDGEE, EDGES, EDGEW 
+    
+    REAL, ALLOCATABLE, DIMENSION (:,:,:) :: PCTPFT 
+    integer, allocatable, dimension (:) :: density, loc_int
+    real   , allocatable, dimension (:) :: loc_val
+    logical, allocatable, dimension (:) :: unq_mask
+    integer :: NBINS, NPLUS, FCLM
+    integer, allocatable, dimension (:,:) :: clm_veg
+    integer :: esa_clm_veg (2)
+    real    :: esa_clm_frac(2)
+    real, dimension (:,:), allocatable      :: maskarray
+
+    ! Initialize the global mask and GEOS5 to LIS mapping
+    ! ---------------------------------------------------
+
+    allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
+    call read_clsm_maskfile(1, maskarray)
+
+    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+
+    ! These 2 values are assumed as same as they are in surfdata_0.23x0.31_simyr2000_c100406.nc
+
+    EDGEW = -180.
+    EDGES = -90. 
+
+    ! Reading CLM pft data file
+    !--------------------------
+
+    ALLOCATE (PCTPFT      (1:N_lon_clm, 1:N_lat_clm, 1:lsmpft))
+     
+    status  = NF_OPEN (trim(c_data)//'/CLM45/mksrf_24pftNT_landuse_rc2000_c121207.nc', NF_NOWRITE, ncid) ; VERIFY_(STATUS)  
+    status  = NF_INQ_VARID (ncid,'PCT_PFT',VarID) ; VERIFY_(STATUS)
+
+    do k = 1, 25 ! Natural vegetation
+       status  = NF_GET_VARA_REAL (ncid,VarID,(/1,1,k/),(/N_lon_clm, N_lat_clm, 1/),PCTPFT(:,:,k)) ; VERIFY_(STATUS)
+    end do
+
+    status = NF_CLOSE(ncid)
+
+    ! CLM 4_5 description (25)                                CLM45-carbon description (27)                                    
+    ! ------------------------                                ----------------------------- 
+
+    ! 'BARE'   1  	bare                                     (does not have bare soil)
+    ! 'NLEt'   2 	needleleaf evergreen temperate tree    1
+    ! 'NLEB'   3 	needleleaf evergreen boreal tree       2
+    ! 'NLDB'   4  	needleleaf deciduous boreal tree       3
+    ! 'BLET'   5 	broadleaf evergreen tropical tree      4
+    ! 'BLEt'   6 	broadleaf evergreen temperate tree     5
+    ! 'BLDT'   7 	broadleaf deciduous tropical tree      6
+    ! 'BLDt'   8 	broadleaf deciduous temperate tree     7
+    ! 'BLDB'   9 	broadleaf deciduous boreal tree        8
+    ! 'BLEtS' 10 	broadleaf evergreen temperate shrub    9
+    ! 'BLDtS' 11 	broadleaf deciduous temperate shrub   10  broadleaf deciduous temperate shrub [moisture +  deciduous]
+    ! 'BLDtSm'  	broadleaf deciduous temperate shrub   11  broadleaf deciduous temperate shrub [moisture stress only]
+    ! 'BLDBS' 12 	broadleaf deciduous boreal shrub      12
+    ! 'AC3G'  13 	arctic c3 grass                       13
+    ! 'CC3G'  14 	cool c3 grass                         14  cool c3 grass [moisture +  deciduous]
+    ! 'CC3Gm'           cool c3 grass                         15  cool c3 grass [moisture stress only]
+    ! 'WC4G'  15 	warm c4 grass                         16  warm c4 grass [moisture +  deciduous]
+    ! 'WC4Gm'   	warm c4 grass                         17  warm c4 grass [moisture stress only]
+    ! 'C3CROP' 16       c3_crop                               18
+    ! 'C3IRR'  17       c3_irrigated                          19
+    ! 'CORN'   18       corn                                  20
+    ! 'ICORN'  19       irrigated corn                        21
+    ! 'STCER'  20       spring temperate cereal               22
+    ! 'ISTCER' 21       irrigated spring temperate cereal     23
+    ! 'WTCER'  22       winter temperate cereal               24
+    ! 'IWTCER' 23       irrigated winter temperate cereal     25
+    ! 'SOYB'   24       soybean                               26
+    ! 'ISOYB'  25       irrigated soybean                     27
+    
+!**    ! 'CROP'  16 	crop                                  18  crop [moisture +  deciduous]
+!**    ! 'CROPm'   	crop                                  19  crop [moisture stress only]
+!**    !         17        water
+
+    dx_clm = 360./N_lon_clm
+    dy_clm = 180./N_lat_clm
+
+    do i = 1, N_lon_clm 
+       x_min_clm (i) = (i-1)*dx_clm + EDGEW  
+    end do
+
+    do i = 1,  N_lat_clm
+       y_min_clm (i) = (i-1)*dy_clm  + EDGES
+    end do
+
+    ! This data set is DE
+    !PCTPFT (1:N_lon_clm/2             ,:,:) =  REAL (PCT_PFT_DBL(N_lon_clm/2 + 1: N_lon_clm,:,:))
+    !PCTPFT (N_lon_clm/2 + 1: N_lon_clm,:,:) =  REAL (PCT_PFT_DBL(1:N_lon_clm/2             ,:,:))
+
+    !DEALLOCATE (PCT_PFT_DBL)
+
+    ! Find primary and secondary types in the CLM data file
+    ! -----------------------------------------------------
+
+    ! allocate (clm_veg (1:N_lon_clm,1:N_lat_clm,1:2))
+    !
+    ! do j = 1, N_lat_clm 
+    !    do i = 1, N_lon_clm  
+    !       if(maxval(PCT_PFT(i,j,:)) > 0.) then
+    !          clm_fracs = PCT_PFT(i,j,:)
+    !          if (maxval (clm_fracs) == 100.) then 
+    !             clm_veg(i,j,:) = maxloc (clm_fracs)
+    !          else 
+    !             clm_veg(i,j,0)             = maxloc (clm_fracs)		
+    !             clm_fracs (clm_veg(i,j,0)) = 0.
+    !             clm_veg(i,j,1)             = maxloc (clm_fracs)	 
+    !          endif
+    !       else 
+    !          clm_veg(i,j,:) = 17
+    !       endif
+    !    end do
+    ! end do
+    
+    ! Reading ESA vegetation types
+    !-----------------------------
+
+    allocate (esa_veg (1:nc_esa, 1: nr_esa))
+    allocate (lon_esa (1:nc_esa))
+    allocate (lat_esa (1:nr_esa))
+
+    status    = NF_OPEN (trim(c_data)//trim(ESA_FILE), NF_NOWRITE, ncid) ; VERIFY_(STATUS)     
+
+    status  = NF_GET_VARA_DOUBLE (ncid,1,(/1/),(/nr_esa/),lat_esa)
+    status  = NF_GET_VARA_DOUBLE (ncid,2,(/1/),(/nc_esa/),lon_esa)
+
+    do j = 1,nr_esa
+       status  = NF_GET_VARA_INT2 (ncid,3,(/1,j/),(/nc_esa,1/),esa_veg(:,j)) ; VERIFY_(STATUS)   
+    end do
+
+    status = NF_CLOSE(ncid)
+
+    ! Find I,J of overlying CLM grid cells for each ESA pixel 
+    !--------------------------------------------------------
+    allocate (i_esa2clm (1:nc_esa))
+    allocate (j_esa2clm (1:nr_esa))
+
+    do i = 1, N_lon_clm 
+       where ((real(lon_esa) >=  x_min_clm(i)).and.(real(lon_esa) <  (x_min_clm(i) + dx_clm))) i_esa2clm= i
+    end do
+
+    i_esa2clm(129545:nc_esa) = 1
+
+    do j = 1, N_lat_clm 
+       where ((real(lat_esa) >=  y_min_clm(j)).and.(real(lat_esa) <  (y_min_clm(j) + dy_clm))) j_esa2clm= j
+    end do
+
+    !
+    ! Reading number of tiles
+    ! -----------------------
+
+    maxcat = LDT_g5map%NT_GEOS 
+    
+    !
+    ! Loop through tile_id raster
+    ! ___________________________
+
+
+    allocate (tile_id (1:nc             ))   
+    allocate (clm_veg (1:maxcat,1:lsmpft))
+    clm_veg = 0.
+
+    dx = nc_esa / nc
+    dy = nr_esa / nr
+
+    open (10,file=trim(gfile)//'.rst',status='old',action='read',  &
+          form='unformatted',convert='little_endian')
+
+    do j=1,nr
+       
+       ! read a row
+       
+       read(10)tile_id(:)
+       
+       do i = 1,nc
+
+          ii = i_esa2clm ((i-1)*dx + dx/2)
+          jj = j_esa2clm ((j-1)*dy + dy/2)
+
+          if((tile_id (i) >= 1).and.(tile_id(i)  <= maxcat)) then
+
+             if (associated (subset)) NULLIFY (subset)
+             subset => esa_veg((i-1)*dx +1 :i*dx, (j-1)*dy +1:j*dy)
+             NPLUS = count(subset >= 1 .and. subset <= 230)
+
+             if(NPLUS > 0)  then
+                allocate (loc_int (1:NPLUS))
+                allocate (unq_mask(1:NPLUS))
+                loc_int = pack(subset,mask = (subset >= 1 .and. subset <= 230))
+                call LDT_quicksort (loc_int)
+                unq_mask = .true.
+                do n = 2,NPLUS 
+                   unq_mask(n) = .not.(loc_int(n) == loc_int(n-1))
+                end do
+                NBINS = count(unq_mask)
+                
+                allocate(loc_val (1:NBINS))
+                allocate(density (1:NBINS))
+                loc_val = 1.*pack(loc_int,mask =unq_mask)
+                call histogram (size(subset,1)*size(subset,2), NBINS, density, loc_val, real(subset))   
+                
+                do k = 1, nbins
+                   
+                   if (density (k) > 0) then
+                      
+                      esa_type = int (loc_val(k))
+                      
+                      ! if (esa_type ==  10)  clm_veg (tile_id(i), 17) = 1.* density(k)   ! lakes inland water
+                      
+                      if ((esa_type ==  11).or. (esa_type ==  14).or.(esa_type ==  20).or. (esa_type == 190)) then
+
+                         ! ESA type  11: Post-flooding or irrigated croplands 
+                         ! ESA type  14: Rainfed croplands 
+                         ! ESA type  20: Mosaic Cropland (50-70%) / Vegetation (grassland, shrubland, forest) (20-50%) 
+                         ! ESA type 190:	Artificial surfaces and associated areas (urban areas >50%) 
+
+                         if(sum(PCTPFT(ii,jj,16:25)) > 0.) then
+                            do n = 16,25                                
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,16:25))
+                            end do
+                         else
+                            clm_veg (tile_id(i), 16) = clm_veg (tile_id(i), 16) + 1.* density(k)   
+                         endif
+                      endif
+                      
+                      ! if (esa_type == 200)  clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 1.* density(k)   ! ESA type 200:	Bare areas
+                      ! if (esa_type == 210)  clm_veg (tile_id(i), 17) = clm_veg (tile_id(i), 17) + 1.* density(k)   ! ocean
+                      ! if (esa_type == 220)  clm_veg (tile_id(i), 17) = clm_veg (tile_id(i), 17) + 1.* density(k)   ! ice  
+                      ! gkw: bare soil excluded! only considering vegetated land                   
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  30) then 
+                         ! ESA type  30: Mosaic Vegetation (grassland, shrubland, forest) (50-70%) / Cropland (20-50%) 
+
+                         if(sum(PCTPFT(ii,jj,16:25)) > 0.) then
+                            do n = 16,25                                
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.5*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,16:25))
+                            end do
+                         elseif(sum(PCTPFT(ii,jj,2:15)) > 0.) then
+                            do n = 2,  15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.5* density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:15))
+                            enddo
+                         else
+                            clm_veg (tile_id(i),  16) = clm_veg (tile_id(i),  16) + 1.0* density(k)
+                         endif
+
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  40) then
+                         ! ESA type  40:	Closed to open (>15%) broadleaved evergreen and/or semi-deciduous forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,5:6)) > 0.) then
+                            do n = 5, 6 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,5:6))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  5) = clm_veg (tile_id(i),  5) + 1.0* density(k)
+                            else
+                               clm_veg (tile_id(i),  6) = clm_veg (tile_id(i),  6) + 1.0* density(k)
+                            endif
+                         endif
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if ((esa_type ==  50) .or. (esa_type ==  60)) then    
+                         ! ESA type  50:	Closed (>40%) broadleaved deciduous forest (>5m) 
+                         ! ESA type  60:	Open (15-40%) broadleaved deciduous forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:9)) > 0.) then
+                            do n = 7, 9 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:9))
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 1.0* density(k)
+                            else
+                               if(abs(y_min_clm(jj) + 0.5*dy_clm) <  60.) clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 1.0* density(k)
+                               if(abs(y_min_clm(jj) + 0.5*dy_clm) >= 60.) clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 1.0* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  70) then    
+                         ! ESA type  70:	Closed (>40%) needleleaved evergreen forest (>5m)
+                         
+                         if(sum(PCTPFT(ii,jj,2:3)) > 0.) then
+                            do n = 2, 3 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:3))	
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  90) then 
+                         !ESA type  90:	Open (15-40%) needleleaved deciduous or evergreen forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,2:4)) > 0.) then
+                            do n = 2, 4 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n)   + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:4))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 100) then 
+                         !  ESA type 100:	Closed to open (>15%) mixed broadleaved and needleleaved forest (>5m) 
+                         
+                         if((sum(PCTPFT(ii,jj,2:4)) + sum(PCTPFT(ii,jj,7:9))) > 0.) then
+                            do n = 2, 9 
+                               if((n /= 5) .and. (n /= 6)) clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/(sum(PCTPFT(ii,jj,2:4)) + sum(PCTPFT(ii,jj,7:9)))	
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.5* density(k)
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 0.5* density(k)			
+                            elseif (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.5* density(k)
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 0.5* density(k)
+                            else 
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.5* density(k)
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 0.5* density(k)			
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 110) then   
+                         ! ESA type 110:	Mosaic Forest/Shrubland (50-70%) / Grassland (20-50%) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:12))  > 0.) then
+                            do n = 7, 12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) +  0.6*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:12)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.3* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.3* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.3* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.3* density(k)
+                            else
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.3* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.3* density(k)			
+                            end if
+                         end if
+                         
+                         if(sum(PCTPFT(ii,jj,13:15))  > 0.) then
+                            do n =13, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.4*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 0.4* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.4* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.4* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+
+                      if (esa_type == 120) then   
+                         ! ESA type 120:	Mosaic Grassland (50-70%) / Forest/Shrubland (20-50%) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:12)) > 0.) then
+                            do n = 7, 12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) +  0.4*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:12)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.2* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.2* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.2* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.2* density(k)
+                            else 
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.2* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.2* density(k)			
+                            end if
+                         end if
+                         
+                         if(sum(PCTPFT(ii,jj,13:15)) > 0.) then
+                            do n =13, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.6*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15)) 
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 0.6* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.6* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.6* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 130) then
+                         ! 	Closed to open (>15%) shrubland (<5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,10:12)) > 0.) then
+                            do n = 10,12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:12))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  11) = clm_veg (tile_id(i),  11) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  12) = clm_veg (tile_id(i),  12) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 140) then
+                         ! ESA type 140:	Closed to open (>15%) grassland 
+                         
+                         if(sum(PCTPFT(ii,jj,13:15)) > 0.) then
+                            do n = 13,15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i),  15) = clm_veg (tile_id(i),  15) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then	
+                               clm_veg (tile_id(i),  14) = clm_veg (tile_id(i),  14) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i),  13) = clm_veg (tile_id(i),  13) + 1.0* density(k)	
+                            end if
+                         end if
+                      end if
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 150) then
+                         ! ESA type 150:	Sparse (<15%) vegetation (woody vegetation, shrubs, grassland) 
+                         
+                         if(sum(PCTPFT(ii,jj,10:15)) > 0.) then
+                            do n = 10, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.0*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:15)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.5* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.5* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.5* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.5* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.5* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.5* density(k)			
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if((esa_type == 160) .or. (esa_type == 170)) then  
+                         ! ESA type 160:	Closed (>40%) broadleaved forest regularly flooded - Fresh water      ! ESA type 170:	Closed (>40%) broadleaved semi-deciduous and/or evergreen forest regularly flooded
+                         
+                         if(sum(PCTPFT(ii,jj,5:9)) > 0.) then
+                            do n = 5,9 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,5:9)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  5) = clm_veg (tile_id(i),  5) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 180) then
+                         ! ESA type 180:	Closed to open (>15%) vegetation (grassland, shrubland, woody vegetation) on regularly flooded or waterlogged soil - Fresh, brackish or saline water 
+                         
+                         if(sum(PCTPFT(ii,jj,10:15)) > 0.) then
+                            do n = 10,15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:15))	
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                   endif
+                enddo
+                deallocate (loc_int,unq_mask,loc_val,density)
+             endif
+          end if
+       enddo
+    end do
+    
+    
+    deallocate (tile_id, PCTPFT,esa_veg,lon_esa,lat_esa,i_esa2clm,j_esa2clm)  
+    close (10,status='keep')    
+
+    ! Now create CLM-carbon_veg_fracs file
+    ! ------------------------------------
+
+    if (write_clsm_files) then
+       fclm = LDT_getNextUnitNumber()
+       open (fclm,file='LDT_clsm/CLM4.5_veg_typs_fracs',  &
+            form='formatted',status='unknown')
+    endif
+
+    do k = 1, maxcat
+
+       tile_lat = LDT_g5map%lat(k)
+       scale = (ABS (tile_lat) - 32.)/10.
+       scale = min (max(scale,0.),1.)
+
+       esa_clm_veg = 0
+       esa_clm_frac= 0.
+
+       clm_fracs = clm_veg (k,:)
+             
+       if (sum (clm_fracs) == 0.) then ! gkw: no vegetated land found; set to BLDtS
+          esa_clm_veg (1) = 11              ! broadleaf deciduous shrub 
+          esa_clm_frac(1) = 100.
+       else
+          esa_clm_veg (1) = maxloc(clm_fracs,1)
+          esa_clm_frac(1) = maxval(clm_fracs) 
+       endif
+
+       clm_fracs (esa_clm_veg (1)) = 0.
+
+       if (sum (clm_fracs) == 0.) then ! gkw: no vegetated secondary type found, set to primary with zero fraction
+          esa_clm_veg (2) = esa_clm_veg (1)
+          esa_clm_frac(1) = 100.
+          esa_clm_frac(2) = 0.
+       else
+          esa_clm_veg (2) = maxloc(clm_fracs,1)
+          esa_clm_frac(1) = 100.*clm_veg (k,esa_clm_veg (1))/(clm_veg (k,esa_clm_veg (1)) + clm_veg (k,esa_clm_veg (2)))
+          esa_clm_frac(2) = 100. - esa_clm_frac(1)
+       end if
+
+! Now splitting CLM types for CLM-carbon model
+! --------------------------------------------
+ 
+! CLM types 2- 10,12,13 are not being splitted.
+! .............................................
+     
+       if ((esa_clm_veg (1) >= 2).and.(esa_clm_veg (1) <= 10)) then
+          CPT1 = esa_clm_veg (1) - 1
+          CPT2 = esa_clm_veg (1) - 1
+          CPF1 = esa_clm_frac(1) 
+          CPF2 = 0.
+       endif
+
+       if ((esa_clm_veg (2) >= 2).and.(esa_clm_veg (2) <= 10)) then
+          CST1 = esa_clm_veg (2) - 1
+          CST2 = esa_clm_veg (2) - 1
+          CSF1 = esa_clm_frac(2) 
+          CSF2 = 0.
+       endif
+
+! .............................................
+
+       if ((esa_clm_veg (1) >= 12).and.(esa_clm_veg (1) <= 13)) then
+          CPT1 = esa_clm_veg (1)
+          CPT2 = esa_clm_veg (1)
+          CPF1 = esa_clm_frac(1) 
+          CPF2 = 0.
+       endif
+
+       if ((esa_clm_veg (2) >= 12).and.(esa_clm_veg (2) <= 13)) then
+          CST1 = esa_clm_veg (2)
+          CST2 = esa_clm_veg (2)
+          CSF1 = esa_clm_frac(2) 
+          CSF2 = 0.
+       endif
+
+! CLM4_5 crop types - we don't split
+
+       if ((esa_clm_veg (1) >= 16).and.(esa_clm_veg (1) <= 25)) then
+          CPT1 = esa_clm_veg (1) + 2
+          CPT2 = esa_clm_veg (1) + 2
+          CPF1 = esa_clm_frac(1) 
+          CPF2 = 0.
+       endif
+
+       if ((esa_clm_veg (2) >= 16).and.(esa_clm_veg (2) <= 25)) then
+          CST1 = esa_clm_veg (2) + 2
+          CST2 = esa_clm_veg (2) + 2
+          CSF1 = esa_clm_frac(2) 
+          CSF2 = 0.
+       endif
+
+! Now splitting (broadleaf deciduous temperate shrub )
+! .............
+
+       if (esa_clm_veg (1) == 11) then
+          CPT1 = 10
+          CPT2 = 11
+          CPF1 = esa_clm_frac(1) * scale
+          CPF2 = esa_clm_frac(1) * (1. - scale)
+       endif
+
+       if (esa_clm_veg (2) == 11) then
+          CST1 = 10
+          CST2 = 11
+          CSF1 = esa_clm_frac(2) * scale       
+          CSF2 = esa_clm_frac(2) * (1. - scale) 
+       endif
+
+! ............. (cool c3 grass)
+
+       if (esa_clm_veg (1) == 14) then
+          CPT1 = 14
+          CPT2 = 15
+          CPF1 = esa_clm_frac(1) * scale        
+          CPF2 = esa_clm_frac(1) * (1. - scale) 
+       endif
+
+       if (esa_clm_veg (2) == 14) then
+          CST1 = 14
+          CST2 = 15
+          CSF1 = esa_clm_frac(2) * scale        
+          CSF2 = esa_clm_frac(2) * (1. - scale) 
+       endif
+
+! ............. warm c4 grass
+
+       if (esa_clm_veg (1) == 15) then
+          CPT1 = 16
+          CPT2 = 17
+          CPF1 = esa_clm_frac(1) * scale        
+          CPF2 = esa_clm_frac(1) * (1. - scale) 
+       endif
+
+       if (esa_clm_veg (2) == 15) then
+          CST1 = 16
+          CST2 = 17
+          CSF1 = esa_clm_frac(2) * scale        
+          CSF2 = esa_clm_frac(2) * (1. - scale)
+       endif
+! .............
+! CLM_4.5 : we don't splot crop type anymore 16 has become 16-25 and they are now 18-27 in catchment-CN
+!       if (esa_clm_veg (1) == 16) then
+!          CPT1 = 18
+!          CPT2 = 19
+!          CPF1 = esa_clm_frac(1) * scale        
+!          CPF2 = esa_clm_frac(1) * (1. - scale) 
+!       endif
+!
+!       if (esa_clm_veg (2) == 16) then
+!          CST1 = 18
+!          CST2 = 19
+!          CSF1 = esa_clm_frac(2) * scale        
+!          CSF2 = esa_clm_frac(2) * (1. - scale) 
+!       endif
+
+       ! fractions must sum to 1
+       ! -----------------------
+       ftot = cpf1 + cpf2 + csf1 + csf2
+
+       if(ftot /= 100.) then
+          cpf1 = 100. * cpf1 / ftot  
+          cpf2 = 100. * cpf2 / ftot 
+          csf1 = 100. * csf1 / ftot 
+          csf2 = 100. * csf2 / ftot 
+       endif
+    
+      if (write_clsm_files)  write (fclm,'(2I8,4I3,4f7.2,2I3,2f7.2)')     &
+            tid,cid,cpt1, cpt2, cst1, cst2, cpf1, cpf2, csf1, csf2, &
+            esa_clm_veg (1), esa_clm_veg (2), esa_clm_frac(1), esa_clm_frac(2)
+    end do
+    if (write_clsm_files) then
+       close (fclm, status = 'keep')
+       call LDT_releaseUnitNumber(fclm)
+    endif
+
+  END SUBROUTINE ESA2CLM45
+
+! ------------------------------------------------------------------------------------------------
+
+  SUBROUTINE ESA2CLM4 (nc, nr, gfile)
+
+    implicit none
+
+    integer  , intent (in) :: nc, nr
+    character (*)          :: gfile
+    
+    integer  , parameter   :: N_lon_clm = 1152, N_lat_clm = 768, lsmpft = 17
+    integer*2, allocatable, target, dimension (:,:) :: esa_veg
+    integer*2, pointer    , dimension (:,:) :: subset
+    integer  , allocatable, dimension (:)   :: tile_id, i_esa2clm, j_esa2clm
+    integer :: i,j, k,n, status, ncid, varid, maxcat, dx,dy, esa_type, tid, cid, ii, jj   
+    real    :: dx_clm, dy_clm, x_min_clm (N_lon_clm), y_min_clm (N_lat_clm), clm_fracs(lsmpft)
+    real    :: minlon,maxlon,minlat,maxlat,tile_lat, scale, ftot
+    integer :: cpt1, cpt2, cst1, cst2  ! CLM-carbon types
+    real    :: cpf1, cpf2, csf1, csf2  ! CLM-carbon fractions
+    DOUBLE PRECISION,  allocatable, dimension (:) :: lon_esa, lat_esa
+    DOUBLE PRECISION       :: EDGEN, EDGEE, EDGES, EDGEW 
+    DOUBLE PRECISION, ALLOCATABLE, DIMENSION (:,:,:) :: PCT_PFT_DBL
+    REAL, ALLOCATABLE, DIMENSION (:,:,:) :: PCTPFT 
+    integer, allocatable, dimension (:) :: density, loc_int
+    real   , allocatable, dimension (:) :: loc_val
+    logical, allocatable, dimension (:) :: unq_mask
+    integer :: NBINS, NPLUS, fclm
+    integer, allocatable, dimension (:,:) :: clm_veg
+    integer :: esa_clm_veg (2)
+    real    :: esa_clm_frac(2)
+    real, dimension (:,:), allocatable      :: maskarray
+
+    ! Initialize the global mask and GEOS5 to LIS mapping
+    ! ---------------------------------------------------
+
+    allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
+    call read_clsm_maskfile(1, maskarray)
+
+    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+
+    ! Reading CLM pft data file
+    !--------------------------
+
+    ALLOCATE (PCTPFT      (1:N_lon_clm, 1:N_lat_clm, 1:lsmpft))
+    ALLOCATE (PCT_PFT_DBL (1:N_lon_clm, 1:N_lat_clm, 1:lsmpft))
+    status  = NF_OPEN (trim(c_data)//'/surfdata_0.23x0.31_simyr2000_c100406.nc', NF_NOWRITE, ncid) ; VERIFY_(STATUS)   
+    status  = NF_GET_VARA_DOUBLE (ncid,1,(/1/),(/1/),EDGEN) ; VERIFY_(STATUS)
+    status  = NF_GET_VARA_DOUBLE (ncid,2,(/1/),(/1/),EDGEE) ; VERIFY_(STATUS)
+    status  = NF_GET_VARA_DOUBLE (ncid,3,(/1/),(/1/),EDGES) ; VERIFY_(STATUS)
+    status  = NF_GET_VARA_DOUBLE (ncid,4,(/1/),(/1/),EDGEW) ; VERIFY_(STATUS)
+    status  = NF_INQ_VARID (ncid,'PCT_PFT',VarID) ; VERIFY_(STATUS)
+
+    do k = 1, lsmpft
+       status  = NF_GET_VARA_DOUBLE (ncid,VarID,(/1,1,k/),(/N_lon_clm, N_lat_clm, 1/),PCT_PFT_DBL(:,:,k)) ; VERIFY_(STATUS)
+    end do
+
+    status = NF_CLOSE(ncid)
+
+    ! change type 6 to 10 for Australia only gkw: to remove CLM artificial tree line, and stay true to ESA
+    ! ----------------------------------------------------------------------------------------------------
+
+    PCT_PFT_DBL(360:494,215:341,11) = PCT_PFT_DBL(360:494,215:341,11) + PCT_PFT_DBL(360:494,215:341, 7)
+    PCT_PFT_DBL(360:494,215:341, 7) = 0.
+
+    ! CLM description (17)                                       CLM-carbon description (19)                                    
+    ! --------------------                                        -------------------------- 
+
+    ! 'BARE'   1  	bare                                     (does not have bare soil)
+    ! 'NLEt'   2 	needleleaf evergreen temperate tree    1
+    ! 'NLEB'   3 	needleleaf evergreen boreal tree       2
+    ! 'NLDB'   4  	needleleaf deciduous boreal tree       3
+    ! 'BLET'   5 	broadleaf evergreen tropical tree      4
+    ! 'BLEt'   6 	broadleaf evergreen temperate tree     5
+    ! 'BLDT'   7 	broadleaf deciduous tropical tree      6
+    ! 'BLDt'   8 	broadleaf deciduous temperate tree     7
+    ! 'BLDB'   9 	broadleaf deciduous boreal tree        8
+    ! 'BLEtS' 10 	broadleaf evergreen temperate shrub    9
+    ! 'BLDtS' 11 	broadleaf deciduous temperate shrub   10  broadleaf deciduous temperate shrub [moisture +  deciduous]
+    ! 'BLDtSm'  	broadleaf deciduous temperate shrub   11  broadleaf deciduous temperate shrub [moisture stress only]
+    ! 'BLDBS' 12 	broadleaf deciduous boreal shrub      12
+    ! 'AC3G'  13 	arctic c3 grass                       13
+    ! 'CC3G'  14 	cool c3 grass                         14  cool c3 grass [moisture +  deciduous]
+    ! 'CC3Gm'           cool c3 grass                         15  cool c3 grass [moisture stress only]
+    ! 'WC4G'  15 	warm c4 grass                         16
+    ! 'WC4Gm'   	warm c4 grass                         17
+    ! 'CROP'  16 	crop                                  18  crop [moisture +  deciduous]
+    ! 'CROPm'   	crop                                  19  crop [moisture stress only]
+    !         17        water
+
+    dx_clm = 360./N_lon_clm
+    dy_clm = 180./N_lat_clm
+
+    do i = 1, N_lon_clm 
+       x_min_clm (i) = (i-1)*dx_clm + EDGEW - 180.
+    end do
+
+    do i = 1,  N_lat_clm
+       y_min_clm (i) = (i-1)*dy_clm  + EDGES
+    end do
+
+    PCTPFT (1:N_lon_clm/2             ,:,:) =  REAL (PCT_PFT_DBL(N_lon_clm/2 + 1: N_lon_clm,:,:))
+    PCTPFT (N_lon_clm/2 + 1: N_lon_clm,:,:) =  REAL (PCT_PFT_DBL(1:N_lon_clm/2             ,:,:))
+
+    DEALLOCATE (PCT_PFT_DBL)
+
+    ! Find primary and secondary types in the CLM data file
+    ! -----------------------------------------------------
+
+    ! allocate (clm_veg (1:N_lon_clm,1:N_lat_clm,1:2))
+    !
+    ! do j = 1, N_lat_clm 
+    !    do i = 1, N_lon_clm  
+    !       if(maxval(PCT_PFT(i,j,:)) > 0.) then
+    !          clm_fracs = PCT_PFT(i,j,:)
+    !          if (maxval (clm_fracs) == 100.) then 
+    !             clm_veg(i,j,:) = maxloc (clm_fracs)
+    !          else 
+    !             clm_veg(i,j,0)             = maxloc (clm_fracs)		
+    !             clm_fracs (clm_veg(i,j,0)) = 0.
+    !             clm_veg(i,j,1)             = maxloc (clm_fracs)	 
+    !          endif
+    !       else 
+    !          clm_veg(i,j,:) = 17
+    !       endif
+    !    end do
+    ! end do
+    
+    ! Reading ESA vegetation types
+    !-----------------------------
+
+    allocate (esa_veg (1:nc_esa, 1: nr_esa))
+    allocate (lon_esa (1:nc_esa))
+    allocate (lat_esa (1:nr_esa))
+
+    status    = NF_OPEN (trim(c_data)//trim(ESA_FILE), NF_NOWRITE, ncid) ; VERIFY_(STATUS)   
+
+    status  = NF_GET_VARA_DOUBLE (ncid,1,(/1/),(/nr_esa/),lat_esa) ; VERIFY_(STATUS)   
+    status  = NF_GET_VARA_DOUBLE (ncid,2,(/1/),(/nc_esa/),lon_esa) ; VERIFY_(STATUS)   
+
+    do j = 1,nr_esa
+       status  = NF_GET_VARA_INT2 (ncid,3,(/1,j/),(/nc_esa,1/),esa_veg(:,j))
+    end do
+
+    status = NF_CLOSE(ncid)
+
+    ! Find I,J of overlying CLM grid cells for each ESA pixel 
+    !--------------------------------------------------------
+    allocate (i_esa2clm (1:nc_esa))
+    allocate (j_esa2clm (1:nr_esa))
+
+    do i = 1, N_lon_clm 
+       where ((real(lon_esa) >=  x_min_clm(i)).and.(real(lon_esa) <  (x_min_clm(i) + dx_clm))) i_esa2clm= i
+    end do
+
+    i_esa2clm(129545:nc_esa) = 1
+
+    do j = 1, N_lat_clm 
+       where ((real(lat_esa) >=  y_min_clm(j)).and.(real(lat_esa) <  (y_min_clm(j) + dy_clm))) j_esa2clm= j
+    end do
+
+    !
+    ! Reading number of tiles
+    ! -----------------------
+
+    maxcat = LDT_g5map%NT_GEOS 
+    
+    ! Loop through tile_id raster
+    ! ___________________________
+
+
+    allocate (tile_id (1:nc             ))   
+    allocate (clm_veg (1:maxcat,1:lsmpft))
+    clm_veg = 0.
+
+    dx = nc_esa / nc
+    dy = nr_esa / nr
+
+    open (10,file=trim(gfile)//'.rst',status='old',action='read',  &
+          form='unformatted',convert='little_endian')
+
+    do j=1,nr
+       
+       ! read a row
+       
+       read(10)tile_id(:)
+       
+       do i = 1,nc
+
+          ii = i_esa2clm ((i-1)*dx + dx/2)
+          jj = j_esa2clm ((j-1)*dy + dy/2)
+
+          if((tile_id (i) >= 1).and.(tile_id(i)  <= maxcat)) then
+
+             if (associated (subset)) NULLIFY (subset)
+             subset => esa_veg((i-1)*dx +1 :i*dx, (j-1)*dy +1:j*dy)
+             NPLUS = count(subset >= 1 .and. subset <= 230)
+
+             if(NPLUS > 0)  then
+                allocate (loc_int (1:NPLUS))
+                allocate (unq_mask(1:NPLUS))
+                loc_int = pack(subset,mask = (subset >= 1 .and. subset <= 230))
+                call LDT_quicksort (loc_int)
+                unq_mask = .true.
+                do n = 2,NPLUS 
+                   unq_mask(n) = .not.(loc_int(n) == loc_int(n-1))
+                end do
+                NBINS = count(unq_mask)
+                
+                allocate(loc_val (1:NBINS))
+                allocate(density (1:NBINS))
+                loc_val = 1.*pack(loc_int,mask =unq_mask)
+                call histogram (size(subset,1)*size(subset,2), NBINS, density, loc_val, real(subset))   
+                
+                do k = 1, nbins
+                   
+                   if (density (k) > 0) then
+                      
+                      esa_type = int (loc_val(k))
+                      
+                      ! if (esa_type ==  10)  clm_veg (tile_id(i), 17) = 1.* density(k)   ! lakes inland water
+                      
+                      if (esa_type ==  11)  clm_veg (tile_id(i), 16) = clm_veg (tile_id(i), 16) + 1.* density(k)   ! ESA type  11: Post-flooding or irrigated croplands 
+                      if (esa_type ==  14)  clm_veg (tile_id(i), 16) = clm_veg (tile_id(i), 16) + 1.* density(k)   ! ESA type  14: Rainfed croplands 
+                      if (esa_type ==  20)  clm_veg (tile_id(i), 16) = clm_veg (tile_id(i), 16) + 1.* density(k)   ! ESA type  20: Mosaic Cropland (50-70%) / Vegetation (grassland, shrubland, forest) (20-50%) 
+                      if (esa_type == 190)  clm_veg (tile_id(i), 16) = clm_veg (tile_id(i), 16) + 1.* density(k)   ! ESA type 190:	Artificial surfaces and associated areas (urban areas >50%) 
+                      
+                      ! if (esa_type == 200)  clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 1.* density(k)   ! ESA type 200:	Bare areas
+                      ! if (esa_type == 210)  clm_veg (tile_id(i), 17) = clm_veg (tile_id(i), 17) + 1.* density(k)   ! ocean
+                      ! if (esa_type == 220)  clm_veg (tile_id(i), 17) = clm_veg (tile_id(i), 17) + 1.* density(k)   ! ice  
+                      ! gkw: bare soil excluded! only considering vegetated land                   
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  30) then 
+                         ! ESA type  30: Mosaic Vegetation (grassland, shrubland, forest) (50-70%) / Cropland (20-50%) 
+                         clm_veg (tile_id(i),  16) = clm_veg (tile_id(i),  16) + 0.5* density(k)
+                         if(sum(PCTPFT(ii,jj,2:15)) > 0.) then
+                            do n = 2,  15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.5* density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:15))
+                            enddo
+                         else 
+                            clm_veg (tile_id(i),  16) = clm_veg (tile_id(i),  16) + 1.0* density(k)
+                         endif
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  40) then
+                         ! ESA type  40:	Closed to open (>15%) broadleaved evergreen and/or semi-deciduous forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,5:6)) > 0.) then
+                            do n = 5, 6 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,5:6))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  5) = clm_veg (tile_id(i),  5) + 1.0* density(k)
+                            else
+                               clm_veg (tile_id(i),  6) = clm_veg (tile_id(i),  6) + 1.0* density(k)
+                            endif
+                         endif
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if ((esa_type ==  50) .or. (esa_type ==  60)) then    
+                         ! ESA type  50:	Closed (>40%) broadleaved deciduous forest (>5m) 
+                         ! ESA type  60:	Open (15-40%) broadleaved deciduous forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:9)) > 0.) then
+                            do n = 7, 9 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:9))
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 1.0* density(k)
+                            else
+                               if(abs(y_min_clm(jj) + 0.5*dy_clm) <  60.) clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 1.0* density(k)
+                               if(abs(y_min_clm(jj) + 0.5*dy_clm) >= 60.) clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 1.0* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  70) then    
+                         ! ESA type  70:	Closed (>40%) needleleaved evergreen forest (>5m)
+                         
+                         if(sum(PCTPFT(ii,jj,2:3)) > 0.) then
+                            do n = 2, 3 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:3))	
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type ==  90) then 
+                         !ESA type  90:	Open (15-40%) needleleaved deciduous or evergreen forest (>5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,2:4)) > 0.) then
+                            do n = 2, 4 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n)   + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,2:4))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 100) then 
+                         !  ESA type 100:	Closed to open (>15%) mixed broadleaved and needleleaved forest (>5m) 
+                         
+                         if((sum(PCTPFT(ii,jj,2:4)) + sum(PCTPFT(ii,jj,7:9))) > 0.) then
+                            do n = 2, 9 
+                               if((n /= 5) .and. (n /= 6)) clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + density(k)*(PCTPFT(ii,jj,n))/(sum(PCTPFT(ii,jj,2:4)) + sum(PCTPFT(ii,jj,7:9)))	
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.5* density(k)
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 0.5* density(k)			
+                            elseif (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.5* density(k)
+                               clm_veg (tile_id(i),  2) = clm_veg (tile_id(i),  2) + 0.5* density(k)
+                            else 
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.5* density(k)
+                               clm_veg (tile_id(i),  3) = clm_veg (tile_id(i),  3) + 0.5* density(k)			
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 110) then   
+                         ! ESA type 110:	Mosaic Forest/Shrubland (50-70%) / Grassland (20-50%) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:12))  > 0.) then
+                            do n = 7, 12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) +  0.6*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:12)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.3* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.3* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.3* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.3* density(k)
+                            else
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.3* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.3* density(k)			
+                            end if
+                         end if
+                         
+                         if(sum(PCTPFT(ii,jj,13:15))  > 0.) then
+                            do n =13, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.4*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 0.4* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.4* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.4* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+
+                      if (esa_type == 120) then   
+                         ! ESA type 120:	Mosaic Grassland (50-70%) / Forest/Shrubland (20-50%) 
+                         
+                         if(sum(PCTPFT(ii,jj,7:12)) > 0.) then
+                            do n = 7, 12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) +  0.4*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,7:12)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  7) = clm_veg (tile_id(i),  7) + 0.2* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.2* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 0.2* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.2* density(k)
+                            else 
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 0.2* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.2* density(k)			
+                            end if
+                         end if
+                         
+                         if(sum(PCTPFT(ii,jj,13:15)) > 0.) then
+                            do n =13, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 0.6*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15)) 
+                            enddo
+                         else
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 0.6* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.6* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.6* density(k)
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 130) then
+                         ! 	Closed to open (>15%) shrubland (<5m) 
+                         
+                         if(sum(PCTPFT(ii,jj,10:12)) > 0.) then
+                            do n = 10,12 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:12))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  11) = clm_veg (tile_id(i),  11) + 1.0* density(k)
+                            else 	
+                               clm_veg (tile_id(i),  12) = clm_veg (tile_id(i),  12) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 140) then
+                         ! ESA type 140:	Closed to open (>15%) grassland 
+                         
+                         if(sum(PCTPFT(ii,jj,13:15)) > 0.) then
+                            do n = 13,15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,13:15))
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i),  15) = clm_veg (tile_id(i),  15) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then	
+                               clm_veg (tile_id(i),  14) = clm_veg (tile_id(i),  14) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i),  13) = clm_veg (tile_id(i),  13) + 1.0* density(k)	
+                            end if
+                         end if
+                      end if
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 150) then
+                         ! ESA type 150:	Sparse (<15%) vegetation (woody vegetation, shrubs, grassland) 
+                         
+                         if(sum(PCTPFT(ii,jj,10:15)) > 0.) then
+                            do n = 10, 15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.0*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:15)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.5* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.5* density(k)			
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 0.5* density(k)
+                               clm_veg (tile_id(i), 11) = clm_veg (tile_id(i), 11) + 0.5* density(k)
+                            else 
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 0.5* density(k)
+                               clm_veg (tile_id(i), 12) = clm_veg (tile_id(i), 12) + 0.5* density(k)			
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if((esa_type == 160) .or. (esa_type == 170)) then  
+                         ! ESA type 160:	Closed (>40%) broadleaved forest regularly flooded - Fresh water      ! ESA type 170:	Closed (>40%) broadleaved semi-deciduous and/or evergreen forest regularly flooded
+                         
+                         if(sum(PCTPFT(ii,jj,5:9)) > 0.) then
+                            do n = 5,9 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,5:9)) 
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 23.5) then
+                               clm_veg (tile_id(i),  5) = clm_veg (tile_id(i),  5) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 60.) then
+                               clm_veg (tile_id(i),  8) = clm_veg (tile_id(i),  8) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i),  9) = clm_veg (tile_id(i),  9) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                      
+                      ! -----------------------------------------------------------------------------------------------------------------------------------------
+                      
+                      if (esa_type == 180) then
+                         ! ESA type 180:	Closed to open (>15%) vegetation (grassland, shrubland, woody vegetation) on regularly flooded or waterlogged soil - Fresh, brackish or saline water 
+                         
+                         if(sum(PCTPFT(ii,jj,10:15)) > 0.) then
+                            do n = 10,15 
+                               clm_veg (tile_id(i), n) = clm_veg (tile_id(i), n) + 1.*density(k)*(PCTPFT(ii,jj,n))/sum(PCTPFT(ii,jj,10:15))	
+                            enddo
+                         else 
+                            if(abs(y_min_clm(jj) + 0.5*dy_clm) < 30.) then
+                               clm_veg (tile_id(i), 15) = clm_veg (tile_id(i), 15) + 1.0* density(k)
+                            else if (abs(y_min_clm(jj) + 0.5*dy_clm) < 55.) then
+                               clm_veg (tile_id(i), 14) = clm_veg (tile_id(i), 14) + 1.0* density(k)	
+                            else 	
+                               clm_veg (tile_id(i), 13) = clm_veg (tile_id(i), 13) + 1.0* density(k)	
+                            end if
+                         end if
+                      endif
+                   endif
+                enddo
+                deallocate (loc_int,unq_mask,loc_val,density)
+             endif
+          end if
+       enddo
+    end do
+    
+    
+    deallocate (tile_id, PCTPFT,esa_veg,lon_esa,lat_esa,i_esa2clm,j_esa2clm)  
+    close (10,status='keep')    
+
+    ! Now create CLM-carbon_veg_fracs file
+    ! ------------------------------------
+
+    if (write_clsm_files) then
+       fclm = LDT_getNextUnitNumber()
+       open (fclm,file='LDT_clsm/CLM_veg_typs_fracs',  &
+            form='formatted',status='unknown')
+    endif
+
+    do k = 1, maxcat
+
+       tile_lat = LDT_g5map%lat(k)
+       scale = (ABS (tile_lat) - 32.)/10.
+       scale = min (max(scale,0.),1.)
+
+       esa_clm_veg = 0
+       esa_clm_frac= 0.
+
+       clm_fracs = clm_veg (k,:)
+             
+       if (sum (clm_fracs) == 0.) then ! gkw: no vegetated land found; set to BLDtS
+          esa_clm_veg (1) = 11              ! broadleaf deciduous shrub 
+          esa_clm_frac(1) = 100.
+       else
+          esa_clm_veg (1) = maxloc(clm_fracs,1)
+          esa_clm_frac(1) = maxval(clm_fracs) 
+       endif
+
+       clm_fracs (esa_clm_veg (1)) = 0.
+
+       if (sum (clm_fracs) == 0.) then ! gkw: no vegetated secondary type found, set to primary with zero fraction
+          esa_clm_veg (2) = esa_clm_veg (1)
+          esa_clm_frac(1) = 100.
+          esa_clm_frac(2) = 0.
+       else
+          esa_clm_veg (2) = maxloc(clm_fracs,1)
+          esa_clm_frac(1) = 100.*clm_veg (k,esa_clm_veg (1))/(clm_veg (k,esa_clm_veg (1)) + clm_veg (k,esa_clm_veg (2)))
+          esa_clm_frac(2) = 100. - esa_clm_frac(1)
+       end if
+
+! Now splitting CLM types for CLM-carbon model
+! --------------------------------------------
+ 
+! CLM types 2- 10,12,13 are not being splitted.
+! .............................................
+     
+       if ((esa_clm_veg (1) >= 2).and.(esa_clm_veg (1) <= 10)) then
+          CPT1 = esa_clm_veg (1) - 1
+          CPT2 = esa_clm_veg (1) - 1
+          CPF1 = esa_clm_frac(1) 
+          CPF2 = 0.
+       endif
+
+       if ((esa_clm_veg (2) >= 2).and.(esa_clm_veg (2) <= 10)) then
+          CST1 = esa_clm_veg (2) - 1
+          CST2 = esa_clm_veg (2) - 1
+          CSF1 = esa_clm_frac(2) 
+          CSF2 = 0.
+       endif
+
+! .............................................
+
+       if ((esa_clm_veg (1) >= 12).and.(esa_clm_veg (1) <= 13)) then
+          CPT1 = esa_clm_veg (1)
+          CPT2 = esa_clm_veg (1)
+          CPF1 = esa_clm_frac(1) 
+          CPF2 = 0.
+       endif
+
+       if ((esa_clm_veg (2) >= 12).and.(esa_clm_veg (2) <= 13)) then
+          CST1 = esa_clm_veg (2)
+          CST2 = esa_clm_veg (2)
+          CSF1 = esa_clm_frac(2) 
+          CSF2 = 0.
+       endif
+
+! Now splitting
+! .............
+
+       if (esa_clm_veg (1) == 11) then
+          CPT1 = 10
+          CPT2 = 11
+          CPF1 = esa_clm_frac(1) * scale
+          CPF2 = esa_clm_frac(1) * (1. - scale)
+       endif
+
+       if (esa_clm_veg (2) == 11) then
+          CST1 = 10
+          CST2 = 11
+          CSF1 = esa_clm_frac(2) * scale       
+          CSF2 = esa_clm_frac(2) * (1. - scale) 
+       endif
+
+! .............
+
+       if (esa_clm_veg (1) == 14) then
+          CPT1 = 14
+          CPT2 = 15
+          CPF1 = esa_clm_frac(1) * scale        
+          CPF2 = esa_clm_frac(1) * (1. - scale) 
+       endif
+
+       if (esa_clm_veg (2) == 14) then
+          CST1 = 14
+          CST2 = 15
+          CSF1 = esa_clm_frac(2) * scale        
+          CSF2 = esa_clm_frac(2) * (1. - scale) 
+       endif
+
+! .............
+
+       if (esa_clm_veg (1) == 15) then
+          CPT1 = 16
+          CPT2 = 17
+          CPF1 = esa_clm_frac(1) * scale        
+          CPF2 = esa_clm_frac(1) * (1. - scale) 
+       endif
+
+       if (esa_clm_veg (2) == 15) then
+          CST1 = 16
+          CST2 = 17
+          CSF1 = esa_clm_frac(2) * scale        
+          CSF2 = esa_clm_frac(2) * (1. - scale)
+       endif
+! .............
+
+       if (esa_clm_veg (1) == 16) then
+          CPT1 = 18
+          CPT2 = 19
+          CPF1 = esa_clm_frac(1) * scale        
+          CPF2 = esa_clm_frac(1) * (1. - scale) 
+       endif
+
+       if (esa_clm_veg (2) == 16) then
+          CST1 = 18
+          CST2 = 19
+          CSF1 = esa_clm_frac(2) * scale        
+          CSF2 = esa_clm_frac(2) * (1. - scale) 
+       endif
+
+       ! fractions must sum to 1
+       ! -----------------------
+       ftot = cpf1 + cpf2 + csf1 + csf2
+
+       if(ftot /= 100.) then
+          cpf1 = 100. * cpf1 / ftot  
+          cpf2 = 100. * cpf2 / ftot 
+          csf1 = 100. * csf1 / ftot 
+          csf2 = 100. * csf2 / ftot 
+       endif
+       
+       if (write_clsm_files) write (fclm,'(2I8,4I3,4f7.2,2I3,2f7.2)')     &
+            tid,cid,cpt1, cpt2, cst1, cst2, cpf1, cpf2, csf1, csf2, &
+            esa_clm_veg (1), esa_clm_veg (2), esa_clm_frac(1), esa_clm_frac(2)
+
+    end do
+
+    if (write_clsm_files) then
+       close (fclm, status = 'keep')
+    endif
+
+  END SUBROUTINE ESA2CLM4
 
 ! ---------------------------------------------------------------
 
