@@ -1,5 +1,3 @@
-#define VERIFY_(A)   IF(A/=0)THEN;PRINT *,'ERROR AT LINE ', __LINE__;STOP;ENDIF
-#define ASSERT_(A)   if(.not.A)then;print *,'Error:',__FILE__,__LINE__;stop;endif
 #include "LDT_misc.h"
 module CLSM_param_routines
 
@@ -53,7 +51,7 @@ module CLSM_param_routines
      character*140 :: catchlaifile    ! LAI climatology file
      real          :: dzsfcrd         ! CLSM top soil layer depth from ldt.config
      real          :: addbdrckcrd     ! CLSM add to bedrock depth from ldt.config
-
+     type(LDT_paramEntry) :: porosity    ! soil porosity
      type(LDT_paramEntry) :: psisat      ! saturated soil moisture potential
      type(LDT_paramEntry) :: bexp        ! Clapp-Hornberger parameter
      type(LDT_paramEntry) :: wpwet       ! wilting point wetness
@@ -698,7 +696,8 @@ END SUBROUTINE create_CLSM_parameters
              Clsm_struc(N)%atau)
         call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
              Clsm_struc(N)%btau)
-        
+        if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%porosity) 
         call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
              Clsm_struc(N)%psisat)
         call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
@@ -778,10 +777,11 @@ END SUBROUTINE create_CLSM_parameters
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%atau)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%btau)
         
+        if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%porosity)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%psisat)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ksat)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bexp)
-        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%wpwet)
+        call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%wpwet)        
         !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%quartz)
         !    call LDT_writeNETCDFdata(n,ftn,LDT_LSMparam_struc(n)%soildepth)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bdrckdpth)

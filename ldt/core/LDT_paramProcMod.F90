@@ -1283,11 +1283,17 @@ contains
         LDT_LSMparam_struc(n)%landcover%standard_name = &
             "USGS landcover map"
 
-      case( "MOSAIC", "CLSMF2.5", "CLSMJ3.2") 
+      case( "MOSAIC", "CLSMF2.5") 
         LDT_rc%lc_type(n) = "MOSAIC"
         LDT_LSMparam_struc(n)%landcover%num_bins = 7
         LDT_LSMparam_struc(n)%landcover%standard_name = &
             "CLSMF2.5/MOSAIC landcover map"
+
+      case( "CLSMJ3.2") 
+        LDT_rc%lc_type(n) = "MOSAIC"
+        LDT_LSMparam_struc(n)%landcover%num_bins = 7
+        LDT_LSMparam_struc(n)%landcover%standard_name = &
+            "CLSMJ3.2/MOSAIC landcover map"
 
       case( "ISA" ) 
         LDT_rc%lc_type(n) = "ISA"

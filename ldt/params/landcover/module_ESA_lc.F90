@@ -1,6 +1,3 @@
-#define VERIFY_(A) if(A /=0)then;print *,'ERROR code',A,'at',__LINE__;call exit(3);endif
-#define ASSERT_(A)   if(.not.A)then;print *,'Error:',__FILE__,__LINE__;stop;endif
-
 !-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
 ! NASA GSFC Land Data Toolkit (LDT) V1.0
 !-------------------------END NOTICE -- DO NOT EDIT-----------------------
@@ -21,7 +18,7 @@
 module mod_ESA_lc
 
 ! !USES:
-  use LDT_coreMod,     only : LDT_rc
+  use LDT_coreMod,     only : LDT_rc, LDT_domain
   use LDT_logMod,      only : LDT_logunit, LDT_getNextUnitNumber, &
             LDT_releaseUnitNumber, LDT_verify, LDT_endrun
   use LDT_gridmappingMod    
@@ -33,6 +30,7 @@ module mod_ESA_lc
        NX => nc_g5_rst,                     &
        NY => nr_g5_rst, histogram , write_clsm_files, init_geos2lis_mapping,G52LIS, LISv2g 
   use LDT_numericalMethodsMod, only : LDT_quicksort
+  use map_utils
 
   implicit none
   include 'netcdf.inc'	
@@ -312,10 +310,16 @@ module mod_ESA_lc
   
   ! ---------------------------------------------------------------------
   !
-  SUBROUTINE ESA2MOSAIC 
+  SUBROUTINE ESA2MOSAIC(n, num_types, fgrd, maskarray) 
     
     implicit none
-
+    integer, intent(in) :: n
+    integer, intent(in) :: num_types
+    real, intent(inout) :: fgrd(LDT_rc%lnc(n),LDT_rc%lnr(n),LDT_rc%nt)
+    real, intent(inout) :: maskarray(LDT_rc%lnc(n),LDT_rc%lnr(n))
+    real    :: rlat(LDT_rc%lnc(n),LDT_rc%lnr(n))
+    real    :: rlon(LDT_rc%lnc(n),LDT_rc%lnr(n))
+    real    :: param_grid(20)
     integer*2, allocatable, target, dimension (:,:) :: esa_veg
     integer*2, pointer    , dimension (:,:) :: subset
     integer  , allocatable, dimension (:)   :: tile_id
@@ -326,18 +330,33 @@ module mod_ESA_lc
     real   , allocatable, dimension (:) :: loc_val
     logical, allocatable, dimension (:) :: unq_mask
     real   , allocatable       :: veg (:,:)
-    integer :: NBINS, NPLUS
-    real, dimension (:,:), allocatable      :: maskarray
-    real, allocatable,  dimension (:)       :: ityp
+    integer :: NBINS, NPLUS, c,r,gr,gc, glpnc, glpnr
+    real, allocatable,  dimension (:)       :: ityp, ityp_lis
     real, pointer, dimension (:,:)          :: vegtype
 
     ! Initialize the global mask and GEOS5 to LIS mapping
     ! ---------------------------------------------------
 
-    allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
-    call read_clsm_maskfile(1, maskarray)
+    call read_clsm_maskfile(n, maskarray)
 
     if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+
+    LDT_rc%waterclass   = 7
+    LDT_rc%bareclass    = 5
+    LDT_rc%urbanclass   = 5
+    LDT_rc%glacierclass = 5
+    LDT_rc%wetlandclass = 0
+    LDT_rc%snowclass    = 0
+
+    !- Double-check landcover spatial transform option:
+    if( LDT_rc%lc_gridtransform(n)=="tile" .or. LDT_rc%lc_gridtransform(n)=="mode")then
+       write(LDT_logunit,*) " (in read_CLSMF25_lc) :: The 'tile' or 'mode' spatial transform option"
+       write(LDT_logunit,*) "          has been selected, but these options are not"
+       write(LDT_logunit,*) "          currently supported for the Catchment F2.5 LSM. "
+       write(LDT_logunit,*) "          Please select option 'none' and run LDT again. "
+       write(LDT_logunit,*) " Program stopping ..."
+       call LDT_endrun
+    end if
 
     ! Reading ESA vegetation types
     !-----------------------------
@@ -364,6 +383,7 @@ module mod_ESA_lc
     allocate (tile_id (1:NX))   
     allocate(veg(1:maxcat,1:6))
     allocate(ityp(1:maxcat))
+    allocate(ityp_lis(1:LDT_g5map%NT_LIS))
     veg = 0.
 
     dx = nc_esa / NX
@@ -525,9 +545,49 @@ module mod_ESA_lc
        call LDT_releaseUnitNumber(fmos)
     endif
 
-    allocate (vegtype(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
-    vegtype =  LISv2g (LDT_rc%lnc(1),LDT_rc%lnr(1),G52LIS (ityp))
-    deallocate (veg, ityp, maskarray)
+    !- Determine global/complete parameter domain number of points:
+    param_grid(:) = LDT_rc%mask_gridDesc(n,:)
+    glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
+    glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9)) + 1
+    allocate( vegtype(glpnc,glpnr), stat=status );  VERIFY_(STATUS) 
+    vegtype = LDT_rc%waterclass
+    ityp_lis = G52LIS (ityp)
+
+! - For now - complete domains:
+    k = 0
+    do r = 1, glpnr
+       do c = 1, glpnc
+          
+          if( LDT_rc%global_mask(c,r) > 0. ) then
+             k = k + 1
+             if( ityp_lis(k) > 0 ) then
+                vegtype(c,r) = ityp_lis(k)
+             elseif( ityp_lis(k) == 0 ) then
+                vegtype(c,r) = 5.   ! Assign landcover for glacier points
+             endif
+          endif          
+      end do
+   enddo    
+
+!!- Final fgrd output fields:
+ !- Build in subsetting domain:
+   do r = 1, LDT_rc%lnr(n)
+      do c = 1, LDT_rc%lnc(n)
+
+         call ij_to_latlon(LDT_domain(n)%ldtproj,float(c),float(r),&
+                           rlat(c,r),rlon(c,r))
+         gr = nint((rlat(c,r)-param_grid(4))/param_grid(10))+1
+         gc = nint((rlon(c,r)-param_grid(5))/param_grid(9))+1
+
+         if( vegtype(gc,gr) > 0. .and. vegtype(gc,gr).ne.LDT_rc%waterclass ) then 
+            fgrd(c,r,int(vegtype(gc,gr))) = 1.0
+         else
+            fgrd(c,r,LDT_rc%waterclass) = 1.0
+         endif
+      enddo
+   enddo
+       
+   deallocate (veg, ityp, ityp_lis)
    
   END SUBROUTINE ESA2MOSAIC
 

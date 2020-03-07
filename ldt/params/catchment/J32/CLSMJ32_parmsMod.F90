@@ -163,8 +163,8 @@ contains
        glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
        glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9))  + 1
 
-!       call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY","CLSMJ3.2", &
-!            full_name="CLSM soil porosity")
+       call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY","CLSMJ3.2", &
+            full_name="CLSM soil porosity")
 
        call set_param_attribs(CLSMJ32_struc(n)%bexp,"BEXP", "CLSMJ3.2",&
             full_name="CLSM Bexp Clapp-Hornberger parameter")
@@ -235,6 +235,10 @@ contains
        allocate(CLSMJ32_struc(n)%bexp%value(&
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%bexp%num_bins))
+
+       allocate(CLSMJ32_struc(n)%porosity%value(&
+            LDT_rc%lnc(n),LDT_rc%lnr(n),&
+            CLSMJ32_struc(n)%porosity%num_bins))
        
        allocate(CLSMJ32_struc(n)%wpwet%value(&
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
@@ -472,7 +476,7 @@ contains
        CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (wpwet))
        CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (Ks))
        CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
-!       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
+       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
        CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (gnu))
        
        call populate_param_attribs( "ALBNIRDIFF", &
