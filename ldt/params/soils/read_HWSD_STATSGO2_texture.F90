@@ -37,7 +37,6 @@ module mod_HWSD_STATSGO2_texture
        soil_class    => DeLannoy_class,     &
        cf_lim        => OC_LIMITS,          &
        mineral_perc, get_GDL_soil_table
-  use LDT_logMod
 
   implicit none
   include 'netcdf.inc'	

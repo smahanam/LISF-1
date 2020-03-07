@@ -124,7 +124,8 @@ contains
     call ESMF_ConfigFindLabel(LDT_config,"Landcover file:",rc=rc)
     do n=1,LDT_rc%nnest
        call ESMF_ConfigGetAttribute(LDT_config,LDT_rc%vfile(n),rc=rc)
-       call LDT_verify(rc,'Landcover file: not specified')
+       if(.not. LDT_LSMparam_struc(n)%landcover%source == "CLSMJ3.2") &
+            call LDT_verify(rc,'Landcover file: not specified')
     enddo
 
     call ESMF_ConfigGetAttribute(LDT_config,LDT_rc%lc_proj,&

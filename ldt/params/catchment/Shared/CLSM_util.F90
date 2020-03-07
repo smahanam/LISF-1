@@ -551,7 +551,7 @@ module CLSM_util
      real, dimension (nc,nr)          :: lis_2D
      integer                          :: c, r, i
 
-     lis_2D = -9999.
+     lis_2D = LDT_rc%udef
      i = 1
      do r = 1, nr
         do c = 1, nc
