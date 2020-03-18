@@ -285,57 +285,104 @@ contains
 #endif
   end subroutine read_irrigFrac
 
+  subroutine read_irrigRootdepth(n, rdfile, rootdepth)
 
-  subroutine read_irrigRootdepth(n,rdfile, rootdepth)
     use LIS_fileIOMod
 #if(defined USE_NETCDF3 || defined USE_NETCDF4)
     use netcdf
 #endif
-    integer,      intent(in) :: n 
-    character(len=*)         :: rdfile
-    real                     :: rootdepth(LIS_rc%npatch(n,LIS_rc%lsm_index))
-
-    integer,   parameter     :: nt = 32 !hardcoded for now
-    integer                  :: ftn
-    real                     :: rootd(nt)
-    integer                  :: t,j,col,row
-    integer                  :: nid,ios,status,croptypeId
-    logical                  :: file_exists    
-    real                     :: l_croptype(LIS_rc%lnc(n),LIS_rc%lnr(n))
-    real,         pointer    :: glb_croptype(:,:)
+    integer,    intent(in) :: n 
+    character(len=*)       :: rdfile
+    real                   :: rootdepth(LIS_rc%npatch(n,LIS_rc%lsm_index))
+    integer                :: total_vegtypes
+!    integer, parameter     :: nt = 32 ! used to be hardcoded 
+    real, allocatable      :: rootd(:)
+    integer                :: ftn
+    integer                :: t,j,col,row
+    integer                :: nid, ios, status, croptypeId
+    logical                :: file_exists    
+    real,   allocatable    :: l_croptype(:,:)
+    real,   allocatable    :: glb_croptype(:,:)
+    real,   allocatable    :: glb_croptype1(:,:)
+! __________________________________________________________________________
     
 #if (defined USE_NETCDF3 || defined USE_NETCDF4)
 
+ !- Read in LDT input crop classification information (done here for now):
+    inquire(file=LIS_rc%paramfile(n), exist=file_exists)
+    if(file_exists) then
+     ! Read in LDT-generated netcdf file information:
+       write(LIS_logunit,*)"[INFO] Reading crop classification information ..."
+       ios = nf90_open(path=LIS_rc%paramfile(n),&
+                       mode=NF90_NOWRITE,ncid=nid)
+       call LIS_verify(ios,'Error in nf90_open in read_irrigRootdepth (concurrent)')
+ 
+       ios = nf90_get_att(nid, NF90_GLOBAL, 'CROPCLASS_SCHEME', LIS_rc%cropscheme)
+       call LIS_verify(ios,'Error in nf90_get_att in read_irrigRootdepth (concurrent)')
+ 
+       ios = nf90_get_att(nid, NF90_GLOBAL, 'CROPCLASS_NUMBER', LIS_rc%numbercrops)
+       call LIS_verify(ios,'Error in nf90_get_att in LIS_irrigation_init')
+       write(LIS_logunit,*)"[INFO] Read in crop classfication: ",trim(LIS_rc%cropscheme),&
+                          ", with the number of crop types:",LIS_rc%numbercrops
+       ios = nf90_close(nid)
+       call LIS_verify(ios,'nf90_close failed in read_irrigRootdepth (concurrent)')
+    endif
+
+  ! Estimate total crop types, added to landcover scheme class total:
+    select case ( LIS_rc%lcscheme )
+     case( "UMD" )
+       total_vegtypes = 13 + LIS_rc%numbercrops
+     case( "UMD+MIRCA" )
+       total_vegtypes = 14 + LIS_rc%numbercrops
+!     case( "IGBP", "IGBPNCEP" )
+     case( "IGBP", "IGBPNCEP", "IGBP+MIRCA", "IGBPNCEP+MIRCA" )
+       total_vegtypes = 20 + LIS_rc%numbercrops
+     case( "USGS" )
+       total_vegtypes = 24 + LIS_rc%numbercrops
+     case default
+       write(LIS_logunit,*) "[ERR] The landcover scheme, ",trim(LIS_rc%lcscheme),","
+       write(LIS_logunit,*) "[ERR] is not supported for sprinkler irrigation Stopping program ... "
+       call LIS_endrun()
+    end select
+  ! Assign default 32 UMD+CROPMAP for now, due to indexing for max root depth input files:
+!    total_vegtypes = 13 + LIS_rc%numbercrops ! KRA: Commenting out to account for crops
+
+    allocate(l_croptype(LIS_rc%lnc(n),LIS_rc%lnr(n)))
+
+ !- Read the max root depth table file:
     inquire(file=rdfile,exist=file_exists)
     if(file_exists) then 
+       write(LIS_logunit,*) "[INFO] Reading in the max root depth file: ",trim(rdfile)
        ftn = LIS_getNextUnitNumber()
        open(ftn,file=rdfile,status='old')
-       read(ftn,*) (rootd(j),j=1,nt)
+       allocate( rootd(total_vegtypes) )
+       read(ftn,*) (rootd(j),j=1,total_vegtypes)
        call LIS_releaseUnitNumber(ftn)
     else
-       write(LIS_logunit,*) 'Max root depth file ',trim(rdfile), ' not found'
+       write(LIS_logunit,*) "[ERR] Max root depth file, ",trim(rdfile),", not found."
+       write(LIS_logunit,*) "[ERR] Stopping program ..."
        call LIS_endrun()
     endif
 
+ !- Read in crop type map file (specified in LIS parameter input file)
     inquire(file=LIS_rc%paramfile(n), exist=file_exists)
     if(file_exists) then 
-
        ios = nf90_open(path=LIS_rc%paramfile(n),&
-            mode=NF90_NOWRITE,ncid=nid)
-       call LIS_verify(ios,'Error in nf90_open in the lis input netcdf file')
+                       mode=NF90_NOWRITE,ncid=nid)
+       call LIS_verify(ios,'Error in nf90_open in read_irrigRootdepth (sprinkler)')
 
-       write(LIS_logunit,*) " Reading in the crop type field ... "
+       write(LIS_logunit,*) "[INFO] Reading in the crop type field ... "
        
        allocate(glb_croptype(LIS_rc%gnc(n),LIS_rc%gnr(n)))
        
        ios = nf90_inq_varid(nid,'CROPTYPE',croptypeId)
-       call LIS_verify(ios,'nf90_inq_varid failed for CROPTYPE')
+       call LIS_verify(ios,'nf90_inq_varid failed for CROPTYPE (sprinkler)')
        
-       ios = nf90_get_var(nid,croptypeId, glb_croptype)
-       call LIS_verify(ios,'nf90_get_var failed for CROPTYPE')
+       ios = nf90_get_var(nid, croptypeId, glb_croptype)
+       call LIS_verify(ios,'nf90_get_var failed for CROPTYPE  (sprinkler)')
 
        ios = nf90_close(nid)
-       call LIS_verify(ios,'nf90_close failed in concurrent_irrigationMod')
+       call LIS_verify(ios,'nf90_close failed in read_irrigRootdepth (sprinkler)')
        
        l_croptype(:,:) = glb_croptype(&
             LIS_ews_halo_ind(n,LIS_localPet+1):&         
@@ -354,14 +401,17 @@ contains
              rootdepth(t) = 0 
           endif
        enddo
+       deallocate( rootd )
 
     else
-       write(LIS_logunit,*) 'irrigation croptype map: ',&
-            LIS_rc%paramfile(n), ' does not exist'
-       write(LIS_logunit,*) 'program stopping ...'
+       write(LIS_logunit,*) "[ERR] The irrigation croptype map: ",&
+             LIS_rc%paramfile(n)," does not exist."
+       write(LIS_logunit,*) "[ERR] Program stopping ..."
        call LIS_endrun
     endif
+    deallocate(l_croptype)
 #endif
+
   end subroutine read_irrigRootdepth
 
   subroutine compute_irrigScale(n,irrigFrac, irrigScale)
@@ -391,7 +441,8 @@ contains
       grass = 10 
       shrub1 = 6
       shrub2 = 9
-   elseif(LIS_rc%lcscheme.eq."MODIS".or.LIS_rc%lcscheme.eq."IGBPNCEP") then 
+   elseif(LIS_rc%lcscheme.eq."MODIS".or.LIS_rc%lcscheme.eq."IGBPNCEP", or. &
+       LIS_rc%lcscheme.eq."IGBP+MIRCA" .or.  LIS_rc%lcscheme.eq."IGBPNCEP+MIRCA" ) then 
       crop1 = 12
       crop2 = 14
       grass = 10 
