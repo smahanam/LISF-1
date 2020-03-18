@@ -54,6 +54,13 @@ subroutine LIS_lsmirrigation_plugin
    external noahmp36_getirrigationstates
 #endif
 
+#if ( defined IRR_CONCURRENT )
+#if ( defined SM_NOAH_3_3 )
+   call registerlsmirrigationgetstates(trim(LIS_noah33Id)//"+"//&
+        trim(LIS_concurrentIrrigationId)//char(0),noah33_getirrigationstates)
+#endif
+#endif
+
 #if ( defined IRR_SPRINKLER )
 #if ( defined SM_NOAH_3_3 )
    call registerlsmirrigationgetstates(trim(LIS_noah33Id)//"+"//&
