@@ -359,6 +359,7 @@ module LIS_pluginIndices
    character*50, public, parameter :: LIS_sprinklerIrrigationId = "Sprinkler"
    character*50, public, parameter :: LIS_floodIrrigationId = "Flood"
    character*50, public, parameter :: LIS_dripIrrigationId  = "Drip"
+   character*50, public, parameter :: LIS_concurrentIrrigationId  = "Concurrent"
 !-------------------------------------------------------------------------
 !  Forecasting algorithms
 !-------------------------------------------------------------------------

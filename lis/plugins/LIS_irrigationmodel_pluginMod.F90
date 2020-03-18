@@ -70,5 +70,12 @@ subroutine LIS_irrigationmodel_plugin
                                  drip_irrigation_updates)
 #endif
 
+#if ( defined IRR_CONCURRENT )
+   call registerirrigationschemeinit(trim(LIS_concurrentIrrigationId)//char(0),&
+                                     concurrent_irrigation_init)
+   call registerirrigationupdate(trim(LIS_concurrentIrrigationId)//char(0),&
+                                 concurrent_irrigation_updates)
+#endif
+
 end subroutine LIS_irrigationmodel_plugin
 end module LIS_irrigationmodel_pluginMod
