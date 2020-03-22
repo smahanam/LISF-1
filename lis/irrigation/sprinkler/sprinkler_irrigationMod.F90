@@ -253,7 +253,6 @@ contains
     logical              :: file_exists    
     real,  allocatable   :: l_frac(:,:)
     real,  allocatable   :: glb_frac(:,:)
-    real,  allocatable   :: glb_frac1(:,:)
     
 #if (defined USE_NETCDF3 || defined USE_NETCDF4)
 

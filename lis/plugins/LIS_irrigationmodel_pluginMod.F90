@@ -49,6 +49,10 @@ subroutine LIS_irrigationmodel_plugin
    use drip_irrigationMod
 #endif
 
+#if ( defined IRR_CONCURRENT )
+   use concurrent_irrigationMod
+#endif
+
 #if ( defined IRR_SPRINKLER )
    call registerirrigationschemeinit(trim(LIS_sprinklerIrrigationId)//char(0),&
                                      sprinkler_irrigation_init)

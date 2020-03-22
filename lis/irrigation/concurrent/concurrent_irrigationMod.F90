@@ -50,9 +50,9 @@ contains
     character*100        :: maxrootdepthfile
 
     do n=1,LIS_rc%nnest
-       allocate(irrigFrac(LIS_rc%npatch(n,LIS_rc%lsm_index,N_IRRIG_TYPES)))
+       allocate(irrigFrac(LIS_rc%npatch(n,LIS_rc%lsm_index),N_IRRIG_TYPES))
        allocate(irrigRootDepth(LIS_rc%npatch(n,LIS_rc%lsm_index)))
-       allocate(irrigScale(LIS_rc%npatch(n,LIS_rc%lsm_index,N_IRRIG_TYPES)))
+       allocate(irrigScale(LIS_rc%npatch(n,LIS_rc%lsm_index),N_IRRIG_TYPES))
 
        write(LIS_logunit,*) " Running the 'Concurrent' irrigation method ... "
 
@@ -222,19 +222,19 @@ contains
     use netcdf
 #endif
     integer,      intent(in) :: n 
-    real                     :: frac(LIS_rc%npatch(n,LIS_rc%lsm_index, N_IRRIG_TYPES))
+    real                     :: frac(LIS_rc%npatch(n,LIS_rc%lsm_index), N_IRRIG_TYPES)
 
     integer                  :: t,col,row
     integer                  :: nid,ios,status,fracId,itid, irrigtypes
     logical                  :: file_exists    
-    real                     :: l_frac(LIS_rc%lnc(n),LIS_rc%lnr(n),N_IRRIG_TYPES)
+    real, allocatable        :: l_frac(:,:,:)
     real,         pointer    :: glb_frac(:,:,:)
     
 #if (defined USE_NETCDF3 || defined USE_NETCDF4)
 
     inquire(file=LIS_rc%paramfile(n), exist=file_exists)
     if(file_exists) then 
-
+       allocate (l_frac(LIS_rc%lnc(n),LIS_rc%lnr(n),N_IRRIG_TYPES))
        ios = nf90_open(path=LIS_rc%paramfile(n),&
             mode=NF90_NOWRITE,ncid=nid)
        call LIS_verify(ios,'Error in nf90_open in the lis input netcdf file')
@@ -247,8 +247,8 @@ contains
        call LIS_verify(ios,'nf90_inq_varid failed for IRRIGFRAC')
        ios = nf90_inq_dimid  (nid, 'irrigtypes', itid)
        call LIS_verify(ios,'nf90_inq_varid failed for irrigtypes dimension')
-       ios = nf90_inq_dimlen (nid, itid, irrigtypes)  
-       call LIS_verify(ios,'nf90_inq_varid failed for irrigtypes dimension value')
+!       ios = nf90_inq_dimlen (nid, itid, irrigtypes)  
+!       call LIS_verify(ios,'nf90_inq_varid failed for irrigtypes dimension value')
 
        if(irrigtypes < N_IRRIG_TYPES) then
           write(LIS_logunit,*) 'irrigtypes < N_IRRIG_TYPES '
@@ -256,7 +256,7 @@ contains
           call LIS_endrun         
        endif
 
-       ios = nf90_get_var(nid,fracId, glb_frac, start =  (/1,1,1/), count = (/(LIS_rc%gnc(n),LIS_rc%gnr(n),N_IRRIG_TYPES/))
+       ios = nf90_get_var(nid,fracId, glb_frac, start =  (/1,1,1/), count = (/LIS_rc%gnc(n),LIS_rc%gnr(n),N_IRRIG_TYPES/))
        call LIS_verify(ios,'nf90_get_var failed for in concurrent_irrigationMod')
 
        ios = nf90_close(nid)
@@ -417,8 +417,8 @@ contains
   subroutine compute_irrigScale(n,irrigFrac, irrigScale)
 
     integer                :: n, i 
-    real                   :: irrigFrac (LIS_rc%npatch(n,LIS_rc%lsm_index,N_IRRIG_TYPES))
-    real                   :: irrigScale(LIS_rc%npatch(n,LIS_rc%lsm_index,N_IRRIG_TYPES))
+    real                   :: irrigFrac (LIS_rc%npatch(n,LIS_rc%lsm_index),N_IRRIG_TYPES)
+    real                   :: irrigScale(LIS_rc%npatch(n,LIS_rc%lsm_index),N_IRRIG_TYPES)
     
     integer                :: t,gid,vegt
     real                   :: crppix(LIS_rc%ngrid(n))
@@ -441,7 +441,7 @@ contains
       grass = 10 
       shrub1 = 6
       shrub2 = 9
-   elseif(LIS_rc%lcscheme.eq."MODIS".or.LIS_rc%lcscheme.eq."IGBPNCEP", or. &
+   elseif(LIS_rc%lcscheme.eq."MODIS".or.LIS_rc%lcscheme.eq."IGBPNCEP" .or. &
        LIS_rc%lcscheme.eq."IGBP+MIRCA" .or.  LIS_rc%lcscheme.eq."IGBPNCEP+MIRCA" ) then 
       crop1 = 12
       crop2 = 14
@@ -462,7 +462,7 @@ contains
 !      shrub2 = 9
    else
       write(LIS_logunit,*) "The landcover scheme, ",trim(LIS_rc%lcscheme)
-      write(LIS_logunit,*) "is not supported for 'flood' irrigation at this time. "
+      write(LIS_logunit,*) "is not supported for 'Concurrent' irrigation at this time. "
       write(LIS_logunit,*) " Stopping ..."
       call LIS_endrun()
    endif
