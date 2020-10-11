@@ -145,7 +145,7 @@ contains
    logical            :: calc_minmaxgfrac
 
    real, allocatable            :: gfrac_gridDesc(:,:)
-   character*50             :: gfrac_proj
+   character*50                 :: gfrac_proj
    character*50,  allocatable   :: gfrac_gridtransform(:)
    character*100, allocatable   :: gfracdir(:)
    character*140, allocatable   :: gfracfile(:)
@@ -370,6 +370,13 @@ contains
                     n, LDT_gfrac_struc(n)%gfrac%value, &
                     LDT_LSMparam_struc(n)%landmask%value )
                write(LDT_logunit,*) "Done reading file - "//trim(gfracfile(n))
+
+            elseif ( trim(LDT_gfrac_struc(n)%gfrac%source) == "GSWPH" ) then
+               write(LDT_logunit,*) "Reading single-file, monthly climatologies for: GSWPH"
+	       call readgfrac( trim(LDT_gfrac_struc(n)%gfrac%source)//char(0),&
+                    n, LDT_gfrac_struc(n)%gfrac%value, &
+                    LDT_LSMparam_struc(n)%landmask%value )
+               write(LDT_logunit,*) "Done reading file - GSWPH"
 
          !- Read multi-file monthly clim greenness fraction: 
             else

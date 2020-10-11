@@ -263,6 +263,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_gfracClimLISId = "NCEP_LIS"
    character*50, public,  parameter :: LDT_gfracClimNATId = "NCEP_Native"
    character*50, public,  parameter :: LDT_gfracClsmf25Id = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_gfracGSWPHId   = "GSWPH"
    character*50, public,  parameter :: LDT_gfracSACHTETId = "SACHTET.3.5.6"
 !-------------------------------------------------------------------------
 ! Maximum greenness data sources
@@ -297,6 +298,8 @@ module LDT_pluginIndices
 
    character*50, public,  parameter :: LDT_albnirclsmf25Id = "CLSMF2.5"
    character*50, public,  parameter :: LDT_albvisclsmf25Id = "CLSMF2.5"
+   character*50, public,  parameter :: LDT_albnirclsmj32Id = "CLSMJ3.2"
+   character*50, public,  parameter :: LDT_albvisclsmj32Id = "CLSMJ3.2"
 
 !-------------------------------------------------------------------------
 ! Bottom temperature (Tbot) data sources

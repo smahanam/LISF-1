@@ -5,22 +5,23 @@
 
 module CLSM_util
 
-  use LDT_coreMod,  only            : LDT_rc, LDT_domain
+  use LDT_coreMod,  only            : LDT_rc, LDT_domain, LDT_localPet
   use LDT_numericalMethodsMod, only : LDT_quicksort
   use LDT_constantsMod, ONLY:      &
        RADIUS => LDT_CONST_REARTH, &
        PI => LDT_CONST_PI
   use LDT_paramDataMod
   use LDT_logMod,        only : LDT_logunit, LDT_getNextUnitNumber, &
-       LDT_releaseUnitNumber
+       LDT_releaseUnitNumber, LDT_endrun
   use LDT_domainMod
+  use LDT_gridmappingMod
 
   implicit none
   include 'netcdf.inc'	
 
   private
   public  LDT_RegridRaster, NC_VarID, GEOS2LIS, LDT_g5map, init_geos2lis_mapping, SRTM_maxcat, & 
-       nc_g5_rst, nr_g5_rst, G5_BCSDIR, G52LIS, LISv2g, write_clsm_files, histogram
+       nc_g5_rst, nr_g5_rst, G5_BCSDIR, G52LIS, LISv2g, write_clsm_files, histogram, read_clsm_maskfile
   
   interface LDT_RegridRaster
      module procedure RegridRaster
@@ -563,5 +564,163 @@ module CLSM_util
      end do
 
    end function LISv2g
+!
+! ====================================================================
+!
+! ---------------------------------------------------------------
+
+!BOP
+!
+! !ROUTINE: read_clsm_maskfile
+!  \label{read_clsm_maskfile}
+!
+! !REVISION HISTORY:
+!  03 Sept 2004: Sujay Kumar; Initial Specification
+!  01 June 2012: KR Arsenault; Restructured to simply read in a mask file
+!
+! !INTERFACE:
+ subroutine read_clsm_maskfile( n, localmask )
+
+! !USES:
+  use LDT_coreMod, only : LDT_rc, LDT_localPet
+  use LDT_logMod,  only : LDT_logunit, LDT_getNextUnitNumber, &
+                          LDT_releaseUnitNumber, LDT_endrun
+  use LDT_gridmappingMod
+
+  implicit none
+
+! !ARGUMENTS: 
+  integer, intent(in)  :: n
+  real,    intent(out) :: localmask(LDT_rc%lnc(n),LDT_rc%lnr(n))
+
+! !DESCRIPTION:
+!  This subroutine reads the landmask data and returns the 
+!   mask and surface type arrays.
+!
+!  The arguments are:
+!  \begin{description}
+!   \item[n]
+!    index of nest
+!   \item[localmask]
+!    landmask for the region of interest
+!   \end{description}
+!
+!EOP      
+  integer :: ftn, ios1
+  logical :: file_exists
+  integer :: c, r, t, line
+  integer :: glpnc, glpnr             ! Parameter (global) total columns and rows
+  integer :: subpnc, subpnr           ! Parameter subsetted columns and rows
+  real    :: subparam_gridDesc(20)    ! Input parameter grid desc array
+
+  integer, allocatable :: lat_line(:,:)
+  integer, allocatable :: lon_line(:,:)
+  real,    allocatable :: read_inputparm(:,:)  ! Read input parameter
+!_________________________________________________________________________________
+
+   LDT_rc%nmaskpts = 0.
+   localmask = 0.
+
+!- Check for and open landmask file:
+   inquire(file=trim(LDT_rc%mfile(n)), exist=file_exists)
+   if( file_exists ) then 
+      write(LDT_logunit,*)'[INFO] Reading CLSM mask file:',trim(LDT_rc%mfile(n)), & 
+                          ' (',LDT_localPet,')'
+
+! -------------------------------------------------------------------
+!    PREPARE SUBSETTED PARAMETER GRID FOR READING IN NEEDED DATA
+! -------------------------------------------------------------------
+ !- Map Parameter Grid Info to LIS Target Grid/Projection Info -- 
+    subparam_gridDesc = 0.
+
+    call LDT_RunDomainPts( n, LDT_rc%mask_proj, LDT_rc%mask_gridDesc(n,:), &
+                  glpnc, glpnr, subpnc, subpnr,  &
+                  subparam_gridDesc, lat_line, lon_line )
+
+    allocate( read_inputparm(subpnc, subpnr) )
+    read_inputparm = 0.
+
+ ! -------------------------------------------------------------------
+
+ ! -- Open land/water mask file:
+      ftn = LDT_getNextUnitNumber()
+      open(ftn, file=trim(LDT_rc%mfile(n)),form='unformatted', recl=4, &
+           access='direct', iostat=ios1)
+
+ ! == (1) READ IN GLOBAL/ENTIRE MASK PARAMETER DATA: == 
+ !     (Currently important for reading in other CLSM F2.5 parameters)
+
+    ! Global mask field for current CLSM F2.5 needs:
+      allocate(LDT_rc%global_mask(glpnc,glpnr))  !  Temporary ...
+      LDT_rc%global_mask = LDT_rc%udef
+      line = 0
+      do r = 1, glpnr 
+         do c = 1, glpnc
+            line = line + 1
+            read(ftn,rec=line)  LDT_rc%global_mask(c,r)
+         enddo
+      enddo
+ !  ( to be removed later after full CLSM-F2.5 preprocesser
+ !    is implemented into LDT)
+ ! =======================================================
+
+ ! == (2) READ IN LANDMASK DATA: == 
+      line = 0
+      do r = 1, subpnr
+         do c = 1, subpnc
+            line = (lat_line(c,r)-1)*glpnc + lon_line(c,r)
+            read(ftn,rec=line) read_inputparm(c,r)
+         enddo
+      enddo
+      localmask = read_inputparm
+
+ ! == (3) INCLUDE WATER POINTS, IF SELECTED: == 
+
+      if( LDT_rc%inc_water_pts ) then
+         write(*,*) " FOR CLSM F2.5, PLEASE DO NOT INCLUDE WATER PTS "
+         write(*,*) "  AT THIS TIME .... stopping."
+         call LDT_endrun
+
+         do r = 1, glpnr
+            do c = 1, glpnc
+               if( LDT_rc%global_mask(c,r) == 0 .or. &
+                   LDT_rc%global_mask(c,r) == LDT_rc%waterclass ) then
+                 LDT_rc%global_mask(c,r) = 1 
+               endif
+            enddo
+         enddo
+         do r = 1, LDT_rc%lnr(n)
+            do c = 1, LDT_rc%lnc(n)
+               if( localmask(c,r) == 0 .or. &
+                   localmask(c,r) == LDT_rc%waterclass ) then
+                 localmask(c,r) = 1 
+               endif
+            end do
+         end do
+      end if
+
+   !- Generate total number of accounted mask points:
+! - Eventually will handle subsetted mask:
+!      do r=1,LDT_rc%lnr(n)
+!         do c=1,LDT_rc%lnc(n)
+!             if( localmask(c,r) >= 1 ) then
+! - Set for global mask for now:
+      do r=1,glpnr
+         do c=1,glpnc
+            if( LDT_rc%global_mask(c,r) >= 1 ) then
+                LDT_rc%nmaskpts(n) = LDT_rc%nmaskpts(n) + 1
+            endif
+         end do 
+      end do
+
+      call LDT_releaseUnitNumber(ftn)
+
+   else
+      write(LDT_logunit,*) "Landmask map: ",trim(LDT_rc%mfile(n)), " does not exist"
+      write(LDT_logunit,*) "program stopping ..."
+      call LDT_endrun
+   endif
+
+end subroutine read_clsm_maskfile
  
 end module CLSM_util

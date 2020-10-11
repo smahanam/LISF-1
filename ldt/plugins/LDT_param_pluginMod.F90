@@ -993,6 +993,9 @@ contains
 ! !INTERFACE:
   subroutine LDT_gfrac_plugin
 !EOP
+    use module_climateBCs_gfrac, only : read_ClimateBCs_gfrac, &
+         read_ClimateBCs_gfracMax, read_ClimateBCs_gfracMin
+
     external read_AVHRR_gfrac, read_NCEP_shdmax, read_NCEP_shdmin
 
     external set_AVHRRNative_gfrac_attribs
@@ -1017,10 +1020,15 @@ contains
     call registerreadshdmin(trim(LDT_gfracClimLISId)//char(0),read_NCEP_shdmin)
     call registerreadshdmin(trim(LDT_gfracClimNATId)//char(0),read_NCEPNative_shdmin)
 
- !- Catchment LSM both :
+ !- Catchment LSM:
     call registerreadgfrac(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfrac)
     call registerreadshdmax(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfracmax)
     call registerreadshdmin(trim(LDT_gfracClsmf25Id)//char(0),read_CLSMF25_gfracmin)
+
+!- GSWPH   
+   call registerreadgfrac(trim(LDT_gfracGSWPHId)//char(0),read_ClimateBCs_gfrac) 
+   call registerreadshdmax(trim(LDT_gfracGSWPHId)//char(0),read_ClimateBCs_gfracMax)
+   call registerreadshdmin(trim(LDT_gfracGSWPHId)//char(0),read_ClimateBCs_gfracMin)
 
  !- SAC-HTET v3.5.6 LSM:
     call registerreadgfrac(trim(LDT_gfracSACHTETId)//char(0),read_SACHTET356_gfrac)
