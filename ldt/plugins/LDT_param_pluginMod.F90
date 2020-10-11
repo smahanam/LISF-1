@@ -839,18 +839,15 @@ contains
 ! !INTERFACE:
   subroutine LDT_laisai_plugin
 !EOP
-
+    use module_climateBCs_lai, only : read_ClimateBCs_lai, &
+         read_ClimateBCs_laiMax, read_ClimateBCs_laiMin
     external set_AVHRR_lai_attribs
     external read_AVHRR_lai,read_AVHRR_sai
 
     external set_CLSMF25_lai_attribs
     external read_CLSMF25_lai
 
-!    external set_MODGEO_lai_attribs
-!    external read_MODGEO_lai
-
     external read_CLSMF25_laimax,read_CLSMF25_laimin
-!    external read_MODGEO_laimax,read_MODGEO_laimin
     external read_CONSTANT_lai, read_CONSTANT_sai
 
   ! AVHRR:
@@ -866,16 +863,24 @@ contains
     call registerreadlaimax(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimax)
     call registerreadlaimin(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimin)
 
-  ! MODGEO :
-!    call registersetlaiattribs(trim(LDT_MODGEOlaiId)//char(0),&
-!         set_MODGEO_lai_attribs)
-!    call registerreadlai(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_lai)
-!    call registerreadlaimax(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_laimax)
-!    call registerreadlaimin(trim(LDT_MODGEOlaiId)//char(0),read_MODGEO_laimin)
+    !- GLASS A climatology  
+   call registerreadgfrac(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadshdmax(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadshdmin(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMin)
 
-  ! Constant values:
-    call registerreadlai(trim(LDT_constId)//char(0),read_CONSTANT_lai)
-    call registerreadsai(trim(LDT_constId)//char(0),read_CONSTANT_sai)
+    !- GLASS M climatology  
+   call registerreadgfrac(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadshdmax(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadshdmin(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMin)
+
+   !- MCD15A2H climatology
+   call registerreadgfrac(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadshdmax(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadshdmin(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMin)
+   
+   ! Constant values:
+   call registerreadlai(trim(LDT_constId)//char(0),read_CONSTANT_lai)
+   call registerreadsai(trim(LDT_constId)//char(0),read_CONSTANT_sai)
 
   end subroutine LDT_laisai_plugin
 

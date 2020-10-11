@@ -51,11 +51,17 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
               "MODIS  monthly LAI climatology"
         case( "CLSMF2.5" )
           LDT_laisai_struc(n)%lai%standard_name =&
-             "CLSMF2.5 LAI climatology"
-        case( "MODGEO" )
+               "CLSMF2.5 LAI climatology"
+       case( "GLASSA" )
           LDT_laisai_struc(n)%lai%standard_name =&
-             "MODGEO LAI climatology"
-        case( "CONSTANT" )
+               "GLASS AVIHRR LAI climatology"
+       case( "GLASSM" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "GLASS MODIS LAI climatology"
+       case( "MCD15A2H" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "MCD15A2H v6 LAI climatology"      
+       case( "CONSTANT" )
           LDT_laisai_struc(n)%lai%standard_name =&
              "CONSTANT LAI climatology"
       end select
@@ -81,12 +87,18 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
         case( "MODIS" )
           LDT_laisai_struc(n)%laimin%standard_name =&
              "MODIS min LAI"
-        case( "CLSMF2.5" )
+       case( "CLSMF2.5" )
           LDT_laisai_struc(n)%laimin%standard_name =&
-             "CLSMF2.5 min LAI"
-        case( "MODGEO" )
-          LDT_laisai_struc(n)%laimin%standard_name =&
-             "MODGEO min LAI"
+               "CLSMF2.5 min LAI"
+       case( "GLASSA" )
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "GLASS AVIHRR min LAI"
+       case( "GLASSM" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "GLASS MODIS min LAI"
+       case( "MCD15A2H" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "MCD15A2H v6 min LAI"      
         case( "CONSTANT" )
           LDT_laisai_struc(n)%laimin%standard_name =&
              "CONSTANT min LAI"
@@ -103,10 +115,16 @@ subroutine setLAISAIParmsFullnames(n,datatype,source)
         case( "CLSMF2.5" )
           LDT_laisai_struc(n)%laimax%standard_name =&
              "CLSMF2.5 max LAI"
-        case( "MODGEO" )
-          LDT_laisai_struc(n)%laimax%standard_name =&
-             "MODGEO max LAI"
-        case( "CONSTANT" )
+       case( "GLASSA" )
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "GLASS AVIHRR max LAI"
+       case( "GLASSM" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "GLASS MODIS max LAI"
+       case( "MCD15A2H" )          
+          LDT_laisai_struc(n)%lai%standard_name =&
+               "MCD15A2H v6 max LAI"      
+       case( "CONSTANT" )
           LDT_laisai_struc(n)%laimax%standard_name =&
              "CONSTANT max LAI"
       end select

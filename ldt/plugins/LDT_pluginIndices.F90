@@ -256,7 +256,10 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_avhrrlaiId    = "AVHRR"
    character*50, public,  parameter :: LDT_modislaiId    = "MODIS"
    character*50, public,  parameter :: LDT_clsmf25laiId  = "CLSMF2.5"
-
+   character*50, public,  parameter :: LDT_glassalaiId   = "GLASSA"
+   character*50, public,  parameter :: LDT_glassmlaiId   = "GLASSM"
+   character*50, public,  parameter :: LDT_mcd15a2laiId  = "MCD15A2H"
+   
 !-------------------------------------------------------------------------
 ! Greenness data sources
 !-------------------------------------------------------------------------

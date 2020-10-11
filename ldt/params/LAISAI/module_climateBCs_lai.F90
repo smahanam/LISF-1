@@ -4,17 +4,17 @@
 !-------------------------END NOTICE -- DO NOT EDIT-----------------------
 !BOP
 !
-! !ROUTINE: module_GSWPH_gfrac
-! \label{module_GSWPH_gfrac}
+! !ROUTINE: module_climateBCs_lai
+! \label{module_climateBCs_lai}
 !
 ! !REVISION HISTORY:
-!  20 Apr 2020: Sarith Mahanama Adapted from read_CLSMF25_gfrac.F90, 
+!  20 Apr 2020: Sarith Mahanama Adapted from read_CLSMF25_lai.F90, 
 
 ! !INTERFACE:
 
-module module_climateBCs_gfrac
+module module_climateBCs_lai
 
-  use LDT_gfracMod,only :  LDT_gfrac_struc
+  use LDT_laisaiMod,only :  LDT_laisai_struc
   use LDT_coreMod, only :  LDT_rc
   use LDT_ClimateBCsReader, ONLY : ClimateBCsReader
 
@@ -22,12 +22,12 @@ module module_climateBCs_gfrac
   
   private
 
-  public read_ClimateBCs_gfrac, read_ClimateBCs_gfracMax, read_ClimateBCs_gfracMin
+  public read_ClimateBCs_lai, read_ClimateBCs_laiMax, read_ClimateBCs_laiMin
   real, allocatable, dimension (:,:,:), save :: clim_data
   
   contains
 
-    subroutine read_ClimateBCs_gfrac(nest, array, maskarray)
+    subroutine read_ClimateBCs_lai(nest, array, maskarray)
   
       implicit none
       ! !ARGUMENTS: 
@@ -55,17 +55,17 @@ module module_climateBCs_gfrac
       
       array = LDT_rc%udef
       if (allocated (clim_data)) deallocate (clim_data)
-      call bcr%readDataset (nest,trim(LDT_gfrac_struc(nest)%gfrac%source), &
-           LDT_gfrac_struc(nest)%gfracInterval, LDT_gfrac_struc(nest)%gfrac_proj, array)
+      call bcr%readDataset (nest,trim(LDT_laisai_struc(nest)%lai%source), &
+           LDT_laisai_struc(nest)%laisaiInterval, LDT_laisai_struc(nest)%laisai_proj, array)
 
       allocate (clim_data (size (array,1),size (array,2), size (array,3)))
       clim_data = array
 
-    end subroutine read_ClimateBCs_gfrac
+    end subroutine read_ClimateBCs_lai
 
     ! --------------------------------------------------------------
 
-    subroutine read_ClimateBCs_gfracMax (nest, array, maskarray)
+    subroutine read_ClimateBCs_laiMax (nest, array, maskarray)
 
       implicit none
       ! !ARGUMENTS: 
@@ -82,11 +82,11 @@ module module_climateBCs_gfrac
          end do
       end do
 
-    end subroutine read_ClimateBCs_gfracMax
+    end subroutine read_ClimateBCs_laiMax
 
     ! --------------------------------------------------------------
 
-    subroutine read_ClimateBCs_gfracMin (nest, array, maskarray)
+    subroutine read_ClimateBCs_laiMin (nest, array, maskarray)
 
       implicit none
       ! !ARGUMENTS: 
@@ -103,6 +103,6 @@ module module_climateBCs_gfrac
          end do
       end do
 
-    end subroutine read_ClimateBCs_gfracMin
+    end subroutine read_ClimateBCs_laiMin
     
-  end module module_climateBCs_gfrac
+  end module module_climateBCs_lai
