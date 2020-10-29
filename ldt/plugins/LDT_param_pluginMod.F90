@@ -840,7 +840,7 @@ contains
   subroutine LDT_laisai_plugin
 !EOP
     use module_climateBCs_lai, only : read_ClimateBCs_lai, &
-         read_ClimateBCs_laiMax, read_ClimateBCs_laiMin
+         read_ClimateBCs_laiMax, read_ClimateBCs_laiMin, set_ClimateBCs_laiattribs
     external set_AVHRR_lai_attribs
     external read_AVHRR_lai,read_AVHRR_sai
 
@@ -859,24 +859,27 @@ contains
   ! CLSM F2.5:
     call registersetlaiattribs(trim(LDT_clsmf25laiId)//char(0),&
          set_CLSMF25_lai_attribs)
-    call registerreadlai(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_lai)
+    call registerreadlai   (trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_lai)
     call registerreadlaimax(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimax)
     call registerreadlaimin(trim(LDT_clsmf25laiId)//char(0),read_CLSMF25_laimin)
 
-    !- GLASS A climatology  
-   call registerreadgfrac(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_lai) 
-   call registerreadshdmax(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMax)
-   call registerreadshdmin(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMin)
+    !- GLASS A climatology
+   call registersetlaiattribs (trim(LDT_glassalaiId)//char(0),set_ClimateBCs_laiattribs)  
+   call registerreadlai   (trim(LDT_glassalaiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadlaimax(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadlaimin(trim(LDT_glassalaiId)//char(0),read_ClimateBCs_laiMin)
 
-    !- GLASS M climatology  
-   call registerreadgfrac(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_lai) 
-   call registerreadshdmax(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMax)
-   call registerreadshdmin(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMin)
+   !- GLASS M climatology
+   call registersetlaiattribs (trim(LDT_glassmlaiId)//char(0),set_ClimateBCs_laiattribs)  
+   call registerreadlai   (trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadlaimax(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadlaimin(trim(LDT_glassmlaiId)//char(0),read_ClimateBCs_laiMin)
 
    !- MCD15A2H climatology
-   call registerreadgfrac(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_lai) 
-   call registerreadshdmax(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMax)
-   call registerreadshdmin(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMin)
+   call registersetlaiattribs (trim(LDT_mcd15a2laiId)//char(0),set_ClimateBCs_laiattribs)  
+   call registerreadlai   (trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadlaimax(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadlaimin(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMin)
    
    ! Constant values:
    call registerreadlai(trim(LDT_constId)//char(0),read_CONSTANT_lai)
@@ -1104,7 +1107,9 @@ contains
 !
 ! !INTERFACE:
   subroutine LDT_alb_plugin
-!EOP
+    !EOP
+
+    use module_climateBCs_albedo, only : read_ClimateBCs_albedo
 
     external read_Briegleb_albedo
 
@@ -1147,6 +1152,9 @@ contains
  !- Constant value:
     call registerreadalbedo(trim(LDT_constId)//char(0),read_CONSTANT_albedo)
     call registerreadmxsnoalb(trim(LDT_constId)//char(0),read_CONSTANT_mxsnoalb)
+
+    ! MCD43GF 
+    call registerreadalbedo(trim(LDT_albmcd43gf)//char(0),read_ClimateBCs_alb)
 
  end subroutine LDT_alb_plugin
 

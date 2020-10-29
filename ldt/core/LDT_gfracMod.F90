@@ -175,6 +175,14 @@ contains
       if(LDT_gfrac_struc(n)%gfrac%selectOpt.gt.0) then 
  
          call set_gfrac_attribs( n, LDT_gfrac_struc(n)%gfrac%source )
+         if(trim (LDT_gfrac_struc(n)%gfrac%source) .eq. "GSWPH") then
+            call ESMF_ConfigFindLabel(LDT_config,"Greenness climatology interval:",rc=rc)
+            call ESMF_ConfigGetAttribute(LDT_config,gfracInterval(n),rc=rc)
+            if(gfracInterval(n) == "monthly") LDT_gfrac_struc(n)%gfrac%num_times = 12
+            if(gfracInterval(n) == "8day"   ) LDT_gfrac_struc(n)%gfrac%num_times = 46
+            if(gfracInterval(n) == "5day"   ) LDT_gfrac_struc(n)%gfrac%num_times = 73
+            if(gfracInterval(n) == "daily"  ) LDT_gfrac_struc(n)%gfrac%num_times = 365
+         endif
          LDT_gfrac_struc(n)%gfrac%vlevels  = LDT_gfrac_struc(n)%gfrac%num_times
 
          allocate(LDT_gfrac_struc(n)%gfrac%value(&
@@ -210,7 +218,7 @@ contains
       do n=1,LDT_rc%nnest
          call ESMF_ConfigGetAttribute(LDT_config,gfracInterval(n),rc=rc)
          call LDT_verify(rc,'Greenness climatology interval: not specified')
-         if( trim(gfracInterval(n)) .ne. "monthly" ) then
+         if(( trim(gfracInterval(n)) .ne. "monthly" ).and.(trim (LDT_gfrac_struc(n)%gfrac%source) .ne. "GSWPH")) then 
             write(LDT_logunit,*) "ERR: 'monthly' Greenness fraction interval option specified."
             write(LDT_logunit,*) "    Set ... Greenness climatology interval:  monthly"
             write(LDT_logunit,*) "    Stopping."

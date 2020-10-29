@@ -14,15 +14,17 @@
 
 module module_climateBCs_lai
 
+  use ESMF
   use LDT_laisaiMod,only :  LDT_laisai_struc
-  use LDT_coreMod, only :  LDT_rc
+  use LDT_coreMod, only  :  LDT_rc, LDT_config
   use LDT_ClimateBCsReader, ONLY : ClimateBCsReader
 
   implicit none
   
   private
 
-  public read_ClimateBCs_lai, read_ClimateBCs_laiMax, read_ClimateBCs_laiMin
+  public read_ClimateBCs_lai, read_ClimateBCs_laiMax, read_ClimateBCs_laiMin, &
+       set_ClimateBCs_laiattribs
   real, allocatable, dimension (:,:,:), save :: clim_data
   
   contains
@@ -102,7 +104,26 @@ module module_climateBCs_lai
                  array (i,j) = minval (clim_data (i,j,:))
          end do
       end do
-
+      deallocate (clim_data)
     end subroutine read_ClimateBCs_laiMin
+
+    ! --------------------------------------------------------------
+
+    SUBROUTINE set_ClimateBCs_laiattribs ()
+
+      implicit none
+      integer :: rc
+      character*20           :: laiInterval
+      
+      LDT_laisai_struc(:)%lai%num_bins = 1
+      
+      call ESMF_ConfigFindLabel(LDT_config,"LAI climatology interval:",rc=rc)
+      call ESMF_ConfigGetAttribute(LDT_config,laiInterval,rc=rc)
+            if(laiInterval == "monthly") LDT_laisai_struc(:)%lai%num_times = 12
+            if(laiInterval == "8day"   ) LDT_laisai_struc(:)%lai%num_times = 46
+            if(laiInterval == "5day"   ) LDT_laisai_struc(:)%lai%num_times = 73
+            if(laiInterval == "daily"  ) LDT_laisai_struc(:)%lai%num_times = 365
+      
+    END SUBROUTINE set_ClimateBCs_laiattribs
     
   end module module_climateBCs_lai

@@ -29,7 +29,7 @@ module CLSM_param_routines
   private
 
   public create_CLSM_parameters, catchmentParms_writeHeader, catchmentParms_writeData,  clsm_type_dec, &
-       set_CLSM_param_attribs, CLSMF25_struc, CLSMJ32_struc
+       set_CLSM_param_attribs, CLSMF25_struc, CLSMJ32_struc, sibalb
 
   type :: clsm_type_dec
 
@@ -645,9 +645,7 @@ END SUBROUTINE create_CLSM_parameters
         t_dimID(2) = dimID(2)
 
         if(LDT_gfrac_struc(n)%gfrac%selectOpt.gt.0) then
-           if(LDT_gfrac_struc(n)%gfracInterval.eq."monthly") then !monthly
-              t_dimID(3) = monthID
-           endif
+           if(have_str (trim(LDT_gfrac_struc(n)%gfracInterval))) t_dimID(3) = monthID
         end if
         
         call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
@@ -714,14 +712,14 @@ END SUBROUTINE create_CLSM_parameters
              Clsm_struc(N)%bdrckdpth)
         
         !- Albedo NIR scale factors:
-        if( LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
+        if(have_str (trim(LDT_albedo_struc(n)%albInterval))) t_dimID(3) = monthID
         call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
              Clsm_struc(N)%albnirdir)
         call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
              Clsm_struc(N)%albnirdif)
         
         !- Albedo VIS scale factors:
-        if(LDT_albedo_struc(n)%albInterval.eq."monthly" ) t_dimID(3) = monthID
+        if(have_str (trim(LDT_albedo_struc(n)%albInterval))) t_dimID(3) = monthID
         call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
              Clsm_struc(N)%albvisdir)
         call LDT_writeNETCDFdataHeader(n,ftn,t_dimID,&
@@ -730,6 +728,19 @@ END SUBROUTINE create_CLSM_parameters
         call LDT_verify(nf90_put_att(ftn,NF90_GLOBAL,"ALBEDO_DATA_INTERVAL", &
              LDT_albedo_struc(n)%albInterval))
       end subroutine writeHeader
+
+      ! ---------------------------------------------------------
+      
+      logical function have_str (str)
+        character(*), intent (in) :: str
+        have_str = str == ''
+        if(have_str) then
+           have_str = .FALSE.
+        else
+           have_str = .TRUE.
+        endif
+      end function have_str
+      
   end subroutine catchmentParms_writeHeader
 
  ! ----------------------------------------------------------------------------------
@@ -795,6 +806,394 @@ END SUBROUTINE create_CLSM_parameters
       END subroutine writeData
 
   end subroutine catchmentParms_writeData
+      SUBROUTINE SIBALB (NTILES, ITYP, VLAI, VGRN, &
+           AVISDF, ANIRDF)
+      
+        IMPLICIT NONE
+        INTEGER, INTENT (IN) :: NTILES 
+        REAL,    DIMENSION (:), INTENT (IN)   :: VLAI, VGRN
+        INTEGER, DIMENSION (:), INTENT (IN  ) :: ITYP
+        REAL,    DIMENSION (:) :: AVISDF, ANIRDF !AVISDR, ANIRDR 
+        
+        REAL, PARAMETER :: ALVDRS = 0.1, ALIDRS = 0.2
+        REAL, PARAMETER :: ALVDRD = 0.3, ALIDRD = 0.350
+        REAL, PARAMETER :: ALVDRI = 0.7, ALIDRI = 0.7
+        REAL, PARAMETER :: ZTH    = 0.0, SNW    = 0.0
+    
+        ! ALVDRS:  Albedo of soil for visible   direct  solar radiation.
+        ! ALIDRS:  Albedo of soil for infra-red direct  solar radiation.
+        ! ALVDFS:  Albedo of soil for visible   diffuse solar radiation.
+        ! ALIDFS:  Albedo of soil for infra-red diffuse solar radiation.
+        
+        INTEGER, PARAMETER :: NLAI = 14, NTYPS = 9
+        REAL,    PARAMETER :: EPSLN = 1.E-6, BLAI = 0.5, DLAI = 0.5, ZERO=0., ONE=1.0
+        REAL,    PARAMETER :: ALATRM = BLAI + (NLAI - 1) * DLAI - EPSLN
+        
+        ! OUTPUTS:
+        ! AVISDR:   visible, direct albedo.
+        ! ANIRDR:   near infra-red, direct albedo.
+        ! AVISDF:   visible, diffuse albedo.
+        ! ANIRDF:   near infra-red, diffuse albedo.
+        
+        ! INPUTS:
+        ! VLAI:     the leaf area index.
+        ! VGRN:     the greenness index.
+        ! ZTH:      The cosine of the solar zenith angle => assumed 0. (noon) at daily time step
+        ! SNW:      Snow cover in meters water equivalent=> assumed 0. (snow free)
+        
+        ! ITYP: Vegetation type as follows:
+        !                  1:  BROADLEAF EVERGREEN TREES
+        !                  2:  BROADLEAF DECIDUOUS TREES
+        !                  3:  NEEDLELEAF TREES
+        !                  4:  GROUND COVER
+        !                  5:  BROADLEAF SHRUBS
+        !                  6:  DWARF TREES (TUNDRA)
+        !                  7:  BARE SOIL
+        !                  8:  DESSERT
+        !                  9:  ICE
+        
+        ! LOCAL VARIABLES
+        
+        INTEGER :: I, LAI
+        REAL    :: FAC, GAMMA, BETA, ALPHA, DX, DY, ALA, GRN (2)
+        !, SNWALB (4, NTYPS), SNWMID (NTYPS)
+        
+        !   Constants used in albedo calculations:
+        
+        REAL :: ALVDR (NLAI, 2, NTYPS)
+        REAL :: BTVDR (NLAI, 2, NTYPS)
+        REAL :: GMVDR (NLAI, 2, NTYPS)
+        REAL :: ALIDR (NLAI, 2, NTYPS)
+        REAL :: BTIDR (NLAI, 2, NTYPS)
+        REAL :: GMIDR (NLAI, 2, NTYPS)
+        
+        ! (Data statements for ALVDR described in full; data statements for
+        ! other constants follow same framework.)
+        
+        ! BROADLEAF EVERGREEN (ITYP=4); GREEN=0.33; LAI: .5-7
+        DATA (ALVDR (I, 1, 1), I = 1, 14)                                &
+             /0.0808, 0.0796, 0.0792, 0.0790, 10*0.0789/
+        
+        ! BROADLEAF EVERGREEN (ITYP=4); GREEN=0.67; LAI: .5-7
+        DATA (ALVDR (I, 2, 1), I = 1, 14)                                &
+             /0.0788, 0.0775, 0.0771, 0.0769, 10*0.0768/
+        
+        ! BROADLEAF DECIDUOUS (ITYP=1); GREEN=0.33; LAI: .5-7
+        DATA (ALVDR (I, 1, 2), I = 1, 14)                                &
+             /0.0803, 0.0790, 0.0785, 0.0784, 3*0.0783, 7*0.0782/
+        
+        ! BROADLEAF DECIDUOUS (ITYP=1); GREEN=0.67; LAI: .5-7
+        DATA (ALVDR (I, 2, 2), I = 1, 14)                                &
+             /0.0782, 0.0770, 0.0765, 0.0763, 10*0.0762/
+        
+        ! NEEDLELEAF (ITYP=3); GREEN=0.33; LAI=.5-7
+        DATA (ALVDR (I, 1, 3), I = 1, 14)                                &
+             /0.0758, 0.0746, 0.0742, 0.0740, 10*0.0739/
+        
+        ! NEEDLELEAF (ITYP=3); GREEN=0.67; LAI=.5-7
+        DATA (ALVDR (I, 2, 3), I = 1, 14)                                &
+             /0.0683, 0.0672, 0.0667, 2*0.0665, 9*0.0664/
+        
+        ! GROUNDCOVER (ITYP=4); GREEN=0.33; LAI=.5-7
+        DATA (ALVDR (I, 1, 4), I = 1, 14)                                &
+             /0.2436, 0.2470, 0.2486, 0.2494, 0.2498, 0.2500, 2*0.2501,  &
+             6*0.2502 /
+        
+        ! GROUNDCOVER (ITYP=4); GREEN=0.67; LAI=.5-7
+        DATA (ALVDR (I, 2, 4), I = 1, 14) /14*0.1637/
+        
+        ! BROADLEAF SHRUBS (ITYP=5); GREEN=0.33,LAI=.5-7
+        DATA (ALVDR (I, 1, 5), I = 1, 14)                                &
+             /0.0807, 0.0798, 0.0794, 0.0792, 0.0792, 9*0.0791/
+        
+        ! BROADLEAF SHRUBS (ITYP=5); GREEN=0.67,LAI=.5-7
+        DATA (ALVDR (I, 2, 5), I = 1, 14)                                &
+             /0.0787, 0.0777, 0.0772, 0.0771, 10*0.0770/
+        
+        ! DWARF TREES, OR TUNDRA (ITYP=6); GREEN=0.33,LAI=.5-7
+        DATA (ALVDR (I, 1, 6), I = 1, 14)                                &
+             /0.0802, 0.0791, 0.0787, 0.0786, 10*0.0785/
+        
+        ! DWARF TREES, OR TUNDRA (ITYP=6); GREEN=0.67,LAI=.5-7
+        DATA (ALVDR (I, 2, 6), I = 1, 14)                                &
+             /0.0781, 0.0771, 0.0767, 0.0765, 0.0765, 9*0.0764/
+        
+        ! BARE SOIL
+        DATA (ALVDR (I, 1, 7), I = 1, 14) /14*ALVDRS/
+        DATA (ALVDR (I, 2, 7), I = 1, 14) /14*ALVDRS/
+        
+        ! DESERT
+        DATA (ALVDR (I, 1, 8), I = 1, 14) /14*ALVDRD/
+        DATA (ALVDR (I, 2, 8), I = 1, 14) /14*ALVDRD/
+        
+        ! ICE
+        DATA (ALVDR (I, 1, 9), I = 1, 14) /14*ALVDRI/
+        DATA (ALVDR (I, 2, 9), I = 1, 14) /14*ALVDRI/
+    
+        !**** -----------------------------------------------------------
+        
+        DATA (BTVDR (I, 1, 1), I = 1, 14)                                      &
+             /0.0153, 0.0372, 0.0506, 0.0587, 0.0630, 0.0652, 0.0663,               &
+             0.0668, 0.0671, 0.0672, 4*0.0673 /
+        DATA (BTVDR (I, 2, 1), I = 1, 14)                                      &
+             /0.0135, 0.0354, 0.0487, 0.0568, 0.0611, 0.0633, 0.0644,             &
+             0.0650, 0.0652, 0.0654, 0.0654, 3*0.0655 /
+        DATA (BTVDR (I, 1, 2), I = 1, 14)                                      &
+             /0.0148, 0.0357, 0.0462, 0.0524, 0.0554, 0.0569, 0.0576,             &
+             0.0579, 0.0580, 0.0581, 0.0581, 3*0.0582 /
+        DATA (BTVDR (I, 2, 2), I = 1, 14)                                      &
+             /0.0131, 0.0342, 0.0446, 0.0508, 0.0539, 0.0554, 0.0560,             &
+             0.0564, 0.0565, 5*0.0566 /
+        DATA (BTVDR (I, 1, 3), I = 1, 14)                                      &
+             /0.0108, 0.0334, 0.0478, 0.0571, 0.0624, 0.0652, 0.0666,             &
+             0.0673, 0.0677, 0.0679, 4*0.0680 /
+        DATA (BTVDR (I, 2, 3), I = 1, 14)                                      &
+             /0.0034, 0.0272, 0.0408, 0.0501, 0.0554, 0.0582, 0.0597,             &
+             0.0604, 0.0608, 0.0610, 4*0.0611 /
+        DATA (BTVDR (I, 1, 4), I = 1, 14)                                      &
+             /0.2050, 0.2524, 0.2799, 0.2947, 0.3022, 0.3059, 0.3076,             &
+             0.3085, 0.3088, 0.3090, 4*0.3091 /
+        DATA (BTVDR (I, 2, 4), I = 1, 14)                                      &
+             /0.1084, 0.1404, 0.1617, 0.1754, 0.1837, 0.1887, 0.1915,             &
+             0.1931, 0.1940, 0.1946, 0.1948, 0.1950, 2*0.1951  /
+        DATA (BTVDR (I, 1, 5), I = 1, 14)                                      &
+             /0.0203, 0.0406, 0.0548, 0.0632, 0.0679, 0.0703, 0.0716,             &
+             0.0722, 0.0726, 0.0727, 0.0728, 0.0728, 0.0728, 0.0729 /
+        DATA (BTVDR (I, 2, 5), I = 1, 14)                                      &
+             /0.0184, 0.0385, 0.0526, 0.0611,  0.0658, 0.0683, 0.0696,            &
+             0.0702, 0.0705, 0.0707, 4*0.0708 /
+        DATA (BTVDR (I, 1, 6), I = 1, 14)                                      &
+             /0.0199, 0.0388, 0.0494,  0.0554, 0.0584, 0.0599, 0.0606,            &
+             0.0609, 0.0611, 5*0.0612  /
+        DATA (BTVDR (I, 2, 6), I = 1, 14)                                      &
+             /0.0181, 0.0371, 0.0476, 0.0537,  0.0568, 0.0583, 0.0590,            &
+             0.0593, 0.0595, 0.0595, 4*0.0596 /
+        DATA (BTVDR (I, 1, 7), I = 1, 14) /14*0./
+        DATA (BTVDR (I, 2, 7), I = 1, 14) /14*0./
+        DATA (BTVDR (I, 1, 8), I = 1, 14) /14*0./
+        DATA (BTVDR (I, 2, 8), I = 1, 14) /14*0./
+        DATA (BTVDR (I, 1, 9), I = 1, 14) /14*0./
+        DATA (BTVDR (I, 2, 9), I = 1, 14) /14*0./
+        
+        !**** -----------------------------------------------------------
+        
+        DATA (GMVDR (I, 1, 1), I = 1, 14)                                      &
+             /0.0814, 0.1361, 0.2078, 0.2650, 0.2986, 0.3169,  0.3265,            &
+             0.3313, 0.3337, 0.3348, 0.3354, 0.3357, 2*0.3358 /
+        DATA (GMVDR (I, 2, 1), I = 1, 14)                                      &
+             /0.0760, 0.1336, 0.2034, 0.2622, 0.2969, 0.3159,  0.3259,            &
+         	   0.3309, 0.3333, 0.3346, 0.3352, 0.3354, 2*0.3356 /
+        DATA (GMVDR (I, 1, 2), I = 1, 14)                                      &
+             /0.0834, 0.1252, 0.1558, 0.1927, 0.2131,   0.2237, 0.2290,           &
+         	   0.2315, 0.2327, 0.2332, 0.2335, 2*0.2336, 0.2337 /
+        DATA (GMVDR (I, 2, 2), I = 1, 14)                                      &
+             /0.0789, 0.1235, 0.1531, 0.1912, 0.2122, 0.2232,  0.2286,            &
+        	   0.2312, 0.2324, 0.2330, 0.2333, 0.2334, 2*0.2335 /
+        DATA (GMVDR (I, 1, 3), I = 1, 14)                                      &
+             /0.0647, 0.1342, 0.2215, 0.2968, 0.3432, 0.3696, 0.3838,             &
+         	   0.3912, 0.3950, 0.3968, 0.3978, 0.3982, 0.3984, 0.3985 /
+        DATA (GMVDR (I, 2, 3), I = 1, 14)                                      &
+             /0.0258, 0.1227, 0.1999, 0.2825, 0.3339, 0.3634, 0.3794,             &
+         	   0.3877, 0.3919, 0.3940, 0.3950, 0.3956, 0.3958, 0.3959 /
+        DATA (GMVDR (I, 1, 4), I = 1, 14)                                      &
+             /0.3371, 0.5762, 0.7159, 0.7927, 0.8324, 0.8526,  0.8624,            &
+         	   0.8671, 0.8693, 0.8704, 0.8709, 0.8710, 2*0.8712 /
+        DATA (GMVDR (I, 2, 4), I = 1, 14)                                      &
+             /0.2634, 0.4375, 0.5532, 0.6291, 0.6763, 0.7048, 0.7213,             &
+         	   0.7310, 0.7363, 0.7395, 0.7411, 0.7420, 0.7426, 0.7428 /
+        DATA (GMVDR (I, 1, 5), I = 1, 14)                                      &
+             /0.0971, 0.1544, 0.2511, 0.3157, 0.3548, 0.3768, 0.3886,            &
+             0.3948, 0.3978, 0.3994, 0.4001, 0.4006, 0.4007, 0.4008 /
+        DATA (GMVDR (I, 2, 5), I = 1, 14)                                      &
+             /0.0924, 0.1470, 0.2458, 0.3123, 0.3527, 0.3756, 0.3877,            &
+             0.3942, 0.3974, 0.3990, 0.3998, 0.4002, 0.4004, 0.4005 /
+        DATA (GMVDR (I, 1, 6), I = 1, 14)                                      &
+             /0.0970, 0.1355, 0.1841, 0.2230, 0.2447,  0.2561, 0.2617,           &
+             0.2645, 0.2658, 0.2664, 0.2667, 3*0.2669 /
+        DATA (GMVDR (I, 2, 6), I = 1, 14)                                      &
+             /0.0934, 0.1337, 0.1812, 0.2213, 0.2437, 0.2554, 0.2613,            &
+             0.2642, 0.2656, 0.2662, 0.2665, 0.2667, 0.2667, 0.2668 /
+        DATA (GMVDR (I, 1, 7), I = 1, 14) /14*1./
+        DATA (GMVDR (I, 2, 7), I = 1, 14) /14*1./
+        DATA (GMVDR (I, 1, 8), I = 1, 14) /14*1./
+        DATA (GMVDR (I, 2, 8), I = 1, 14) /14*1./
+        DATA (GMVDR (I, 1, 9), I = 1, 14) /14*1./
+        DATA (GMVDR (I, 2, 9), I = 1, 14) /14*1./
+        
+    !***  -----------------------------------------------------------
+
+        DATA (ALIDR (I, 1, 1), I = 1, 14)                                      &
+             /0.2867,  0.2840, 0.2828, 0.2822, 0.2819, 0.2818, 2*0.2817,          &
+         	   6*0.2816 /
+        DATA (ALIDR (I, 2, 1), I = 1, 14)                                      &
+             /0.3564, 0.3573, 0.3577, 0.3580, 2*0.3581, 8*0.3582 /
+        DATA (ALIDR (I, 1, 2), I = 1, 14)                                      &
+             /0.2848, 0.2819, 0.2804, 0.2798, 0.2795, 2*0.2793, 7*0.2792 /
+        DATA (ALIDR (I, 2, 2), I = 1, 14)                                      &
+             /0.3544, 0.3550, 0.3553, 2*0.3555, 9*0.3556 /
+        DATA (ALIDR (I, 1, 3), I = 1, 14)                                      &
+             /0.2350, 0.2311, 0.2293, 0.2285, 0.2281, 0.2280, 8*0.2279 /
+        DATA (ALIDR (I, 2, 3), I = 1, 14)                                      &
+             /0.2474, 0.2436, 0.2418, 0.2410, 0.2406, 0.2405, 3*0.2404,           &
+         	   5*0.2403 /
+        DATA (ALIDR (I, 1, 4), I = 1, 14)                                      &
+             /0.5816, 0.6157, 0.6391, 0.6556, 0.6673, 0.6758, 0.6820,             &
+         	   0.6866, 0.6899, 0.6924, 0.6943, 0.6956, 0.6966, 0.6974 /
+        DATA (ALIDR (I, 2, 4), I = 1, 14)                                      &
+             /0.5489, 0.5770, 0.5955, 0.6079, 0.6163, 0.6221, 0.6261,             &
+         	   0.6288, 0.6308, 0.6321, 0.6330, 0.6337, 0.6341, 0.6344 /
+        DATA (ALIDR (I, 1, 5), I = 1, 14)                                      &
+             /0.2845, 0.2837, 0.2832, 0.2831, 0.2830, 9*0.2829 /
+        DATA (ALIDR (I, 2, 5), I = 1, 14)                                      &
+             /0.3532, 0.3562, 0.3578,  0.3586, 0.3590, 0.3592, 0.3594,           &
+             0.3594, 0.3594, 5*0.3595 /
+        DATA (ALIDR (I, 1, 6), I = 1, 14)                                      &
+             /0.2825, 0.2812, 0.2806, 0.2803, 0.2802, 9*0.2801 /
+        DATA (ALIDR (I, 2, 6), I = 1, 14)                                      &
+             /0.3512, 0.3538,  0.3552, 0.3559, 0.3562, 0.3564, 0.3565,           &
+             0.3565, 6*0.3566 /
+        DATA (ALIDR (I, 1, 7), I = 1, 14) /14*ALIDRS/
+        DATA (ALIDR (I, 2, 7), I = 1, 14) /14*ALIDRS/
+        DATA (ALIDR (I, 1, 8), I = 1, 14) /14*ALIDRD/
+        DATA (ALIDR (I, 2, 8), I = 1, 14) /14*ALIDRD/
+        DATA (ALIDR (I, 1, 9), I = 1, 14) /14*ALIDRI/
+        DATA (ALIDR (I, 2, 9), I = 1, 14) /14*ALIDRI/
+    
+   !*** -----------------------------------------------------------
+        DATA (BTIDR (I, 1, 1), I = 1, 14)                                      &
+             /0.1291, 0.1707, 0.1969, 0.2125, 0.2216,   0.2267, 0.2295,           &
+         	   0.2311, 0.2319, 0.2323, 0.2326, 2*0.2327, 0.2328 /
+        DATA (BTIDR (I, 2, 1), I = 1, 14)                                      &
+             /0.1939, 0.2357, 0.2598, 0.2735, 0.2810,  0.2851, 0.2874,            &
+         	   0.2885, 0.2892, 0.2895, 0.2897, 3*0.2898 /
+        DATA (BTIDR (I, 1, 2), I = 1, 14)                                      &
+             /0.1217, 0.1522, 0.1713, 0.1820,   0.1879,  0.1910, 0.1926,          &
+        	   0.1935, 0.1939, 0.1942, 2*0.1943, 2*0.1944 /
+        DATA (BTIDR (I, 2, 2), I = 1, 14)                                      &
+             /0.1781, 0.2067, 0.2221, 0.2301,   0.2342,  0.2363, 0.2374,          &
+         	   0.2379, 0.2382, 0.2383, 2*0.2384, 2*0.2385 /
+        DATA (BTIDR (I, 1, 3), I = 1, 14)                                      &
+             /0.0846, 0.1299, 0.1614, 0.1814, 0.1935,   0.2004, 0.2043,           &
+             0.2064, 0.2076, 0.2082, 0.2085, 2*0.2087, 0.2088 /
+        DATA (BTIDR (I, 2, 3), I = 1, 14)                                      &
+             /0.0950, 0.1410, 0.1722, 0.1921, 0.2042, 0.2111,  0.2151,            &
+         	   0.2172, 0.2184, 0.2191, 0.2194, 0.2196, 2*0.2197 /
+        DATA (BTIDR (I, 1, 4), I = 1, 14)                                      &
+             /0.5256, 0.7444, 0.9908, 1.2700, 1.5680, 1.8505, 2.0767,             &
+         	   2.2211, 2.2808, 2.2774, 2.2362, 2.1779, 2.1160, 2.0564 /
+        DATA (BTIDR (I, 2, 4), I = 1, 14)                                      &
+             /0.4843, 0.6714, 0.8577, 1.0335, 1.1812, 1.2858, 1.3458,             &
+         	   1.3688, 1.3685, 1.3546, 1.3360, 1.3168, 1.2989, 1.2838 /
+        DATA (BTIDR (I, 1, 5), I = 1, 14)                                      &
+             /0.1498, 0.1930, 0.2201, 0.2364, 0.2460, 0.2514, 0.2544,            &
+             0.2560, 0.2569, 0.2574, 0.2577, 0.2578, 0.2579, 0.2579 /
+        DATA (BTIDR (I, 2, 5), I = 1, 14)                                      &
+             /0.2184, 0.2656, 0.2927, 0.3078, 0.3159,  0.3202, 0.3224,           &
+             0.3235, 0.3241, 0.3244, 0.3245, 3*0.3246 /
+        DATA (BTIDR (I, 1, 6), I = 1, 14)                                      &
+             /0.1369, 0.1681, 0.1860, 0.1958, 0.2010,  0.2038, 0.2053,           &
+             0.2060, 0.2064, 0.2066, 0.2067, 3*0.2068 /
+        DATA (BTIDR (I, 2, 6), I = 1, 14)                                      &
+             /0.1969, 0.2268, 0.2416,  0.2488, 0.2521, 0.2537, 0.2544,           &
+             0.2547, 0.2548, 5*0.2549 /
+        DATA (BTIDR (I, 1, 7), I = 1, 14) /14*0./
+        DATA (BTIDR (I, 2, 7), I = 1, 14) /14*0./
+        DATA (BTIDR (I, 1, 8), I = 1, 14) /14*0./
+        DATA (BTIDR (I, 2, 8), I = 1, 14) /14*0./
+        DATA (BTIDR (I, 1, 9), I = 1, 14) /14*0./
+        DATA (BTIDR (I, 2, 9), I = 1, 14) /14*0./
+        
+    !*** --------------------------------------------------------------
+        DATA (GMIDR (I, 1, 1), I = 1, 14)                                      &
+             /0.1582, 0.2581, 0.3227, 0.3635, 0.3882, 0.4026, 0.4108,             &
+         	   0.4154, 0.4179, 0.4193, 0.4200, 0.4204, 0.4206, 0.4207 /
+        DATA (GMIDR (I, 2, 1), I = 1, 14)                                      &
+             /0.1934, 0.3141, 0.3818, 0.4200, 0.4415, 0.4533, 0.4598,             &
+         	   0.4633, 0.4651, 0.4662, 0.4667, 0.4671, 2*0.4672 /
+        DATA (GMIDR (I, 1, 2), I = 1, 14)                                      &
+             /0.1347, 0.1871, 0.2277, 0.2515, 0.2651, 0.2727, 0.2768,             &
+         	   0.2790, 0.2801, 0.2808, 0.2811, 0.2812, 0.2813, 0.2814 /
+        DATA (GMIDR (I, 2, 2), I = 1, 14)                                      &
+             /0.1440, 0.2217, 0.2629, 0.2839, 0.2947, 0.3003, 0.3031,             &
+         	   0.3046, 0.3054, 0.3058, 0.3060, 2*0.3061, 0.3062 /
+        DATA (GMIDR (I, 1, 3), I = 1, 14)                                      &
+             /0.1372, 0.2368, 0.3235, 0.3839, 0.4229, 0.4465, 0.4602,             &
+         	   0.4679, 0.4722, 0.4745, 0.4758, 0.4764, 0.4768, 0.4770 /
+        DATA (GMIDR (I, 2, 3), I = 1, 14)                                      &
+             /0.1435, 0.2524, 0.3370, 0.3955, 0.4332, 0.4563, 0.4697,             &
+         	   0.4773, 0.4815, 0.4839, 0.4851, 0.4858, 0.4861, 0.4863 /
+        DATA (GMIDR (I, 1, 4), I = 1, 14)                                      &
+             /0.4298, 0.9651, 1.6189, 2.4084, 3.2992, 4.1928, 4.9611,             &
+         	   5.5095, 5.8085, 5.9069, 5.8726, 5.7674, 5.6346, 5.4944 /
+        DATA (GMIDR (I, 2, 4), I = 1, 14)                                      &
+             /0.4167, 0.8974, 1.4160, 1.9414, 2.4147, 2.7803, 3.0202,             &
+        	   3.1468, 3.1954, 3.1932, 3.1676, 3.1328, 3.0958, 3.0625 /
+        DATA (GMIDR (I, 1, 5), I = 1, 14)                                      &
+             /0.1959, 0.3203, 0.3985, 0.4472, 0.4766, 0.4937, 0.5034,            &
+             0.5088, 0.5117, 0.5134, 0.5143, 0.5147, 0.5150, 0.5152 /
+        DATA (GMIDR (I, 2, 5), I = 1, 14)                                      &
+             /0.2328, 0.3859, 0.4734, 0.5227, 0.5498, 0.5644, 0.5720,            &
+             0.5761, 0.5781, 0.5792, 0.5797, 0.5800, 0.5802, 0.5802 /
+        DATA (GMIDR (I, 1, 6), I = 1, 14)                                      &
+             /0.1447, 0.2244, 0.2698, 0.2953, 0.3094, 0.3170, 0.3211,            &
+             0.3233, 0.3244, 0.3250, 0.3253, 0.3255, 0.3256, 0.3256 /
+        DATA (GMIDR (I, 2, 6), I = 1, 14)                                      &
+             /0.1643, 0.2624, 0.3110, 0.3347, 0.3461, 0.3517, 0.3543,            &
+             0.3556, 0.3562, 0.3564, 0.3565, 0.3566, 0.3566, 0.3566 /
+        DATA (GMIDR (I, 1, 7), I = 1, 14) /14*1./
+        DATA (GMIDR (I, 2, 7), I = 1, 14) /14*1./
+        DATA (GMIDR (I, 1, 8), I = 1, 14) /14*1./
+        DATA (GMIDR (I, 2, 8), I = 1, 14) /14*1./
+        DATA (GMIDR (I, 1, 9), I = 1, 14) /14*1./
+        DATA (GMIDR (I, 2, 9), I = 1, 14) /14*1./
+        
+        DATA GRN /0.33, 0.67/
+        
+        DO I=1,NTILES
+           
+           ALA = AMIN1 (AMAX1 (ZERO, VLAI(I)), ALATRM)
+           LAI = 1 + MAX(0, INT((ALA-BLAI)/DLAI) )
+           DX = (ALA - (BLAI+(LAI-1)*DLAI)) * (ONE/DLAI)
+           DY = (VGRN(I)- GRN(1)) * (ONE/(GRN(2) - GRN(1)))
+           
+           ALPHA = COEFF (ALVDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           BETA  = COEFF (BTVDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           GAMMA = COEFF (GMVDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           
+           GAMMA = MAX(GAMMA,0.01)
+           
+           !	  AVISDR(I) = ALPHA - ZTH(I)*BETA / (GAMMA+ZTH(I))
+           AVISDF(I) = ALPHA-BETA                                  &
+                + 2.*BETA*GAMMA*(1.-GAMMA*ALOG((1.+GAMMA)/GAMMA))
+           
+           ALPHA = COEFF (ALIDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           BETA  = COEFF (BTIDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           GAMMA = COEFF (GMIDR (1, 1, ITYP (I)), NLAI, LAI ,DX, DY)
+           
+           GAMMA = MAX(GAMMA,0.01)
+           
+           !	  ANIRDR(I) = ALPHA - ZTH(I)*BETA / (GAMMA+ZTH(I))
+           ANIRDF(I) = ALPHA-BETA                                  &
+                + 2.*BETA*GAMMA*(1.-GAMMA*ALOG((1.+GAMMA)/GAMMA))
+           
+        END DO
+    
+      contains
+
+        REAL FUNCTION COEFF (TABLE, NTABL, LAI ,DX, DY)
+    
+          implicit none
+          INTEGER NTABL, LAI       
+          REAL TABLE (NTABL, 2), DX, DY
+          
+          COEFF = (TABLE(LAI,  1)                                      &
+               + (TABLE(LAI  ,2) - TABLE(LAI  ,1)) * DY ) * (1.0-DX) &
+               + (TABLE(LAI+1,1)                                     &
+               + (TABLE(LAI+1,2) - TABLE(LAI+1,1)) * DY ) * DX
+          
+        END FUNCTION COEFF
+        
+      END SUBROUTINE SIBALB
 
 !---------------------------------------------------------------------
 
@@ -1063,11 +1462,10 @@ END SUBROUTINE create_CLSM_parameters
          normerr1=err1/catmean
          normerr2=err2/bfmean
 	 endif
-!c---------------------------------------------------------------------
-         
-       END SUBROUTINE BASE_PARAM
 
-! ************************************************************************
+contains
+
+  ! ************************************************************************
 
       SUBROUTINE BASIDEP(                          &
                          IDEP,                     &
@@ -1137,6 +1535,9 @@ END SUBROUTINE create_CLSM_parameters
       if (bug) write(*,*) 'basidep: ok3'
 
     END SUBROUTINE BASIDEP
+  
+END SUBROUTINE BASE_PARAM
+
 
 !*****************************************************************************
 
@@ -2145,60 +2546,555 @@ END SUBROUTINE create_CLSM_parameters
           call RMSE(tabact,tabfit,icount,err4)
           taberr4=err4
           normerr4=err4/sum
-	  endif
-     END SUBROUTINE SAT_PARAM
-!
+       endif
 
-! ******************************************************************
+     contains
 
-!c
-      SUBROUTINE CURVE1(ars1,ars2,ars3,cdcr2,flag)
-      REAL ars1,ars2,ars3,y,x,yp,cdcr2
-      INTEGER i,flag
-!c
-      yp=1.
-      if (abs(ars1+ars2+ars3).le.1.e25) then
-      do i=0,CEILING(cdcr2)
-         x=float(i)
-         if(x > cdcr2) x = cdcr2
-         y=(1.+ars1*x)/(1.+ars2*x+ars3*x*x + 1.e-20)
-         if((y.gt.0.0).and.(((yp -y) .lt. -1.e-4).or.(y.gt.1.)))then
+  ! ******************************************************************
+
+       !c
+       SUBROUTINE CURVE1(ars1,ars2,ars3,cdcr2,flag)
+         REAL ars1,ars2,ars3,y,x,yp,cdcr2
+         INTEGER i,flag
+         !c
+         yp=1.
+         if (abs(ars1+ars2+ars3).le.1.e25) then
+            do i=0,CEILING(cdcr2)
+               x=float(i)
+               if(x > cdcr2) x = cdcr2
+               y=(1.+ars1*x)/(1.+ars2*x+ars3*x*x + 1.e-20)
+               if((y.gt.0.0).and.(((yp -y) .lt. -1.e-4).or.(y.gt.1.)))then
+                  flag=1
+                  goto 99
+               endif
+               yp=y
+            end do
+99          continue
+         else
             flag=1
-            goto 99
-         endif   
-         yp=y
-      end do
- 99   continue
-      else
-	flag=1
-      endif
+         endif
 
     end SUBROUTINE CURVE1
 
-
-! ******************************************************************
-
-      SUBROUTINE CURVE2(arw1,arw2,arw3,arw4,cdcr1,WPWET,flag)
+    
+    ! ******************************************************************
+    
+    SUBROUTINE CURVE2(arw1,arw2,arw3,arw4,cdcr1,WPWET,flag)
       REAL arw1,arw2,arw3,arw4,y,x,yp,cdcr1, wpwet
       INTEGER i,flag
 !c
       yp=1.
       if (abs(arw1+arw2+arw3+arw4).le.1.e25) then
-      do i=0,CEILING(cdcr1)
-         x=float(i)
-         if(x > cdcr1) x = cdcr1
-         y=arw4+(1.-arw4)*(1.+arw1*x)/(1.+arw2*x+arw3*x*x + 1.e-20)
-         if ((y .lt. wpwet).or.((yp -y) .lt. -1.e-4).or.(y.gt.1.)) then
-            flag=1
-            goto 99
-         endif  
-         yp=y
-      end do
-99    continue
+         do i=0,CEILING(cdcr1)
+            x=float(i)
+            if(x > cdcr1) x = cdcr1
+            y=arw4+(1.-arw4)*(1.+arw1*x)/(1.+arw2*x+arw3*x*x + 1.e-20)
+            if ((y .lt. wpwet).or.((yp -y) .lt. -1.e-4).or.(y.gt.1.)) then
+               flag=1
+               goto 99
+            endif
+            yp=y
+         end do
+99       continue
       else
-      flag=1
+         flag=1
       endif
     end SUBROUTINE CURVE2
+! -----------------------------------------------------------------------------------
+
+
+      SUBROUTINE svbksb(u,w,v,m,n,b,x) 
+        implicit none
+        INTEGER m,mp,n,np,NMAX 
+        REAL*8 b(m),u(m,n),v(n,n),w(n),x(n) 
+        PARAMETER (NMAX=500)  !Maximum anticipated value of n
+        !------------------------------------------------------------------------------------------- 
+        ! Solves A · X = B for a vector X, where A is specified by the arrays u, w, v as returned by 
+        ! svdcmp. m and n are the dimensions of a, and will be equal for square matrices. b(1:m) is 
+        ! the input right-hand side. x(1:n) is the output solution vector. No input quantities are 
+        ! destroyed, so the routine may be called sequentially with different b’s. 
+        !-------------------------------------------------------------------------------------------
+
+        INTEGER i,j,jj 
+        REAL*8 s,tmp(NMAX) 
+        do j=1,n !Calculate UTB. 
+           s=0. 
+           if(w(j).ne.0.)then !Nonzero result only if wj is nonzero. 
+              do i=1,m 
+                 s=s+u(i,j)*b(i) 
+              end do
+              s=s/(w(j) + 1.d-20) !This is the divide by wj . 
+           endif
+           tmp(j)=s 
+        end do
+        do j=1,n !Matrix multiply by V to get answer. 
+           s=0. 
+           do jj=1,n 
+              s=s+v(j,jj)*tmp(jj) 
+           end do
+           x(j)=s 
+        end do
+        return 
+      END SUBROUTINE svbksb
+
+!---------------------------------------------------------------------
+
+      SUBROUTINE svdcmp(a,m,n,w,v) 
+        implicit none
+        INTEGER m,n,NMAX 
+        REAL*8, intent (inout)  :: a(m,n)
+        REAL*8, intent (out) :: v(n,n),w(n) 
+        PARAMETER (NMAX=500)  !Maximum anticipated value of n. 
+        !-------------------------------------------------------------------------------------- 
+        ! Given a matrix A(1:m,1:n), this routine computes its singular value decomposition, 
+        ! A = U · W · Vt. The matrix U replaces A on output. The diagonal matrix of singular 
+        ! values W is output as a vector W(1:n). The matrix V (not the transpose Vt) is output 
+        ! as V(1:n,1:n). 
+        !--------------------------------------------------------------------------------------
+
+        INTEGER i,its,j,jj,k,l,nm 
+        REAL*8 anorm,c,f,g,h,s,scale,x,y,z,rv1(NMAX) 
+        real*8, parameter :: EPS=epsilon(1.0d0)
+        g=0.d0  !Householder reduction to bidiagonal form. 
+        scale=0.d0 
+        anorm=0.d0 
+        c =0.d0 
+        f =0.d0 
+        g =0.d0 
+        h =0.d0 
+        s =0.d0 
+        x =0.d0 
+        y =0.d0 
+        z =0.d0 
+        rv1=0.d0 
+        w = 0.d0 
+        v = 0.d0 
+        do i=1,n 
+           l=i+1 
+           rv1(i)=scale*g 
+           g=0.d0 
+           s=0.d0 
+           scale=0.d0 
+           if(i.le.m)then 
+              do k=i,m 
+                 scale=scale+abs(a(k,i)) 
+              end do
+              if(scale.ne.0.d0)then 
+                 do k=i,m 
+                    a(k,i)=a(k,i)/scale 
+                    s=s+a(k,i)*a(k,i) 
+                 end do
+                 f=a(i,i) 
+                 g=-dsign(dsqrt(s),f) 
+                 h=f*g-s 
+                 a(i,i)=f-g 
+                 do j=l,n 
+                    s=0.d0 
+                    do k=i,m 
+                       s=s+a(k,i)*a(k,j) 
+                    end do
+                    f=s/h 
+                    do k=i,m 
+                       a(k,j)=a(k,j)+f*a(k,i) 
+                    end do
+                 end do
+                 do k=i,m 
+                    a(k,i)=scale*a(k,i) 
+                 end do
+              endif
+           endif
+           w(i)=scale *g 
+           g=0.d0 
+           s=0.d0 
+           scale=0.d0 
+           if((i.le.m).and.(i.ne.n))then 
+              do k=l,n 
+                 scale=scale+abs(a(i,k)) 
+              end do
+              if(scale.ne.0.d0)then 
+                 do k=l,n 
+                    a(i,k)=a(i,k)/scale 
+                    s=s+a(i,k)*a(i,k) 
+                 end do
+                 f=a(i,l) 
+                 g=-sign(sqrt(s),f) 
+                 h=f*g-s 
+                 a(i,l)=f-g 
+                 do k=l,n 
+                    rv1(k)=a(i,k)/h 
+                 end do
+                 do j=l,m 
+                    s=0.d0 
+                    do k=l,n 
+                       s=s+a(j,k)*a(i,k) 
+                    end do
+                    do k=l,n 
+                       a(j,k)=a(j,k)+s*rv1(k) 
+                    end do
+                 end do
+                 do k=l,n 
+                    a(i,k)=scale*a(i,k) 
+                 end do
+              endif
+           endif
+           anorm=max(anorm,(abs(w(i))+abs(rv1(i)))) 
+        end do !do i=1,n
+        
+        do i=n,1,-1 !Accumulation of right-hand transformations. 
+           if(i.lt.n)then 
+              if(g.ne.0.d0)then 
+                 do j=l,n       !Double division to avoid possible underflow. 
+                    v(j,i)=(a(i,j)/a(i,l))/g 
+                 end do
+                 do j=l,n 
+                    s=0.d0 
+                    do k=l,n 
+                       s=s+a(i,k)*v(k,j) 
+                    end do
+                    do k=l,n 
+                       v(k,j)=v(k,j)+s*v(k,i) 
+                    end do
+                 end do
+              endif
+              do j=l,n 
+                 v(i,j)=0.d0 
+                 v(j,i)=0.d0 
+              end do
+           endif
+           v(i,i)=1.d0
+           g=rv1(i) 
+           l=i 
+        end do
+        
+        do i=min(m,n),1,-1 !Accumulation of left-hand transformations. 
+           l=i+1 
+           g=w(i) 
+           do j=l,n 
+              a(i,j)=0.d0 
+           end do
+           if(g.ne.0.d0)then 
+              g=1.d0/g 
+              do j=l,n 
+                 s=0.d0 
+                 do k=l,m 
+                    s=s+a(k,i)*a(k,j) 
+                 end do
+                 f=(s/a(i,i))*g 
+                 do k=i,m 
+                    a(k,j)=a(k,j)+f*a(k,i) 
+                 end do
+              end do
+              do j=i,m 
+                 a(j,i)=a(j,i)*g 
+              end do
+           else
+              do j= i,m 
+                 a(j,i)=0.d0 
+              end do
+           endif
+           a(i,i)=a(i,i)+1.d0 
+        end do
+        
+        do k=n,1,-1 !Diagonalization of the bidiagonal form: Loop over 
+           !singular values, and over allowed iterations. 
+           do its=1,30 
+              do l=k,1,-1 !Test for splitting. 
+                 nm=l-1 !Note that rv1(1) is always zero.
+                 if( abs(rv1(l)) <= EPS*anorm ) goto 2 
+                 if( abs(w(nm) ) <= EPS*anorm ) goto 1  
+              end do
+1             c=0.d0 !Cancellation of rv1(l), if l > 1. 
+              s=1.d0 
+              do i=l,k 
+                 f=s*rv1(i) 
+                 rv1(i)=c*rv1(i) 
+                 if( abs(f) <= EPS*anorm ) goto 2 
+                 g=w(i) 
+                 h=pythag(f,g) 
+                 w(i)=h 
+                 h=1.d0/h 
+                 c= (g*h) 
+                 s=-(f*h) 
+                 do j=1,m 
+                    y=a(j,nm) 
+                    z=a(j,i) 
+                    a(j,nm)=(y*c)+(z*s) 
+                    a(j,i)=-(y*s)+(z*c) 
+                 end do
+              end do
+2             z=w(k) 
+              if(l.eq.k)then   !Convergence. 
+                 if(z.lt.0.d0)then !Singular value is made nonnegative. 
+                    w(k)=-z 
+                    do j=1,n 
+                       v(j,k)=-v(j,k) 
+                    end do
+                 endif
+                 goto 3 
+              endif
+              if(its.eq.30) print *, 'no convergence in svdcmp' 
+ !             if(its.ge.4)  print *, 'its = ',its
+              x=w(l) !Shift from bottom 2-by-2 minor. 
+              nm=k-1 
+              y=w(nm) 
+              g=rv1(nm) 
+              h=rv1(k) 
+              f=((y-z)*(y+z)+(g-h)*(g+h))/(2.0*h*y) 
+              g=pythag(f,1.d0) 
+              f=((x-z)*(x+z)+h*((y/(f+sign(g,f)))-h))/x 
+              c=1.d0 !Next QR transformation: 
+              s=1.d0 
+              do j=l,nm 
+                 i=j+1 
+                 g=rv1(i) 
+                 y=w(i) 
+                 h=s*g 
+                 g=c*g 
+                 z=pythag(f,h) 
+                 rv1(j)=z 
+                 c=f/z 
+                 s=h/z 
+                 f= (x*c)+(g*s) 
+                 g=-(x*s)+(g*c) 
+                 h=y*s 
+                 y=y*c 
+                 do jj=1,n 
+                    x=v(jj,j) 
+                    z=v(jj,i) 
+                    v(jj,j)= (x*c)+(z*s) 
+                    v(jj,i)=-(x*s)+(z*c) 
+                 end do
+                 z=pythag(f,h) 
+                 w(j)=z !Rotation can be arbitrary if z = 0. 
+                 if(z.ne.0.d0)then 
+                    z=1.d0/z 
+                    c=f*z 
+                    s=h*z 
+                 endif
+                 f= (c*g)+(s*y) 
+                 x=-(s*g)+(c*y) 
+                 do jj=1,m 
+                    y=a(jj,j) 
+                    z=a(jj,i) 
+                    a(jj,j)= (y*c)+(z*s) 
+                    a(jj,i)=-(y*s)+(z*c) 
+                 end do
+              end do !j=l;nm 
+              rv1(l)=0.d0 
+              rv1(k)=f 
+              w(k)=x 
+           end do !its=1,30
+3          continue 
+        end do !k=n,1,-1 
+        return 
+      END SUBROUTINE svdcmp
+
+!
+! ________________________________________________________________________________
+!     
+      REAL*8 FUNCTION pythag(a,b) 
+        REAL*8 a,b 
+        !Computes sqrt(a**2 + b**2) without destructive underflow or overflow.
+        REAL*8 absa,absb 
+        absa=abs(a) 
+        absb=abs(b) 
+        if(absa.gt.absb)then 
+           pythag=absa*sqrt(1.+(absb/absa)**2) 
+        else 
+           if(absb.eq.0.)then 
+              pythag=0. 
+           else
+              pythag=absb*sqrt(1.+(absa/absb)**2) 
+           endif
+        endif
+        return 
+      END FUNCTION pythag
+!
+! ________________________________________________________________________________
+!     
+
+      SUBROUTINE savgol(c,np,nl,nr,ld,m)
+      implicit none
+      INTEGER ld,m,nl,np,nr,MMAX 
+      real c(np) 
+      PARAMETER (MMAX=6)
+!-------------------------------------------------------------------------------------------- 
+!USES lubksb,ludcmp given below. 
+!Returns in c(1:np), in wrap-around order (see reference) consistent with the argument respns 
+!in routine convlv, a set of Savitzky-Golay filter coefficients. nl is the number of leftward 
+!(past) data points used, while nr is the number of rightward (future) data points, making 
+!the total number of data points used nl +nr+1. ld is the order of the derivative desired 
+!(e.g., ld = 0 for smoothed function). m is the order of the smoothing polynomial, also 
+!equal to the highest conserved moment; usual values are m = 2 or m = 4. 
+!--------------------------------------------------------------------------------------------
+INTEGER d,icode,imj,ipj,j,k,kk,mm,indx(MMAX+1) 
+real fac,sum,a(MMAX+1,MMAX+1),b(MMAX+1)
+if(np.lt.nl+nr+1.or.nl.lt.0.or.nr.lt.0.or.ld.gt.m.or.m.gt.MMAX  & 
+	  .or.nl+nr.lt.m) pause ' Bad args in savgol.' 
+	do ipj=0,2*m        !Set up the normal equations of the desired leastsquares fit. 
+    	sum=0. 
+    if(ipj.eq.0) sum=1. 
+    do k=1,nr 
+      sum=sum+dfloat(k)**ipj 
+    end do 
+    do k=1,nl 
+      sum=sum+dfloat(-k)**ipj 
+    end do 
+    mm=min(ipj,2*m-ipj) 
+    do imj=-mm,mm,2 
+      a(1+(ipj+imj)/2,1+(ipj-imj)/2)=sum 
+    end do 
+  end do
+
+  call ludcmp(a,m+1,MMAX+1,indx,d,icode)    !Solve them: LU decomposition. 
+
+  do j=1,m+1 
+    b(j)=0. 
+  end do 
+  b(ld+1)=1.      !Right-hand side vector is unit vector, depending on which derivative we want. 
+
+  call lubksb(a,m+1,MMAX+1,indx,b)   !Backsubstitute, giving one row of the inverse matrix. 
+
+  do kk=1,np                         !Zero the output array (it may be bigger than the number 
+    c(kk)=0.                         !of coefficients).  
+  end do 
+  do k=-nl,nr                        !Each Savitzky-Golay coefficient is the dot product 
+    sum=b(1)                         !of powers of an integer with the inverse matrix row. 
+    fac=1. 
+    do mm=1,m 
+      fac=fac*k 
+      sum=sum+b(mm+1)*fac 
+    end do 
+    kk=mod(np-k,np)+1                !Store in wrap-around order. 
+    c(kk)=sum 
+  end do
+  return 
+END SUBROUTINE savgol
+
+!***************************************************************
+!* Given an N x N matrix A, this routine replaces it by the LU *
+!* decomposition of a rowwise permutation of itself. A and N   *
+!* are input. INDX is an output vector which records the row   *
+!* permutation effected by the partial pivoting; D is output   *
+!* as -1 or 1, depending on whether the number of row inter-   *
+!* changes was even or odd, respectively. This routine is used *
+!* in combination with LUBKSB to solve linear equations or to  *
+!* invert a matrix. Return code is 1, if matrix is singular.   *
+!***************************************************************
+ Subroutine LUDCMP(A,N,NP,INDX,D,CODE)
+INTEGER, PARAMETER :: NMAX=100
+REAL, PARAMETER :: TINY=1E-12
+ real  AMAX,DUM, SUM, A(NP,NP),VV(NMAX)
+ INTEGER CODE, D, INDX(N),NP,N,I,J,K,IMAX
+
+ D=1; CODE=0
+
+ DO I=1,N
+   AMAX=0.
+   DO J=1,N
+     IF (ABS(A(I,J)).GT.AMAX) AMAX=ABS(A(I,J))
+   END DO ! j loop
+   IF(AMAX.LT.TINY) THEN
+     CODE = 1
+     RETURN
+   END IF
+   VV(I) = 1. / AMAX
+ END DO ! i loop
+
+ DO J=1,N
+   DO I=1,J-1
+     SUM = A(I,J)
+     DO K=1,I-1
+       SUM = SUM - A(I,K)*A(K,J) 
+     END DO ! k loop
+     A(I,J) = SUM
+   END DO ! i loop
+   AMAX = 0.
+   DO I=J,N
+     SUM = A(I,J)
+     DO K=1,J-1
+       SUM = SUM - A(I,K)*A(K,J) 
+     END DO ! k loop
+     A(I,J) = SUM
+     DUM = VV(I)*ABS(SUM)
+     IF(DUM.GE.AMAX) THEN
+       IMAX = I
+       AMAX = DUM
+     END IF
+   END DO ! i loop  
+   
+   IF(J.NE.IMAX) THEN
+     DO K=1,N
+       DUM = A(IMAX,K)
+       A(IMAX,K) = A(J,K)
+       A(J,K) = DUM
+     END DO ! k loop
+     D = -D
+     VV(IMAX) = VV(J)
+   END IF
+
+   INDX(J) = IMAX
+   IF(ABS(A(J,J)) < TINY) A(J,J) = TINY
+
+   IF(J.NE.N) THEN
+     DUM = 1. / A(J,J)
+     DO I=J+1,N
+       A(I,J) = A(I,J)*DUM
+     END DO ! i loop
+   END IF 
+ END DO ! j loop
+
+ RETURN
+ END Subroutine LUDCMP
+
+
+!******************************************************************
+!* Solves the set of N linear equations A . X = B.  Here A is     *
+!* input, not as the matrix A but rather as its LU decomposition, *
+!* determined by the routine LUDCMP. INDX is input as the permuta-*
+!* tion vector returned by LUDCMP. B is input as the right-hand   *
+!* side vector B, and returns with the solution vector X. A, N and*
+!* INDX are not modified by this routine and can be used for suc- *
+!* cessive calls with different right-hand sides. This routine is *
+!* also efficient for plain matrix inversion.                     *
+!******************************************************************
+ Subroutine LUBKSB(A,N,NP,INDX,B)
+ INTEGER :: II,I,J,LL,N,NP
+ real  SUM, A(NP,NP),B(N)
+ INTEGER INDX(N)
+
+ II = 0
+
+ DO I=1,N
+   LL = INDX(I)
+   SUM = B(LL)
+   B(LL) = B(I)
+   IF(II.NE.0) THEN
+     DO J=II,I-1
+       SUM = SUM - A(I,J)*B(J)
+     END DO ! j loop
+   ELSE IF(SUM.NE.0.) THEN
+     II = I
+   END IF
+   B(I) = SUM
+ END DO ! i loop
+
+ DO I=N,1,-1
+   SUM = B(I)
+   IF(I < N) THEN
+     DO J=I+1,N
+       SUM = SUM - A(I,J)*B(J)
+     END DO ! j loop
+   END IF
+   B(I) = SUM / A(I,I)
+ END DO ! i loop
+
+ RETURN
+END Subroutine LUBKSB
+         
+  END SUBROUTINE SAT_PARAM
+!
+
 
 
 ! ******************************************************************
@@ -2988,497 +3884,6 @@ END SUBROUTINE create_CLSM_parameters
 
     END SUBROUTINE SMTOT
 
-! -----------------------------------------------------------------------------------
-
-
-      SUBROUTINE svbksb(u,w,v,m,n,b,x) 
-        implicit none
-        INTEGER m,mp,n,np,NMAX 
-        REAL*8 b(m),u(m,n),v(n,n),w(n),x(n) 
-        PARAMETER (NMAX=500)  !Maximum anticipated value of n
-        !------------------------------------------------------------------------------------------- 
-        ! Solves A · X = B for a vector X, where A is specified by the arrays u, w, v as returned by 
-        ! svdcmp. m and n are the dimensions of a, and will be equal for square matrices. b(1:m) is 
-        ! the input right-hand side. x(1:n) is the output solution vector. No input quantities are 
-        ! destroyed, so the routine may be called sequentially with different b’s. 
-        !-------------------------------------------------------------------------------------------
-
-        INTEGER i,j,jj 
-        REAL*8 s,tmp(NMAX) 
-        do j=1,n !Calculate UTB. 
-           s=0. 
-           if(w(j).ne.0.)then !Nonzero result only if wj is nonzero. 
-              do i=1,m 
-                 s=s+u(i,j)*b(i) 
-              end do
-              s=s/(w(j) + 1.d-20) !This is the divide by wj . 
-           endif
-           tmp(j)=s 
-        end do
-        do j=1,n !Matrix multiply by V to get answer. 
-           s=0. 
-           do jj=1,n 
-              s=s+v(j,jj)*tmp(jj) 
-           end do
-           x(j)=s 
-        end do
-        return 
-      END SUBROUTINE svbksb
-
-!---------------------------------------------------------------------
-
-      SUBROUTINE svdcmp(a,m,n,w,v) 
-        implicit none
-        INTEGER m,n,NMAX 
-        REAL*8, intent (inout)  :: a(m,n)
-        REAL*8, intent (out) :: v(n,n),w(n) 
-        PARAMETER (NMAX=500)  !Maximum anticipated value of n. 
-        !-------------------------------------------------------------------------------------- 
-        ! Given a matrix A(1:m,1:n), this routine computes its singular value decomposition, 
-        ! A = U · W · Vt. The matrix U replaces A on output. The diagonal matrix of singular 
-        ! values W is output as a vector W(1:n). The matrix V (not the transpose Vt) is output 
-        ! as V(1:n,1:n). 
-        !--------------------------------------------------------------------------------------
-
-        INTEGER i,its,j,jj,k,l,nm 
-        REAL*8 anorm,c,f,g,h,s,scale,x,y,z,rv1(NMAX) 
-        real*8, parameter :: EPS=epsilon(1.0d0)
-        g=0.d0  !Householder reduction to bidiagonal form. 
-        scale=0.d0 
-        anorm=0.d0 
-        c =0.d0 
-        f =0.d0 
-        g =0.d0 
-        h =0.d0 
-        s =0.d0 
-        x =0.d0 
-        y =0.d0 
-        z =0.d0 
-        rv1=0.d0 
-        w = 0.d0 
-        v = 0.d0 
-        do i=1,n 
-           l=i+1 
-           rv1(i)=scale*g 
-           g=0.d0 
-           s=0.d0 
-           scale=0.d0 
-           if(i.le.m)then 
-              do k=i,m 
-                 scale=scale+abs(a(k,i)) 
-              end do
-              if(scale.ne.0.d0)then 
-                 do k=i,m 
-                    a(k,i)=a(k,i)/scale 
-                    s=s+a(k,i)*a(k,i) 
-                 end do
-                 f=a(i,i) 
-                 g=-dsign(dsqrt(s),f) 
-                 h=f*g-s 
-                 a(i,i)=f-g 
-                 do j=l,n 
-                    s=0.d0 
-                    do k=i,m 
-                       s=s+a(k,i)*a(k,j) 
-                    end do
-                    f=s/h 
-                    do k=i,m 
-                       a(k,j)=a(k,j)+f*a(k,i) 
-                    end do
-                 end do
-                 do k=i,m 
-                    a(k,i)=scale*a(k,i) 
-                 end do
-              endif
-           endif
-           w(i)=scale *g 
-           g=0.d0 
-           s=0.d0 
-           scale=0.d0 
-           if((i.le.m).and.(i.ne.n))then 
-              do k=l,n 
-                 scale=scale+abs(a(i,k)) 
-              end do
-              if(scale.ne.0.d0)then 
-                 do k=l,n 
-                    a(i,k)=a(i,k)/scale 
-                    s=s+a(i,k)*a(i,k) 
-                 end do
-                 f=a(i,l) 
-                 g=-sign(sqrt(s),f) 
-                 h=f*g-s 
-                 a(i,l)=f-g 
-                 do k=l,n 
-                    rv1(k)=a(i,k)/h 
-                 end do
-                 do j=l,m 
-                    s=0.d0 
-                    do k=l,n 
-                       s=s+a(j,k)*a(i,k) 
-                    end do
-                    do k=l,n 
-                       a(j,k)=a(j,k)+s*rv1(k) 
-                    end do
-                 end do
-                 do k=l,n 
-                    a(i,k)=scale*a(i,k) 
-                 end do
-              endif
-           endif
-           anorm=max(anorm,(abs(w(i))+abs(rv1(i)))) 
-        end do !do i=1,n
-        
-        do i=n,1,-1 !Accumulation of right-hand transformations. 
-           if(i.lt.n)then 
-              if(g.ne.0.d0)then 
-                 do j=l,n       !Double division to avoid possible underflow. 
-                    v(j,i)=(a(i,j)/a(i,l))/g 
-                 end do
-                 do j=l,n 
-                    s=0.d0 
-                    do k=l,n 
-                       s=s+a(i,k)*v(k,j) 
-                    end do
-                    do k=l,n 
-                       v(k,j)=v(k,j)+s*v(k,i) 
-                    end do
-                 end do
-              endif
-              do j=l,n 
-                 v(i,j)=0.d0 
-                 v(j,i)=0.d0 
-              end do
-           endif
-           v(i,i)=1.d0
-           g=rv1(i) 
-           l=i 
-        end do
-        
-        do i=min(m,n),1,-1 !Accumulation of left-hand transformations. 
-           l=i+1 
-           g=w(i) 
-           do j=l,n 
-              a(i,j)=0.d0 
-           end do
-           if(g.ne.0.d0)then 
-              g=1.d0/g 
-              do j=l,n 
-                 s=0.d0 
-                 do k=l,m 
-                    s=s+a(k,i)*a(k,j) 
-                 end do
-                 f=(s/a(i,i))*g 
-                 do k=i,m 
-                    a(k,j)=a(k,j)+f*a(k,i) 
-                 end do
-              end do
-              do j=i,m 
-                 a(j,i)=a(j,i)*g 
-              end do
-           else
-              do j= i,m 
-                 a(j,i)=0.d0 
-              end do
-           endif
-           a(i,i)=a(i,i)+1.d0 
-        end do
-        
-        do k=n,1,-1 !Diagonalization of the bidiagonal form: Loop over 
-           !singular values, and over allowed iterations. 
-           do its=1,30 
-              do l=k,1,-1 !Test for splitting. 
-                 nm=l-1 !Note that rv1(1) is always zero.
-                 if( abs(rv1(l)) <= EPS*anorm ) goto 2 
-                 if( abs(w(nm) ) <= EPS*anorm ) goto 1  
-              end do
-1             c=0.d0 !Cancellation of rv1(l), if l > 1. 
-              s=1.d0 
-              do i=l,k 
-                 f=s*rv1(i) 
-                 rv1(i)=c*rv1(i) 
-                 if( abs(f) <= EPS*anorm ) goto 2 
-                 g=w(i) 
-                 h=pythag(f,g) 
-                 w(i)=h 
-                 h=1.d0/h 
-                 c= (g*h) 
-                 s=-(f*h) 
-                 do j=1,m 
-                    y=a(j,nm) 
-                    z=a(j,i) 
-                    a(j,nm)=(y*c)+(z*s) 
-                    a(j,i)=-(y*s)+(z*c) 
-                 end do
-              end do
-2             z=w(k) 
-              if(l.eq.k)then   !Convergence. 
-                 if(z.lt.0.d0)then !Singular value is made nonnegative. 
-                    w(k)=-z 
-                    do j=1,n 
-                       v(j,k)=-v(j,k) 
-                    end do
-                 endif
-                 goto 3 
-              endif
-              if(its.eq.30) print *, 'no convergence in svdcmp' 
- !             if(its.ge.4)  print *, 'its = ',its
-              x=w(l) !Shift from bottom 2-by-2 minor. 
-              nm=k-1 
-              y=w(nm) 
-              g=rv1(nm) 
-              h=rv1(k) 
-              f=((y-z)*(y+z)+(g-h)*(g+h))/(2.0*h*y) 
-              g=pythag(f,1.d0) 
-              f=((x-z)*(x+z)+h*((y/(f+sign(g,f)))-h))/x 
-              c=1.d0 !Next QR transformation: 
-              s=1.d0 
-              do j=l,nm 
-                 i=j+1 
-                 g=rv1(i) 
-                 y=w(i) 
-                 h=s*g 
-                 g=c*g 
-                 z=pythag(f,h) 
-                 rv1(j)=z 
-                 c=f/z 
-                 s=h/z 
-                 f= (x*c)+(g*s) 
-                 g=-(x*s)+(g*c) 
-                 h=y*s 
-                 y=y*c 
-                 do jj=1,n 
-                    x=v(jj,j) 
-                    z=v(jj,i) 
-                    v(jj,j)= (x*c)+(z*s) 
-                    v(jj,i)=-(x*s)+(z*c) 
-                 end do
-                 z=pythag(f,h) 
-                 w(j)=z !Rotation can be arbitrary if z = 0. 
-                 if(z.ne.0.d0)then 
-                    z=1.d0/z 
-                    c=f*z 
-                    s=h*z 
-                 endif
-                 f= (c*g)+(s*y) 
-                 x=-(s*g)+(c*y) 
-                 do jj=1,m 
-                    y=a(jj,j) 
-                    z=a(jj,i) 
-                    a(jj,j)= (y*c)+(z*s) 
-                    a(jj,i)=-(y*s)+(z*c) 
-                 end do
-              end do !j=l;nm 
-              rv1(l)=0.d0 
-              rv1(k)=f 
-              w(k)=x 
-           end do !its=1,30
-3          continue 
-        end do !k=n,1,-1 
-        return 
-      END SUBROUTINE svdcmp
-
-!
-! ________________________________________________________________________________
-!     
-      REAL*8 FUNCTION pythag(a,b) 
-        REAL*8 a,b 
-        !Computes sqrt(a**2 + b**2) without destructive underflow or overflow.
-        REAL*8 absa,absb 
-        absa=abs(a) 
-        absb=abs(b) 
-        if(absa.gt.absb)then 
-           pythag=absa*sqrt(1.+(absb/absa)**2) 
-        else 
-           if(absb.eq.0.)then 
-              pythag=0. 
-           else
-              pythag=absb*sqrt(1.+(absa/absb)**2) 
-           endif
-        endif
-        return 
-      END FUNCTION pythag
-!
-! ________________________________________________________________________________
-!     
-
-      SUBROUTINE savgol(c,np,nl,nr,ld,m)
-      implicit none
-      INTEGER ld,m,nl,np,nr,MMAX 
-      real c(np) 
-      PARAMETER (MMAX=6)
-!-------------------------------------------------------------------------------------------- 
-!USES lubksb,ludcmp given below. 
-!Returns in c(1:np), in wrap-around order (see reference) consistent with the argument respns 
-!in routine convlv, a set of Savitzky-Golay filter coefficients. nl is the number of leftward 
-!(past) data points used, while nr is the number of rightward (future) data points, making 
-!the total number of data points used nl +nr+1. ld is the order of the derivative desired 
-!(e.g., ld = 0 for smoothed function). m is the order of the smoothing polynomial, also 
-!equal to the highest conserved moment; usual values are m = 2 or m = 4. 
-!--------------------------------------------------------------------------------------------
-INTEGER d,icode,imj,ipj,j,k,kk,mm,indx(MMAX+1) 
-real fac,sum,a(MMAX+1,MMAX+1),b(MMAX+1)
-if(np.lt.nl+nr+1.or.nl.lt.0.or.nr.lt.0.or.ld.gt.m.or.m.gt.MMAX  & 
-	  .or.nl+nr.lt.m) pause ' Bad args in savgol.' 
-	do ipj=0,2*m        !Set up the normal equations of the desired leastsquares fit. 
-    	sum=0. 
-    if(ipj.eq.0) sum=1. 
-    do k=1,nr 
-      sum=sum+dfloat(k)**ipj 
-    end do 
-    do k=1,nl 
-      sum=sum+dfloat(-k)**ipj 
-    end do 
-    mm=min(ipj,2*m-ipj) 
-    do imj=-mm,mm,2 
-      a(1+(ipj+imj)/2,1+(ipj-imj)/2)=sum 
-    end do 
-  end do
-
-  call ludcmp(a,m+1,MMAX+1,indx,d,icode)    !Solve them: LU decomposition. 
-
-  do j=1,m+1 
-    b(j)=0. 
-  end do 
-  b(ld+1)=1.      !Right-hand side vector is unit vector, depending on which derivative we want. 
-
-  call lubksb(a,m+1,MMAX+1,indx,b)   !Backsubstitute, giving one row of the inverse matrix. 
-
-  do kk=1,np                         !Zero the output array (it may be bigger than the number 
-    c(kk)=0.                         !of coefficients).  
-  end do 
-  do k=-nl,nr                        !Each Savitzky-Golay coefficient is the dot product 
-    sum=b(1)                         !of powers of an integer with the inverse matrix row. 
-    fac=1. 
-    do mm=1,m 
-      fac=fac*k 
-      sum=sum+b(mm+1)*fac 
-    end do 
-    kk=mod(np-k,np)+1                !Store in wrap-around order. 
-    c(kk)=sum 
-  end do
-  return 
-END SUBROUTINE savgol
-
-!***************************************************************
-!* Given an N x N matrix A, this routine replaces it by the LU *
-!* decomposition of a rowwise permutation of itself. A and N   *
-!* are input. INDX is an output vector which records the row   *
-!* permutation effected by the partial pivoting; D is output   *
-!* as -1 or 1, depending on whether the number of row inter-   *
-!* changes was even or odd, respectively. This routine is used *
-!* in combination with LUBKSB to solve linear equations or to  *
-!* invert a matrix. Return code is 1, if matrix is singular.   *
-!***************************************************************
- Subroutine LUDCMP(A,N,NP,INDX,D,CODE)
-INTEGER, PARAMETER :: NMAX=100
-REAL, PARAMETER :: TINY=1E-12
- real  AMAX,DUM, SUM, A(NP,NP),VV(NMAX)
- INTEGER CODE, D, INDX(N),NP,N,I,J,K,IMAX
-
- D=1; CODE=0
-
- DO I=1,N
-   AMAX=0.
-   DO J=1,N
-     IF (ABS(A(I,J)).GT.AMAX) AMAX=ABS(A(I,J))
-   END DO ! j loop
-   IF(AMAX.LT.TINY) THEN
-     CODE = 1
-     RETURN
-   END IF
-   VV(I) = 1. / AMAX
- END DO ! i loop
-
- DO J=1,N
-   DO I=1,J-1
-     SUM = A(I,J)
-     DO K=1,I-1
-       SUM = SUM - A(I,K)*A(K,J) 
-     END DO ! k loop
-     A(I,J) = SUM
-   END DO ! i loop
-   AMAX = 0.
-   DO I=J,N
-     SUM = A(I,J)
-     DO K=1,J-1
-       SUM = SUM - A(I,K)*A(K,J) 
-     END DO ! k loop
-     A(I,J) = SUM
-     DUM = VV(I)*ABS(SUM)
-     IF(DUM.GE.AMAX) THEN
-       IMAX = I
-       AMAX = DUM
-     END IF
-   END DO ! i loop  
-   
-   IF(J.NE.IMAX) THEN
-     DO K=1,N
-       DUM = A(IMAX,K)
-       A(IMAX,K) = A(J,K)
-       A(J,K) = DUM
-     END DO ! k loop
-     D = -D
-     VV(IMAX) = VV(J)
-   END IF
-
-   INDX(J) = IMAX
-   IF(ABS(A(J,J)) < TINY) A(J,J) = TINY
-
-   IF(J.NE.N) THEN
-     DUM = 1. / A(J,J)
-     DO I=J+1,N
-       A(I,J) = A(I,J)*DUM
-     END DO ! i loop
-   END IF 
- END DO ! j loop
-
- RETURN
- END Subroutine LUDCMP
-
-
-!******************************************************************
-!* Solves the set of N linear equations A . X = B.  Here A is     *
-!* input, not as the matrix A but rather as its LU decomposition, *
-!* determined by the routine LUDCMP. INDX is input as the permuta-*
-!* tion vector returned by LUDCMP. B is input as the right-hand   *
-!* side vector B, and returns with the solution vector X. A, N and*
-!* INDX are not modified by this routine and can be used for suc- *
-!* cessive calls with different right-hand sides. This routine is *
-!* also efficient for plain matrix inversion.                     *
-!******************************************************************
- Subroutine LUBKSB(A,N,NP,INDX,B)
- INTEGER :: II,I,J,LL,N,NP
- real  SUM, A(NP,NP),B(N)
- INTEGER INDX(N)
-
- II = 0
-
- DO I=1,N
-   LL = INDX(I)
-   SUM = B(LL)
-   B(LL) = B(I)
-   IF(II.NE.0) THEN
-     DO J=II,I-1
-       SUM = SUM - A(I,J)*B(J)
-     END DO ! j loop
-   ELSE IF(SUM.NE.0.) THEN
-     II = I
-   END IF
-   B(I) = SUM
- END DO ! i loop
-
- DO I=N,1,-1
-   SUM = B(I)
-   IF(I < N) THEN
-     DO J=I+1,N
-       SUM = SUM - A(I,J)*B(J)
-     END DO ! j loop
-   END IF
-   B(I) = SUM / A(I,I)
- END DO ! i loop
-
- RETURN
-END Subroutine LUBKSB
 
 
 end module CLSM_param_routines

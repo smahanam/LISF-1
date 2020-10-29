@@ -102,7 +102,7 @@ module module_climateBCs_gfrac
                  array (i,j) = minval (clim_data (i,j,:))
          end do
       end do
-
+      deallocate (clim_data)
     end subroutine read_ClimateBCs_gfracMin
     
   end module module_climateBCs_gfrac
