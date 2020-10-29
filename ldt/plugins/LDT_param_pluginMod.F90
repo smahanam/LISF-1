@@ -1109,7 +1109,7 @@ contains
   subroutine LDT_alb_plugin
     !EOP
 
-    use module_climateBCs_albedo, only : read_ClimateBCs_albedo
+    ! use module_climateBCs_albedo, only : read_ClimateBCs_clsmalb !, read_ClimateBCs_alb
 
     external read_Briegleb_albedo
 
@@ -1153,8 +1153,11 @@ contains
     call registerreadalbedo(trim(LDT_constId)//char(0),read_CONSTANT_albedo)
     call registerreadmxsnoalb(trim(LDT_constId)//char(0),read_CONSTANT_mxsnoalb)
 
-    ! MCD43GF 
-    call registerreadalbedo(trim(LDT_albmcd43gf)//char(0),read_ClimateBCs_alb)
+    ! MCD43GF
+!    call registerreadalbedo(trim(LDT_albmcd43gf5)//char(0),read_ClimateBCs_alb)
+!    call registerreadalbedo(trim(LDT_albmcd43gf5clsm)//char(0),read_ClimateBCs_clsmalb)
+!    call registerreadalbedo(trim(LDT_albmcd43gf6)//char(0),read_ClimateBCs_alb)
+!    call registerreadalbedo(trim(LDT_albmcd43gf6clsm)//char(0),read_ClimateBCs_clsmalb)
 
  end subroutine LDT_alb_plugin
 

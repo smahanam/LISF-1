@@ -174,7 +174,7 @@ contains
 
     ! --------------------------------------------------------------------------------------------
     
-    SUBROUTINE readDataset_clsm (this, nest, SOURCE, out_interval, project, CLIMDATA1,CLIMDATA2, maskarray, clsm)     
+    SUBROUTINE readDataset_clsm (this, nest, SOURCE, out_interval, project, CLIMDATA1,CLIMDATA2, clsm, maskarray)     
 
       implicit none
 
@@ -302,7 +302,7 @@ contains
          CP%data_doys= MONTHLY_DOYS
          call ESMF_TimeIntervalSet(CP%data_dtstep, mm=1, rc=status )   ; VERIFY_(STATUS)
                   
-      case ('MCD43GFv5')
+      case ('MCD43GFv5','MCD43GFv5-CLSM')
          CP%NTIMES = N_MODIS_DATES8
          CP%NX       = 43200
          CP%NY       = 21600
@@ -316,7 +316,7 @@ contains
          CP%data_doys= MODIS_DOYS
          call ESMF_TimeIntervalSet(CP%data_dtstep, h=24*8, rc=status ) ; VERIFY_(STATUS)    
 
-      case ('MCD43GFv6')
+      case ('MCD43GFv6','MCD43GFv6-CLSM')
          CP%NTIMES   = N_MODIS_DATES5
          CP%NX       = 43200
          CP%NY       = 21600

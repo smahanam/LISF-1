@@ -117,8 +117,9 @@ module module_climateBCs_lai
       
       LDT_laisai_struc(:)%lai%num_bins = 1
       
-      call ESMF_ConfigFindLabel(LDT_config,"LAI climatology interval:",rc=rc)
-      call ESMF_ConfigGetAttribute(LDT_config,laiInterval,rc=rc)
+!      call ESMF_ConfigFindLabel(LDT_config,"LAI climatology interval:",rc=rc)
+      call ESMF_ConfigGetAttribute(LDT_config,laiInterval,label = "LAI climatology interval:", rc=rc)
+      
             if(laiInterval == "monthly") LDT_laisai_struc(:)%lai%num_times = 12
             if(laiInterval == "8day"   ) LDT_laisai_struc(:)%lai%num_times = 46
             if(laiInterval == "5day"   ) LDT_laisai_struc(:)%lai%num_times = 73

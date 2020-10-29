@@ -301,8 +301,10 @@ module LDT_pluginIndices
 
    character*50, public,  parameter :: LDT_albnirclsmf25Id = "CLSMF2.5"
    character*50, public,  parameter :: LDT_albvisclsmf25Id = "CLSMF2.5"
-   character*50, public,  parameter :: LDT_albmcd43gf      = "MCD43GF"
-   character*50, public,  parameter :: LDT_albmcd43gfclsm  = "MCD43GF"
+   character*50, public,  parameter :: LDT_albmcd43gf5     = "MCD43GFv5"
+   character*50, public,  parameter :: LDT_albmcd43gf5clsm = "MCD43GFv5-CLSM"   
+   character*50, public,  parameter :: LDT_albmcd43gf6     = "MCD43GFv6"
+   character*50, public,  parameter :: LDT_albmcd43gf6clsm = "MCD43GFv6-CLSM"
 
 !-------------------------------------------------------------------------
 ! Bottom temperature (Tbot) data sources
