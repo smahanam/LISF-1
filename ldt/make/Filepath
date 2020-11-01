@@ -42,8 +42,10 @@ dirs := . \
 ../runmodes/NUWRFpreproc \
 ../runmodes/Metforcproc \
 ../runmodes/MetTimeDScale \
-../runmodes/Rstproc \
+../runmodes/climoRstproc \
+../runmodes/rstTransformProc \
 ../runmodes/StatDscaleMetForc \
+../runmodes/OPTUEproc/ \
 ../domains/latlon \
 ../domains/gaussian \
 ../domains/hrap \
@@ -55,6 +57,7 @@ dirs := . \
 ../DAobs/synthetic_sm \
 ../DAobs/NASA_AMSRE_sm \
 ../DAobs/LPRM_AMSREsm \
+../DAobs/LPRMvod \
 ../DAobs/ESACCI_sm \
 ../DAobs/WindSat_sm \
 ../DAobs/GRACE_tws \
@@ -88,6 +91,7 @@ dirs := . \
 ../metforcing/gswp2 \
 ../metforcing/merra-land \
 ../metforcing/merra2 \
+../metforcing/era5 \
 ../metforcing/nam242 \
 ../metforcing/narr \
 ../metforcing/princeton \
@@ -113,5 +117,6 @@ dirs := . \
 ../statDscale/BayesianMerging \
 ../statDscale/Climo \
 ../params/CLM45 \
-../LDTSI \
-../runmodes/LDTSI
+../USAFSI \
+../runmodes/USAFSI \
+../runmodes/LISHydropreproc

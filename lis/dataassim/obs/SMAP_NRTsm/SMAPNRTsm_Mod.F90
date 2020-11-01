@@ -38,7 +38,6 @@ module SMAPNRTsm_Mod
   type, public:: SMAPNRTsm_dec
      
      integer                :: useSsdevScal
-     integer                :: qcFlag
      logical                :: startMode
      integer                :: nc
      integer                :: nr
@@ -66,8 +65,8 @@ module SMAPNRTsm_Mod
                                              !e.g., 4/29 13:00:00)
      integer                :: cdf_read_opt  ! 0: read all months at one time
                                              ! 1: read only the current month
-     character*100,         :: modelcdffile
-     character*100,         :: obscdffile
+     character*100          :: modelcdffile
+     character*100          :: obscdffile
   end type SMAPNRTsm_dec
   
   type(SMAPNRTsm_dec),allocatable :: SMAPNRTsm_struc(:)
@@ -172,14 +171,6 @@ contains
        
     enddo
 
-    call ESMF_ConfigFindLabel(LIS_config,"SMAP(NRT) soil moisture apply SMAP QC flags:",&
-         rc=status)
-    do n=1,LIS_rc%nnest
-       call ESMF_ConfigGetAttribute(LIS_config,SMAPNRTsm_struc(n)%qcFlag,&
-            rc=status)
-       call LIS_verify(status, 'SMAP(NRT) soil moisture apply SMAP QC flags: is missing')
-       
-    enddo
     call ESMF_ConfigFindLabel(LIS_config,"SMAP(NRT) model CDF file:",&
          rc=status)
     do n=1,LIS_rc%nnest
