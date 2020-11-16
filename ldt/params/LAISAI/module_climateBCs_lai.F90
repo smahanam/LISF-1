@@ -34,7 +34,7 @@ module module_climateBCs_lai
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:,:)   
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest),LDT_laisai_struc(nest)%lai%num_times)   
       type (ClimateBCsReader)       :: bcr
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
 
@@ -72,7 +72,7 @@ module module_climateBCs_lai
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:)
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       integer :: i,j
       
@@ -93,7 +93,7 @@ module module_climateBCs_lai
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:)
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       integer :: i,j
       
@@ -118,13 +118,13 @@ module module_climateBCs_lai
       LDT_laisai_struc(:)%lai%num_bins = 1
       
 !      call ESMF_ConfigFindLabel(LDT_config,"LAI climatology interval:",rc=rc)
-      call ESMF_ConfigGetAttribute(LDT_config,laiInterval,label = "LAI climatology interval:", rc=rc)
+      call ESMF_ConfigGetAttribute(LDT_config,laiInterval,label = "LAI/SAI climatology interval:", rc=rc)
       
             if(laiInterval == "monthly") LDT_laisai_struc(:)%lai%num_times = 12
             if(laiInterval == "8day"   ) LDT_laisai_struc(:)%lai%num_times = 46
             if(laiInterval == "5day"   ) LDT_laisai_struc(:)%lai%num_times = 73
             if(laiInterval == "daily"  ) LDT_laisai_struc(:)%lai%num_times = 365
-      
+  
     END SUBROUTINE set_ClimateBCs_laiattribs
     
   end module module_climateBCs_lai

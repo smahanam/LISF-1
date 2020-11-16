@@ -36,7 +36,7 @@ module CLSMJ32_parmsMod
   use CLSM_util, only : init_geos2lis_mapping, LDT_g5map, G52LIS, LISv2g
   use CLSM_param_routines, only : create_CLSM_parameters,    &
        clsm_type_dec, CLSMJ32_struc,                         &
-       set_param_attribs => set_CLSM_param_attribs
+       set_param_attribs => set_CLSM_param_attribs, jpl_canoph
   use mod_HWSD_STATSGO2_texture, ONLY : &
        derive_CLSM_HWSD_soiltypes
   use LDT_ClimateBCsReader, ONLY : ClimateBCsReader
@@ -90,7 +90,7 @@ contains
     real         :: param_grid(20)
     real, pointer, dimension (:) :: ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4, &
          ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2, GNU,  &
-         ATAU2, BTAU2, ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH
+         ATAU2, BTAU2, ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, Z2CH
     integer, pointer, dimension (:) :: SOIL_TOP, SOIL_COM
     character*20           :: albInterval, source, proj
     type (ClimateBCsReader):: bcr
@@ -122,6 +122,7 @@ contains
     allocate (BTAU      (1:NTILES))
     allocate (SOIL_TOP  (1:NTILES))
     allocate (SOIL_COM  (1:NTILES))
+    allocate (Z2CH      (1:NTILES))
 
     call derive_CLSM_HWSD_soiltypes (NTILES, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, &
          ATAU2, BTAU2, ATAU, BTAU, SOIL_TOP, SOIL_COM)
@@ -152,7 +153,7 @@ contains
     call create_CLSM_parameters (NTILES, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, & 
          SOIL_TOP, SOIL_COM, GNU, ARS1,ARS2,ARS3, ARA1,ARA2,ARA3,ARA4,           &
          ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2)
-    
+    call jpl_canoph (ntiles, z2ch)
 
     ! (4) write out gridded arrays in LIS input file
     ! ----------------------------------------------
@@ -164,6 +165,9 @@ contains
        param_grid(:) = LDT_rc%mask_gridDesc(n,:)
        glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
        glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9))  + 1
+
+       call set_param_attribs(CLSMJ32_struc(n)%z2,"Z2CH","CLSMJ3.2", &
+            full_name="CLSM vegetation height", units="m")
 
        call set_param_attribs(CLSMJ32_struc(n)%porosity,"POROSITY","CLSMJ3.2", &
             full_name="CLSM soil porosity")
@@ -248,6 +252,9 @@ contains
        allocate(CLSMJ32_struc(n)%bdrckdpth%value(&
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%bdrckdpth%num_bins))
+       allocate(CLSMJ32_struc(n)%z2%value(&
+            LDT_rc%lnc(n),LDT_rc%lnr(n),&
+            CLSMJ32_struc(n)%z2%num_bins))
        allocate(CLSMJ32_struc(n)%gnu%value(&
             LDT_rc%lnc(n),LDT_rc%lnr(n),&
             CLSMJ32_struc(n)%gnu%vlevels))
@@ -480,6 +487,7 @@ contains
        CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
        CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
        CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (gnu))
+       CLSMJ32_struc(n)%z2%value       (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (z2ch))
        
        call populate_param_attribs( "ALBNIRDIFF", &
            "Alb near-IR diffuse scale factor", "-",  &

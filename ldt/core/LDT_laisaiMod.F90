@@ -176,6 +176,7 @@ contains
     if(lai_select) then
        write(LDT_logunit,*)" - - - - - - - - - - LAI/SAI Parameters - - - - - - - - - -"
        call setlaiattribs(trim(LDT_laisai_struc(1)%lai%source)//char(0))
+       
     endif
 
    allocate(laisai_gridDesc(LDT_rc%nnest,20))

@@ -32,7 +32,7 @@ module module_climateBCs_gfrac
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:,:)   
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest),LDT_gfrac_struc(nest)%gfrac%num_times)   
       type (ClimateBCsReader)       :: bcr
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
 
@@ -52,7 +52,7 @@ module module_climateBCs_gfrac
       !
       !EOP      
       ! __________________________________________________________
-      
+
       array = LDT_rc%udef
       if (allocated (clim_data)) deallocate (clim_data)
       call bcr%readDataset (nest,trim(LDT_gfrac_struc(nest)%gfrac%source), &
@@ -70,7 +70,7 @@ module module_climateBCs_gfrac
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:)
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       integer :: i,j
       
@@ -91,7 +91,7 @@ module module_climateBCs_gfrac
       implicit none
       ! !ARGUMENTS: 
       integer, intent(in)    :: nest    
-      real,    intent(inout) :: array (:,:)
+      real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       integer :: i,j
       

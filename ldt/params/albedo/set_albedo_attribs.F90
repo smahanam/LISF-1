@@ -13,14 +13,18 @@
 ! !INTERFACE:
 subroutine set_albedo_attribs(n,source)
 
-! !USES:
+  ! !USES:
+  use ESMF
   use LDT_albedoMod
-
+  use LDT_coreMod, only  :  LDT_rc, LDT_config
+  
   implicit none
 
   integer,         intent(in) :: n
   character(len=*),intent(in) :: source
-
+  character*20                :: albInterval
+  integer                     :: rc
+  
 ! !ARGUMENTS: 
 
 ! !DESCRIPTION:
@@ -49,6 +53,15 @@ subroutine set_albedo_attribs(n,source)
       LDT_albedo_struc(n)%albedo%num_bins = 1
       LDT_albedo_struc(n)%albedo%num_times = 12
 
+   case( "MCD43GF-CLSM", "MCD43GF")
+      call ESMF_ConfigGetAttribute(LDT_config,albInterval,label = "Albedo climatology interval:", rc=rc)
+      
+            if(albInterval == "monthly") LDT_albedo_struc(:)%albedo%num_times = 12
+            if(albInterval == "8day"   ) LDT_albedo_struc(:)%albedo%num_times = 46
+            if(albInterval == "5day"   ) LDT_albedo_struc(:)%albedo%num_times = 73
+            if(albInterval == "daily"  ) LDT_albedo_struc(:)%albedo%num_times = 365
+            LDT_albedo_struc(n)%albedo%num_bins = 1
+      
     case default
       write(*,*) "[ERR] Albedo source not recognized: ",trim(source)
       write(*,*) " Please select: NCEP_LIS, NCEP_Native, NCEP_NativeQtr, " 

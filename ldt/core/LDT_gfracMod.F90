@@ -265,7 +265,7 @@ contains
 
          allocate(LDT_gfrac_struc(n)%gfrac%value(&
               LDT_rc%lnc(n),LDT_rc%lnr(n),&
-              LDT_gfrac_struc(n)%gfrac%vlevels))       
+              LDT_gfrac_struc(n)%gfrac%vlevels))
       endif
       if(LDT_gfrac_struc(n)%shdmax%selectOpt.gt.0) then 
          LDT_gfrac_struc(n)%shdmax%vlevels = LDT_gfrac_struc(n)%shdmax%num_times
@@ -284,13 +284,14 @@ contains
 
    !- Greenness fraction:
    if( gfrac_select ) then 
-
-      call ESMF_ConfigFindLabel(LDT_config,"Greenness fraction map:",rc=rc)
-      do n=1,LDT_rc%nnest
-         call ESMF_ConfigGetAttribute(LDT_config,gfracdir(n),rc=rc)
-         call LDT_verify(rc,'Greenness fraction map: not specified')
-         LDT_gfrac_struc(n)%gfracdir = gfracdir(n)
-      enddo
+      if(trim (LDT_gfrac_struc(1)%gfrac%source) .ne. "GSWPH") then
+         call ESMF_ConfigFindLabel(LDT_config,"Greenness fraction map:",rc=rc)
+         do n=1,LDT_rc%nnest
+            call ESMF_ConfigGetAttribute(LDT_config,gfracdir(n),rc=rc)
+            call LDT_verify(rc,'Greenness fraction map: not specified')
+            LDT_gfrac_struc(n)%gfracdir = gfracdir(n)
+         enddo
+      endif
 
       call ESMF_ConfigFindLabel(LDT_config,"Greenness climatology interval:",rc=rc)
       do n=1,LDT_rc%nnest
@@ -459,7 +460,7 @@ contains
 
             elseif ( trim(LDT_gfrac_struc(n)%gfrac%source) == "GSWPH" ) then
                write(LDT_logunit,*) "Reading single-file, monthly climatologies for: GSWPH"
-	       call readgfrac( trim(LDT_gfrac_struc(n)%gfrac%source)//char(0),&
+               call readgfrac( trim(LDT_gfrac_struc(n)%gfrac%source)//char(0),&
                     n, LDT_gfrac_struc(n)%gfrac%value, &
                     LDT_LSMparam_struc(n)%landmask%value )
                write(LDT_logunit,*) "Done reading file - GSWPH"

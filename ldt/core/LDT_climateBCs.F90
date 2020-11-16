@@ -136,14 +136,6 @@ contains
            this%glpnc, this%glpnr, this%subpnc, this%subpnr, this%subparam_gridDesc, &
            this%lat_line, this%lon_line)
 
-      if((this%subpnc /= size(CLIMDATA,1)) .or.(this%subpnr /= size(CLIMDATA,2))) then
-          write(LDT_logunit,*)'[ERR] LIS domain dimensions mismatch in READ_CLIM_BCS'
-          write(LDT_logunit,*)'  input dimensions : ', size(CLIMDATA,1), size(CLIMDATA,2)
-          write(LDT_logunit,*)'  domain dimensions: ', this%subpnc, this%subpnr
-          VERIFY_(1)
-          call LDT_endrun         
-      endif
-
       ! ------------------------------------------------
       !    READ REGRID INTERPOLATE AND POPULATE CLIMDATA
       ! ------------------------------------------------
@@ -208,14 +200,6 @@ contains
       call LDT_RunDomainPts( nest, project, this%param_gridDesc(:), &
            this%glpnc, this%glpnr, this%subpnc, this%subpnr, this%subparam_gridDesc, &
            this%lat_line, this%lon_line)   
-
-      if((this%subpnc /= size(CLIMDATA1,1)) .or.(this%subpnr /= size(CLIMDATA1,2))) then
-          write(LDT_logunit,*)'[ERR] LIS domain dimensions mismatch in READ_CLIM_BCS'
-          write(LDT_logunit,*)'  input dimensions : ', size(CLIMDATA1,1), size(CLIMDATA1,2)
-          write(LDT_logunit,*)'  domain dimensions: ', this%subpnc, this%subpnr
-          VERIFY_(1)
-          call LDT_endrun         
-      endif
 
       ! ------------------------------------------------
       !    READ REGRID INTERPOLATE AND POPULATE CLIMDATA
@@ -471,7 +455,7 @@ contains
                 write (vv,'(i2.2)')jx
                 write (hh,'(i2.2)')ix 
                 fname = trim(CP%BCS_PATH)//'H'//hh//'V'//vv//'.nc'
-                status = NF90_OPEN(trim(fname),NF90_NOWRITE, ncid)                    ; VERIFY_(STATUS)
+                status = NF90_OPEN(trim(fname),NF90_NOWRITE, ncid)
                 if(status == 0) then
                    status = NF90_GET_att (ncid,NF90_GLOBAL,'i_ind_offset_LL',iLL)     ; VERIFY_(STATUS)
                    status = NF90_GET_att (ncid,NF90_GLOBAL,'j_ind_offset_LL',jLL)     ; VERIFY_(STATUS)
@@ -734,10 +718,10 @@ contains
       ! --------------------
       
       call ESMF_TimeSet (CURRENT_TIME, yy=ref_year, mm=1, dd=1, rc=status)     ; VERIFY_(STATUS)
-      call ESMF_TimeSet (END_TIME    , yy=ref_year + 1, mm=1, dd=1, rc=status) ; VERIFY_(STATUS)
+      call ESMF_TimeSet (END_TIME    , yy=ref_year, mm=12,dd=31, rc=status) ; VERIFY_(STATUS)
       call ESMF_TimeIntervalSet (DAY_DT, h=24, rc=status)                      ; VERIFY_(STATUS)
       
-      OUT_RING  = CURRENT_TIME
+      OUT_RING  = CURRENT_TIME  + CP%out_dtstep
       t1        = CP%NTIMES
       t2        = 1
       out_time  = 1
@@ -748,18 +732,18 @@ contains
       TIME1     = MidTime (CP%data_doys(t1),CP%data_doys(1),start=.true.)
       TIME2     = MidTime (CP%data_doys(1) ,CP%data_doys(2))
       
-      allocate (var_subset1 (CP%subpnc,CP%subpnr,NF))
-      allocate (var_subset2 (CP%subpnc,CP%subpnr,NF))
-      allocate (out_ave     (CP%subpnc,CP%subpnr,NF))
-      allocate (daily_array (CP%subpnc,CP%subpnr))
+      allocate (var_subset1 (NX,NY,NF))
+      allocate (var_subset2 (NX,NY,NF))
+      allocate (out_ave     (NX,NY,NF))
+      allocate (daily_array (NX,NY))
       call CP%update_data (t1, nest, var_subset1)
       call CP%update_data (t2, nest, var_subset2)
       out_ave = 0.
       
       if(present (clsm)) then
-         allocate (sibvis  (CP%subpnc,CP%subpnr))
-         allocate (sibnir  (CP%subpnc,CP%subpnr))
-         allocate (sib_ave (CP%subpnc,CP%subpnr,NF))
+         allocate (sibvis  (NX,NY))
+         allocate (sibnir  (NX,NY))
+         allocate (sib_ave (NX,NY,NF))
          sib_ave = 0.
       endif
       
@@ -793,7 +777,9 @@ contains
                TIME2 = MidTime (CP%data_doys(t1),CP%data_doys(t2))
             endif
             if (switch == 1) last = .true. 
-            
+            !print *, 'UPDATE_BCS', t1,t2
+            !CALL ESMF_TimePrint (TIME1, OPTIONS="string", RC=STATUS )
+            !CALL ESMF_TimePrint (TIME2, OPTIONS="string", RC=STATUS )
             ! read BCs data 
             var_subset1 = var_subset2
             call CP%update_data (t2, nest, var_subset2)
@@ -802,6 +788,7 @@ contains
 
          ! sum of daily values to compute CLIMDATA data at out_interval
          time_frac = TimeFrac (TIME1, CURRENT_TIME, TIME2)
+         !print *, time_frac, 1. - time_frac
          do i = 1, NF
             daily_array (:,:) = (var_subset1(:,:,i) * time_frac + & 
                  var_subset2(:,:,i) * (1. - time_frac))
@@ -819,11 +806,12 @@ contains
             if(save_lai  ) call CP%update_sibinputs (nest, LAI=daily_array,   tstep =day_count)
          endif
 
-         PROC_OUTPPUT: if (CURRENT_TIME == OUT_RING) then
-
+         PROC_OUTPPUT: if ((CURRENT_TIME == OUT_RING).OR.(CURRENT_TIME == END_TIME)) then
+            !print *, 'OUT_TIME : ', out_time
+            !CALL ESMF_TimePrint (CURRENT_TIME, OPTIONS="string", RC=STATUS )
             if (out_time > NT) then
                write(LDT_logunit,*)'[ERR] out_interval mismatch in READ_CLIM_BCS'
-               write(LDT_logunit,*)'  out_intervals : ',NF
+               write(LDT_logunit,*)'  out_intervals : ',NT, out_time
                VERIFY_(1)
                call LDT_endrun
             endif

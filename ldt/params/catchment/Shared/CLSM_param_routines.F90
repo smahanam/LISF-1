@@ -14,7 +14,9 @@ module CLSM_param_routines
 
   use CLSM_util, ONLY: NC_VarID, &
        c_data => G5_BCSDIR,      &
-       LDT_g5map, write_clsm_files
+       LDT_g5map, write_clsm_files, &
+       NC => nc_g5_rst,             &
+       NR => nr_g5_rst
 
   use get_DeLannoy_SoilClass, ONLY:          & 
        mineral_perc, GDL_center_pix,         &
@@ -29,7 +31,7 @@ module CLSM_param_routines
   private
 
   public create_CLSM_parameters, catchmentParms_writeHeader, catchmentParms_writeData,  clsm_type_dec, &
-       set_CLSM_param_attribs, CLSMF25_struc, CLSMJ32_struc, sibalb
+       set_CLSM_param_attribs, CLSMF25_struc, CLSMJ32_struc, sibalb, jpl_canoph
 
   type :: clsm_type_dec
 
@@ -78,6 +80,7 @@ module CLSM_param_routines
      type(LDT_paramEntry) :: tsb2
      type(LDT_paramEntry) :: atau
      type(LDT_paramEntry) :: btau
+     type(LDT_paramEntry) :: z2
      type(LDT_paramEntry) :: albnirdir   ! Albedo NIR direct scale factor (CLSM F2.5)
      type(LDT_paramEntry) :: albnirdif   ! Albedo NIR diffuse scale factor (CLSM F2.5)
      type(LDT_paramEntry) :: albvisdir   ! Albedo VIS direct scale factor (CLSM F2.5)
@@ -789,6 +792,7 @@ END SUBROUTINE create_CLSM_parameters
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%btau)
         
         if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%porosity)
+        if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%z2)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%psisat)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%ksat)
         call LDT_writeNETCDFdata(n,ftn,Clsm_struc(N)%bexp)
@@ -1194,7 +1198,73 @@ END SUBROUTINE create_CLSM_parameters
         END FUNCTION COEFF
         
       END SUBROUTINE SIBALB
+      
+ ! ------------------------------------------------------------------------------------------
 
+    SUBROUTINE jpl_canoph (ntiles, z2)
+
+      implicit none
+      include 'netcdf.inc'
+      ! 1) JPL Canopy Height 
+      ! /discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001//Simard_Pinto_3DGlobalVeg_JGR.nc4
+     
+      integer, intent (in)               :: ntiles
+      real, pointer, dimension (:), intent (inout) :: z2
+      integer  , parameter               :: N_lon_jpl = 43200, N_lat_jpl = 21600
+      integer                            :: i,j, status, ncid,varid
+      REAL, ALLOCATABLE, dimension (:)   :: count_pix
+      INTEGER, ALLOCATABLE, dimension (:,:) :: z2_grid
+      INTEGER, ALLOCATABLE, dimension (:,:) :: tile_id
+      character*100                      :: fout
+
+      ! READ JPL source data files and regrid
+      ! -------------------------------------
+
+      status  = NF_OPEN (trim(c_data)//'/Simard_Pinto_3DGlobalVeg_JGR.nc4', NF_NOWRITE, ncid)
+            
+      allocate (z2_grid   (1 : NC         , 1 : NR))
+
+      status  = NF_INQ_VARID (ncid,'CanopyHeight',VarID) ; VERIFY_(STATUS)
+      status  = NF_GET_VARA_INT (ncid,VarID, (/1,1/),(/N_lon_jpl, N_lat_jpl/), z2_grid) ; VERIFY_(STATUS)
+      
+      status = NF_CLOSE(ncid)
+
+      ! Grid to tile
+      ! ------------
+                
+      ! Reading tile-id raster file
+
+      allocate(tile_id(1:nc,1:nr))
+      tile_id = LDT_g5map%rst
+      
+      allocate (z2        (1:NTILES))
+      allocate (count_pix (1:NTILES))
+      
+      z2        = 0.
+      count_pix = 0.
+
+      do j = 1,nr
+         do i = 1, nc
+            if((tile_id(i,j).gt.0).and.(tile_id(i,j).le.NTILES)) then
+
+               if(z2_grid(i,j) >= 0.) then 
+                 z2 (tile_id(i,j)) = z2 (tile_id(i,j)) + real (z2_grid(i,j))
+                 count_pix (tile_id(i,j)) = count_pix (tile_id(i,j)) + 1. 
+               endif
+
+            endif
+         end do
+      end do
+      
+      where (count_pix >   0.) z2 = z2/count_pix
+      where (z2        <  0.5) z2 = 0.5            ! to ensure Z2 >= MIN_VEG_HEIGHT
+
+      deallocate (count_pix)
+      deallocate (z2_grid)
+      deallocate (tile_id)
+      
+    END SUBROUTINE jpl_canoph
+    
 !---------------------------------------------------------------------
 
       SUBROUTINE TS_PARAM(                                &

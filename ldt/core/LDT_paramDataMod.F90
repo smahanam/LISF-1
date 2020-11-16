@@ -173,7 +173,8 @@ CONTAINS
           paramEntry%source = "none"
        else
           paramEntry%selectOpt = 1  
-          paramEntry%source = trim(source)    
+          paramEntry%source = trim(source)
+          if(trim(source) == "MCD43GF-CLSM") paramEntry%selectOpt = 0
        endif
        paramEntry%units = ""
        paramEntry%num_times =1
