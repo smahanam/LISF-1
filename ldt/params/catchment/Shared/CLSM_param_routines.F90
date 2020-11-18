@@ -698,7 +698,9 @@ END SUBROUTINE create_CLSM_parameters
         call LDT_writeNETCDFdataHeader(n,ftn,dimID,&
              Clsm_struc(N)%btau)
         if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
-             Clsm_struc(N)%porosity) 
+             Clsm_struc(N)%porosity)
+        if (LDT_rc%lsm.eq."CLSMJ3.2") call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
+             Clsm_struc(N)%z2) 
         call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&
              Clsm_struc(N)%psisat)
         call LDT_writeNETCDFdataHeader(n,ftn,tdimID,&

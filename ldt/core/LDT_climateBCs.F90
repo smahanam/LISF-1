@@ -576,20 +576,20 @@ contains
           real,    allocatable  :: gi(:)      ! Input parameter 1d grid
           logical*1,allocatable :: li(:)      ! Input logical mask (to match gi)
           real, allocatable, dimension (:,:) :: var_in
-          real, allocatable, dimension (:,:)      :: go2     ! Output lis 1d grid
-          logical*1, allocatable, dimension (:,:) :: lo2  ! Output logical mask (to match go)
+          real, allocatable, dimension (:)      :: go2     ! Output lis 1d grid
+          logical*1, allocatable, dimension (:) :: lo2  ! Output logical mask (to match go)
           
-          mi = CP%subpnc*CP%subpnr
+          mi = CP%NX*CP%NY
           mo = LDT_rc%lnc(nest)*LDT_rc%lnr(nest)
           
           allocate (var_in(CP%subpnc,CP%subpnr))                
           allocate ( li(mi), gi (mi), n11(mi))
-          allocate (go2(mo,1), lo2(mo,1))
+          allocate (go2(mo), lo2(mo))
           
           !- Create mapping between parameter domain and LIS grid domain:
           call upscaleByAveraging_input( CP%subparam_gridDesc, &
                LDT_rc%gridDesc(nest,:), mi, mo, n11)
-          
+
           Data_Fields: do j = 1, size (data_in, 3)
              
              var_in = LDT_rc%udef
@@ -617,19 +617,19 @@ contains
                    endif
                 end do
              enddo
-             
+
              !- Calculate total counts for valid land pixels in each coarse gridcell:
-             call upscaleByCnt( mi, mo, 1, LDT_rc%udef, n11, li, gi, &
-                  lo2(:,1), go2 (:,1))
+             call upscaleByAveraging ( mi, mo, LDT_rc%udef, n11, li, gi, &
+                  lo2(:), go2 (:))
              i = 0
              do nr = 1, LDT_rc%lnr(nest)
                 do nc = 1, LDT_rc%lnc(nest)
                    i = i + 1
-                   var_subset (nc,nr,j) = go2(i,1)
+                   var_subset (nc,nr,j) = go2(i)
                 enddo
              enddo
+             
           end do Data_Fields
-          
           deallocate (var_in, li, gi, n11, go2, lo2)
    
         END SUBROUTINE regrid_to_lisgrid
@@ -791,7 +791,7 @@ contains
          !print *, time_frac, 1. - time_frac
          do i = 1, NF
             daily_array (:,:) = (var_subset1(:,:,i) * time_frac + & 
-                 var_subset2(:,:,i) * (1. - time_frac))
+                 var_subset2(:,:,i) * (1. - time_frac))            
             out_ave(:,:,i) = out_ave(:,:,i) + daily_array
          end do
          

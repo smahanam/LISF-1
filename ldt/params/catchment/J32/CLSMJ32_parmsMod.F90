@@ -501,36 +501,22 @@ contains
 
     enddo
 
- !   call ESMF_ConfigFindLabel(LDT_config,"Albedo NIR factor file:",rc=rc)
- !   do n=1,LDT_rc%nnest
- !      call ESMF_ConfigGetAttribute(LDT_config,&
- !           CLSMJ32_struc(n)%albnirfile,rc=rc)
- !      call LDT_verify(rc,"Albedo NIR factor file: not specified")
- !   enddo
-
- ! Albedo VIS:
- !   call ESMF_ConfigFindLabel(LDT_config,"Albedo VIS factor file:",rc=rc)
- !   do n=1,LDT_rc%nnest
- !      call ESMF_ConfigGetAttribute(LDT_config,&
- !           CLSMJ32_struc(n)%albvisfile,rc=rc)
- !      call LDT_verify(rc,"Albedo VIS factor file: not specified")
- !   enddo
-    call ESMF_ConfigGetAttribute(LDT_config,albInterval, label = "Albedo climatology interval:",rc=rc) ; VERIFY_(RC)
-    call ESMF_ConfigGetAttribute(LDT_config,source, label = "Albedo data source:", rc=rc)              ; VERIFY_(RC)
-    call ESMF_ConfigGetAttribute(LDT_config,proj,label = "Albedo map projection:", rc=rc)              ; VERIFY_(RC)
+!    call ESMF_ConfigGetAttribute(LDT_config,albInterval, label = "Albedo climatology interval:",rc=rc) ; VERIFY_(RC)
+!    call ESMF_ConfigGetAttribute(LDT_config,source, label = "Albedo data source:", rc=rc)              ; VERIFY_(RC)
+!    call ESMF_ConfigGetAttribute(LDT_config,proj,label = "Albedo map projection:", rc=rc)              ; VERIFY_(RC)
     
-    do n=1,LDT_rc%nnest
-       write(LDT_logunit,*) 'Reading CLSM ALBEDO : '//trim(source)
-       call bcr%readDataset (n, SOURCE, albinterval, proj, &
-            CLSMJ32_struc(n)%albvisdif%value, CLSMJ32_struc(n)%albnirdif%value, &
-            .true., maskarray=LDT_LSMparam_struc(n)%landmask%value(:,:,n))
-       CLSMJ32_struc(n)%albnirdir%value = CLSMJ32_struc(n)%albnirdif%value
-       CLSMJ32_struc(n)%albvisdir%value = CLSMJ32_struc(n)%albvisdif%value
- 
-       LDT_rc%monthlyData(n) = .true.
-       LDT_albedo_struc(n)%albInterval = "monthly"
-       LDT_gfrac_struc(n)%gfracInterval = "monthly"
-    enddo
+!    do n=1,LDT_rc%nnest
+!       write(LDT_logunit,*) 'Reading CLSM ALBEDO : '//trim(source)
+!       call bcr%readDataset (n, SOURCE, albinterval, proj, &
+!            CLSMJ32_struc(n)%albvisdif%value, CLSMJ32_struc(n)%albnirdif%value, &
+!            .true., maskarray=LDT_LSMparam_struc(n)%landmask%value(:,:,n))
+!       CLSMJ32_struc(n)%albnirdir%value = CLSMJ32_struc(n)%albnirdif%value
+!       CLSMJ32_struc(n)%albvisdir%value = CLSMJ32_struc(n)%albvisdif%value
+! 
+!       LDT_rc%monthlyData(n) = .true.
+!       LDT_albedo_struc(n)%albInterval = "monthly"
+!       LDT_gfrac_struc(n)%gfracInterval = "monthly"
+!    enddo
 
   end subroutine catchmentParms_init_J32
 
