@@ -1181,7 +1181,7 @@ END SUBROUTINE create_CLSM_parameters
            !	  ANIRDR(I) = ALPHA - ZTH(I)*BETA / (GAMMA+ZTH(I))
            ANIRDF(I) = ALPHA-BETA                                  &
                 + 2.*BETA*GAMMA*(1.-GAMMA*ALOG((1.+GAMMA)/GAMMA))
-           
+
         END DO
     
       contains

@@ -94,8 +94,8 @@ module LDT_ClimateBCsReader
 
   integer, parameter                     :: ref_year = 2002
   integer                                :: status
-  type (sibalb_inputs_struc),save, dimension (:), allocatable :: sibinputs 
-     
+  type (sibalb_inputs_struc),save        :: sibinputs 
+
 contains
 
   ! --------------------------------------------------------------
@@ -161,7 +161,7 @@ contains
       if (present (CLIMDATA3))  CLIMDATA3 (:,:,:) = cdata(3)%gdata(:,:,:)
       if (present (CLIMDATA4))  CLIMDATA4 (:,:,:) = cdata(3)%gdata(:,:,:)
       deallocate (cdata)
-
+ 
     end SUBROUTINE readDataset_general
 
     ! --------------------------------------------------------------------------------------------
@@ -367,7 +367,7 @@ contains
       CP%param_gridDesc(1)  = 0.          ! Latlon
       CP%param_gridDesc(2)  = input_cols
       CP%param_gridDesc(3)  = input_rows
-      CP%param_gridDesc(4)  = -60.0  + (IN_yres/2) ! LL lat 
+      CP%param_gridDesc(4)  = -90.0  + (IN_yres/2) ! LL lat 
       CP%param_gridDesc(5)  = -180.0 + (IN_xres/2) ! LL lon 
       CP%param_gridDesc(6)  = 128
       CP%param_gridDesc(7)  =  90.0 - (IN_yres/2)  ! UR lat
@@ -404,7 +404,7 @@ contains
       integer, intent (in)                         :: time_slice, nest
       real, intent (out), dimension(:,:,:)         :: var_subset
       real, allocatable, dimension (:,:,:)         :: datain
-      
+
       allocate (datain (CP%NX, CP%NY,size(var_subset,3)))
       datain     = LDT_rc%udef
       var_subset = LDT_rc%udef
@@ -412,10 +412,11 @@ contains
       if((trim(CP%source) == 'GSWPH') .OR. (trim(CP%source) == 'MCD43GFv5')) &
            call read_10deg_geos5tiles (time_slice, datain)
       
-      if((trim(CP%source) == 'GLASSA')  .OR. (trim(CP%source) == 'GLASSM') .OR. &
-         (trim(CP%source) == 'MCD15A2H').OR. (trim(CP%source) == 'MCD43GFv6'))  &
+      if((trim(CP%source) == 'GLASSA')  .OR. (trim(CP%source) == 'GLASSM') .OR.  &
+           (trim(CP%source) == 'MCD15A2H').OR. (trim(CP%source) == 'MCD43GFv6').OR.&
+           (trim(CP%source) == 'MCD43GFv6-CLSM'))  &
          call read_global_nc4 (time_slice, datain)
-      
+
       call regrid_to_lisgrid (nest, datain, var_subset)
       call fill_gaps         (var_subset)
       
@@ -499,10 +500,10 @@ contains
           character*3                             :: DOY
           integer                                 :: i,j, nv, ncid
           integer*2, allocatable, dimension (:,:) :: int2_arr
-          integer, allocatable, dimension (:,:)   :: data_array, data_array2
+          integer,   allocatable, dimension (:,:) :: data_array, data_array2
 
           nv = SIZE (datain,3)
-          if (trim(CP%source) == 'MCD43GFv6') then
+          if ((trim(CP%source) == 'MCD43GFv6').OR.(trim(CP%source) == 'MCD43GFv6-CLSM')) then
              allocate (data_array2 (1:CP%NX,1:CP%NY))
              if (nv .NE. 2) then
                 print *, ' SOURCE : ', trim(CP%source),nv
@@ -516,17 +517,15 @@ contains
           write (DOY,'(i3.3)') CP%data_doys(time_slice)
           filename = trim(CP%BCS_PATH)//DOY//'.nc4'
           status = NF90_OPEN(trim(filename),NF90_NOWRITE, ncid) ; VERIFY_(STATUS)
-          
+
           if (trim(CP%source) == 'MCD15A2H') then
              allocate (int2_arr (1:CP%NX, 1:CP%NY))
              STATUS = NF90_GET_VAR (NCID,VARID(NCID,CP%var1 ), int2_arr)            ; VERIFY_(STATUS)
              data_array  = int2_arr
-             if (nv == 2) STATUS = NF90_GET_VAR (NCID,VARID(NCID,CP%var2), int2_arr); VERIFY_(STATUS)
-             data_array2 = int2_arr
              deallocate (int2_arr)
           else             
-             STATUS = NF90_GET_VAR (NCID,VARID(NCID,CP%var1 ),   data_array)             ; VERIFY_(STATUS)
-             if (nv == 2) STATUS = NF90_GET_VAR (NCID,VARID(NCID,CP%var2),   data_array2); VERIFY_(STATUS)
+             STATUS = NF90_GET_VAR (NCID,VARID(NCID,trim(CP%var1 )),   data_array)             ; VERIFY_(STATUS)
+             if (nv == 2) STATUS = NF90_GET_VAR (NCID,VARID(NCID,trim(CP%var2)),   data_array2); VERIFY_(STATUS)
           endif
           STATUS = NF90_CLOSE (NCID)
 
@@ -567,29 +566,32 @@ contains
           real, dimension(:,:,:), intent(inout) :: var_subset
           
           ! arrays read from LL
-          
-          integer   :: mi                     ! Total number of input param grid array points
+          integer,parameter :: k10 = selected_int_kind(10)
+          integer(kind=8) :: mi               ! Total number of input param grid array points
           integer   :: mo                     ! Total number of output LIS grid array points
           integer   :: nc, nr, i, j
           integer, allocatable  :: n11(:)     ! Array that maps the location of each input grid
           !   point in the output grid. 
           real,    allocatable  :: gi(:)      ! Input parameter 1d grid
           logical*1,allocatable :: li(:)      ! Input logical mask (to match gi)
-          real, allocatable, dimension (:,:) :: var_in
+          !integer, dimension (3732480000)  :: n11
+          !real,    dimension (3732480000)  :: gi
+          !logical*1,dimension (3732480000) :: li
+          real, allocatable, dimension (:,:)    :: var_in
           real, allocatable, dimension (:)      :: go2     ! Output lis 1d grid
           logical*1, allocatable, dimension (:) :: lo2  ! Output logical mask (to match go)
-          
-          mi = CP%NX*CP%NY
+
+          mi = INT(dble(CP%NX)*dble(CP%NY), 8)
           mo = LDT_rc%lnc(nest)*LDT_rc%lnr(nest)
-          
+
           allocate (var_in(CP%subpnc,CP%subpnr))                
           allocate ( li(mi), gi (mi), n11(mi))
           allocate (go2(mo), lo2(mo))
-          
+
           !- Create mapping between parameter domain and LIS grid domain:
           call upscaleByAveraging_input( CP%subparam_gridDesc, &
                LDT_rc%gridDesc(nest,:), mi, mo, n11)
-
+          
           Data_Fields: do j = 1, size (data_in, 3)
              
              var_in = LDT_rc%udef
@@ -605,7 +607,7 @@ contains
              
              gi  = LDT_rc%udef
              li  = .false.
-             
+
              !- Assign 2-D array to 1-D for aggregation routines:
              i = 0
              do nr = 1, CP%subpnr
@@ -618,7 +620,7 @@ contains
                 end do
              enddo
 
-             !- Calculate total counts for valid land pixels in each coarse gridcell:
+             !- Spatial average within each coarse gridcell:
              call upscaleByAveraging ( mi, mo, LDT_rc%udef, n11, li, gi, &
                   lo2(:), go2 (:))
              i = 0
@@ -631,7 +633,7 @@ contains
              
           end do Data_Fields
           deallocate (var_in, li, gi, n11, go2, lo2)
-   
+
         END SUBROUTINE regrid_to_lisgrid
 
         ! -------------------------------------------------------------------
@@ -699,14 +701,21 @@ contains
       real, allocatable, dimension (:,:)             :: daily_array, sibvis, sibnir, sibvis_ave, sibnir_ave
       logical                                        :: last
       real                                           :: time_frac
-      logical                                        :: save_lai=.false., save_green = .false.
+      logical                                        :: save_lai, save_green
+
+      save_lai   = .false.
+      save_green = .false.
 
       if(LDT_rc%lsm.eq."CLSMJ3.2")then
          select case (trim(CP%SOURCE))
          case ('GSWPH')
             save_green = .true.
+            if(allocated (sibinputs%GREEN )) deallocate (sibinputs%GREEN)
+            allocate (sibinputs%GREEN(1:LDT_rc%lnc(nest), 1:LDT_rc%lnr(nest),1:366))
          case ('GLASSA','GLASSM','MCD15A2H')
-            save_lai= .true.      
+            save_lai= .true.
+            if(allocated (sibinputs%LAI )) deallocate (sibinputs%LAI)
+            allocate (sibinputs%LAI(1:LDT_rc%lnc(nest), 1:LDT_rc%lnr(nest),1:366))            
          case default         
             write(LDT_logunit,*)'[WARNING] Not saving for SiBALB calc though CLSM is the model : '
             write(LDT_logunit,*)'[WARNING] clim data source : ', trim (CP%SOURCE)
@@ -717,9 +726,9 @@ contains
       ! initialize time loop
       ! --------------------
       
-      call ESMF_TimeSet (CURRENT_TIME, yy=ref_year, mm=1, dd=1, rc=status)     ; VERIFY_(STATUS)
+      call ESMF_TimeSet (CURRENT_TIME, yy=ref_year, mm=1, dd= 1, rc=status) ; VERIFY_(STATUS)
       call ESMF_TimeSet (END_TIME    , yy=ref_year, mm=12,dd=31, rc=status) ; VERIFY_(STATUS)
-      call ESMF_TimeIntervalSet (DAY_DT, h=24, rc=status)                      ; VERIFY_(STATUS)
+      call ESMF_TimeIntervalSet (DAY_DT, h=24, rc=status)                   ; VERIFY_(STATUS)
       
       OUT_RING  = CURRENT_TIME  + CP%out_dtstep
       t1        = CP%NTIMES
@@ -798,6 +807,7 @@ contains
          if(present (clsm)) then
             ! SiB scaling parameters for CLSM
             call sib_scale_params (nest,day_count,sibvis, sibnir)
+            ! print *, day_count, maxval(sibvis), maxval (sibnir)
             sib_ave(:,:,1) = sib_ave(:,:,1) + sibvis
             sib_ave(:,:,2) = sib_ave(:,:,2) + sibnir
          else
@@ -821,11 +831,12 @@ contains
                if(present (clsm)) then
                   out_ave(:,:,i) = out_ave(:,:,i) / real(time_count)
                   sib_ave(:,:,i) = sib_ave(:,:,i) / real(time_count)
-                  out_ave(:,:,i) = out_ave(:,:,i) / sib_ave(:,:,i)
+                  out_ave(:,:,i) = out_ave(:,:,i) / (sib_ave(:,:,i) + 1.e-15)
                   where (out_ave(:,:,i) <   0.) out_ave(:,:,i) = 1.
                   where (out_ave(:,:,i) > 100.) out_ave(:,:,i) = 1.
                   cdata(i)%gdata(:,:,out_time) = out_ave(:,:,i)
                   sib_ave(:,:,i) = 0.
+ !                 print *, 'SCALE PARAMS :', i, maxval(cdata(i)%gdata(:,:,out_time))
                else
                   cdata(i)%gdata(:,:,out_time) = out_ave(:,:,i) / real(time_count)
                endif
@@ -842,8 +853,8 @@ contains
          
       end do ANNUAL_LOOP
 
-!      if(present (clsm)) deallocate (sibinputs%ITYP, sibinputs%LAI, sibinputs%GREEN, sibvis, sibnir)
-
+      if(present (clsm)) deallocate (sibinputs%ITYP, sibinputs%LAI, sibinputs%GREEN, sibvis, sibnir)
+      
     end subroutine run_annual_cycle
 
     ! --------------------------------------------------------------
@@ -856,35 +867,15 @@ contains
       integer, dimension (:,:), intent(in), optional :: ITYP
       real,    dimension (:,:), intent(in), optional :: LAI, GREEN
       integer, optional                              :: tstep
-      integer :: nx,ny
-
-      if(.not.allocated (sibinputs)) allocate (sibinputs (1:LDT_rc%nnest))
+ 
       if (present (ITYP)) then
-         NX = SIZE (ITYP,1)
-         NY = SIZE (ITYP,2)
-         ASSERT_ (NX == LDT_rc%lnc(nest))
-         ASSERT_ (NY == LDT_rc%lnr(nest))
-         if(.not.allocated (sibinputs(nest)%ITYP)) allocate (sibinputs(nest)%ITYP(1:NX, 1:NY))
-         sibinputs(nest)%ITYP = ITYP
+         if(allocated (sibinputs%ITYP )) deallocate (sibinputs%ITYP)
+         allocate (sibinputs%ITYP(1:LDT_rc%lnc(nest), 1:LDT_rc%lnr(nest)))
+         sibinputs%ITYP = ITYP
       endif
 
-      if (present (LAI)) then
-         NX = SIZE (LAI,1)
-         NY = SIZE (LAI,2)
-         ASSERT_ (NX == LDT_rc%lnc(nest))
-         ASSERT_ (NY == LDT_rc%lnr(nest))
-         if(.not.allocated (sibinputs(nest)%LAI)) allocate (sibinputs(nest)%LAI(1:NX, 1:NY,1:366))
-         sibinputs(nest)%LAI(:,:,tstep) = LAI         
-      endif
-
-      if (present (GREEN)) then
-         NX = SIZE (GREEN,1)
-         NY = SIZE (GREEN,2)
-         ASSERT_ (NX == LDT_rc%lnc(nest))
-         ASSERT_ (NY == LDT_rc%lnr(nest))
-         if(.not.allocated (sibinputs(nest)%GREEN)) allocate (sibinputs(nest)%GREEN(1:NX, 1:NY,1:366))
-         sibinputs(nest)%GREEN(:,:,tstep) = GREEN         
-      endif
+      if (present (LAI)  ) sibinputs%LAI  (:,:,tstep) = LAI
+      if (present (GREEN)) sibinputs%GREEN(:,:,tstep) = GREEN
 
     end SUBROUTINE update_sibinputs
     
@@ -893,31 +884,39 @@ contains
     SUBROUTINE sib_scale_params (nest, day,AVISDF,ANIRDF)
     
       implicit none
-      INTEGER, INTENT (IN)  :: DAY, nest
-      REAL, DIMENSION (:,:) :: AVISDF,ANIRDF
-      INTEGER :: NTILES, NX, NY
+      INTEGER, INTENT (IN)              :: DAY, nest
+      REAL, DIMENSION (:,:),INTENT(OUT) :: AVISDF,ANIRDF
+      INTEGER                           :: NTILES, NX, NY
       logical, dimension (:,:), allocatable :: landmask
+      real, dimension (:), allocatable      :: VISDF, NIRDF
+      real, dimension (:,:), allocatable    :: field
       
-      NX = SIZE (sibinputs(nest)%ITYP,1)
-      NY = SIZE (sibinputs(nest)%ITYP,2)      
-      NTILES = COUNT (sibinputs(nest)%ITYP .NE. NINT(LDT_rc%udef))
+      NX = SIZE (sibinputs%ITYP,1)
+      NY = SIZE (sibinputs%ITYP,2)      
+      NTILES = COUNT (sibinputs%ITYP .NE. NINT(LDT_rc%udef))
 
       allocate (landmask (1:NX, 1:NY))
+      allocate (field    (1:NX, 1:NY))
+      allocate (VISDF (1:NTILES))
+      allocate (NIRDF (1:NTILES))
       
       landmask = .false.
       AVISDF = LDT_rc%udef
       ANIRDF = LDT_rc%udef
 
-      landmask = sibinputs(nest)%ITYP .NE. NINT(LDT_rc%udef)
-      
-      call SIBALB (NTILES,                                  &
-           pack(sibinputs(nest)%ITYP, mask = landmask),           &
-           pack(sibinputs(nest)%LAI(:,:,day),  mask = landmask),  &
-           pack(sibinputs(nest)%GREEN(:,:,day),mask = landmask),  &
-           pack(AVISDF,mask = landmask),                    &
-           pack(ANIRDF,mask = landmask))
+      landmask = sibinputs%ITYP .NE. NINT(LDT_rc%udef)
 
-      deallocate (landmask)
+      call SIBALB (NTILES,                                  &
+           pack(sibinputs%ITYP, mask = landmask),           &
+           pack(sibinputs%LAI  (:,:,day),mask = landmask),  &
+           pack(sibinputs%GREEN(:,:,day),mask = landmask),  &
+           VISDF, NIRDF)
+
+      field = 0.
+      AVISDF = unpack(VISDF,landmask, field)
+      field = 0.
+      ANIRDF = unpack(NIRDF,landmask, field)
+      deallocate (landmask, visdf, nirdf, field)
      
   END SUBROUTINE sib_scale_params
         

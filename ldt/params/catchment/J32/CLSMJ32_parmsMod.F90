@@ -92,7 +92,7 @@ contains
          ARW1,ARW2,ARW3,ARW4,bf1, bf2, bf3, tsa1, tsa2,tsb1, tsb2, GNU,  &
          ATAU2, BTAU2, ATAU, BTAU, BEE, POROS, WPWET, PSIS, KS, SOILDEPTH, Z2CH
     integer, pointer, dimension (:) :: SOIL_TOP, SOIL_COM
-    character*20           :: albInterval, source, proj
+    character*20           :: albInterval, source
     type (ClimateBCsReader):: bcr
 ! ________________________________________________________
 
@@ -501,22 +501,22 @@ contains
 
     enddo
 
-!    call ESMF_ConfigGetAttribute(LDT_config,albInterval, label = "Albedo climatology interval:",rc=rc) ; VERIFY_(RC)
-!    call ESMF_ConfigGetAttribute(LDT_config,source, label = "Albedo data source:", rc=rc)              ; VERIFY_(RC)
-!    call ESMF_ConfigGetAttribute(LDT_config,proj,label = "Albedo map projection:", rc=rc)              ; VERIFY_(RC)
-    
-!    do n=1,LDT_rc%nnest
-!       write(LDT_logunit,*) 'Reading CLSM ALBEDO : '//trim(source)
-!       call bcr%readDataset (n, SOURCE, albinterval, proj, &
-!            CLSMJ32_struc(n)%albvisdif%value, CLSMJ32_struc(n)%albnirdif%value, &
-!            .true., maskarray=LDT_LSMparam_struc(n)%landmask%value(:,:,n))
-!       CLSMJ32_struc(n)%albnirdir%value = CLSMJ32_struc(n)%albnirdif%value
-!       CLSMJ32_struc(n)%albvisdir%value = CLSMJ32_struc(n)%albvisdif%value
-! 
+    call ESMF_ConfigGetAttribute(LDT_config,albInterval, label = "Albedo climatology interval:",rc=rc) ; VERIFY_(RC)
+    call ESMF_ConfigGetAttribute(LDT_config,source, label = "Albedo data source:", rc=rc)              ; VERIFY_(RC)
+    call ESMF_ConfigGetAttribute(LDT_config,catchparms_proj,label = "Albedo map projection:", rc=rc)              ; VERIFY_(RC)
+   
+    do n=1,LDT_rc%nnest
+       write(LDT_logunit,*) 'Reading CLSM ALBEDO : '//trim(source)
+       call bcr%readDataset (n, SOURCE, albinterval, catchparms_proj, &
+            CLSMJ32_struc(n)%albvisdif%value, CLSMJ32_struc(n)%albnirdif%value, &
+            .true., maskarray=LDT_LSMparam_struc(n)%landmask%value(:,:,n))
+       CLSMJ32_struc(n)%albnirdir%value = CLSMJ32_struc(n)%albnirdif%value
+       CLSMJ32_struc(n)%albvisdir%value = CLSMJ32_struc(n)%albvisdif%value
+ 
 !       LDT_rc%monthlyData(n) = .true.
 !       LDT_albedo_struc(n)%albInterval = "monthly"
 !       LDT_gfrac_struc(n)%gfracInterval = "monthly"
-!    enddo
+    enddo
 
   end subroutine catchmentParms_init_J32
 

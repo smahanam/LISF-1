@@ -217,15 +217,21 @@ contains
        endif
     end do 
 
- !- LAI:
-    if( lai_select ) then 
-       call ESMF_ConfigFindLabel(LDT_config,"LAI map:",rc=rc)
-       do n=1,LDT_rc%nnest
-          call ESMF_ConfigGetAttribute(LDT_config,laidir(n),rc=rc)
-          call LDT_verify(rc,'LAI map: not specified')
-          LDT_laisai_struc(n)%laidir = laidir(n)
-       enddo
-     ! Set units and full names:
+    !- LAI:
+    if( lai_select ) then
+       
+       if ( (trim(LDT_laisai_struc(1)%lai%source).ne.'GLASSA').AND. &
+            (trim(LDT_laisai_struc(1)%lai%source).ne.'GLASSM').AND. &
+            (trim(LDT_laisai_struc(1)%lai%source).ne.'MCD15A2H')) THEN
+          
+          call ESMF_ConfigFindLabel(LDT_config,"LAI map:",rc=rc)
+          do n=1,LDT_rc%nnest
+             call ESMF_ConfigGetAttribute(LDT_config,laidir(n),rc=rc)
+             call LDT_verify(rc,'LAI map: not specified')
+             LDT_laisai_struc(n)%laidir = laidir(n)
+          enddo
+       endif
+          ! Set units and full names:
        do n=1,LDT_rc%nnest
           LDT_laisai_struc(n)%lai%units="-"
           call setLAISAIParmsFullnames( n, "lai", &
@@ -392,35 +398,44 @@ contains
 
     !- Read in LAI/SAI files:
        if(LDT_laisai_struc(n)%lai%selectOpt.eq.1) then 
-
-          if(laisaiInterval(n).eq."monthly") then !monthly
-             LDT_rc%monthlyData(n) = .true.
-
-          !- Read single-file monthly clim LAI: 
-             if( trim(LDT_laisai_struc(n)%lai%source) == "CLSMF2.5" ) then
-                LDT_laisai_struc(n)%laifile = trim(laidir(n))
-                write(LDT_logunit,*) "Reading single-file, monthly climatologies for: "&
-                     //trim(LDT_laisai_struc(n)%laifile)
-                call readlai( trim(LDT_laisai_struc(n)%lai%source)//char(0),&
-                     n, LDT_laisai_struc(n)%lai%value, &
-                     LDT_LSMparam_struc(n)%landmask%value )
-                write(LDT_logunit,*) "Done reading file - "//&
-                     trim(LDT_laisai_struc(n)%laifile)
+          if ( (trim(LDT_laisai_struc(1)%lai%source).eq.'GLASSA').OR. &
+               (trim(LDT_laisai_struc(1)%lai%source).eq.'GLASSM').OR. &
+               (trim(LDT_laisai_struc(1)%lai%source).eq.'MCD15A2H')) THEN
+             write(LDT_logunit,*) "Reading single-file, monthly climatologies for: "&
+                        //trim(LDT_laisai_struc(1)%lai%source)
+             call readlai( trim(LDT_laisai_struc(n)%lai%source)//char(0),&
+                  n, LDT_laisai_struc(n)%lai%value, &
+                  LDT_LSMparam_struc(n)%landmask%value )
+             write(LDT_logunit,*) "Done reading file - "//&
+                        trim(LDT_laisai_struc(1)%lai%source)
+          else   
+             if(laisaiInterval(n).eq."monthly") then !monthly
+                LDT_rc%monthlyData(n) = .true.
                 
-          !- Read multi-file monthly LAI: 
-             else  ! Other LAI sources
-                do k=1,LDT_laisai_struc(n)%lai%vlevels
-                   LDT_laisai_struc(n)%laifile = trim(laidir(n))//'.'//&
-                       trim(months(k))//'.1gd4r'
-                   write(LDT_logunit,*) 'Reading '//trim(LDT_laisai_struc(n)%laifile)
-                   call readlai(trim(LDT_laisai_struc(n)%lai%source)//char(0),&
-                        n,LDT_laisai_struc(n)%lai%value(:,:,k))
-                   write(LDT_logunit,*) 'Done reading '//&
+                !- Read single-file monthly clim LAI: 
+                if( trim(LDT_laisai_struc(n)%lai%source) == "CLSMF2.5" ) then
+                   LDT_laisai_struc(n)%laifile = trim(laidir(n))
+                   write(LDT_logunit,*) "Reading single-file, monthly climatologies for: "&
+                        //trim(LDT_laisai_struc(n)%laifile)
+                   call readlai( trim(LDT_laisai_struc(n)%lai%source)//char(0),&
+                        n, LDT_laisai_struc(n)%lai%value, &
+                        LDT_LSMparam_struc(n)%landmask%value )
+                   write(LDT_logunit,*) "Done reading file - "//&
                         trim(LDT_laisai_struc(n)%laifile)
-                enddo
-             end if
-          endif  ! End interval check
-
+                   !- Read multi-file monthly LAI: 
+                else  ! Other LAI sources
+                   do k=1,LDT_laisai_struc(n)%lai%vlevels
+                      LDT_laisai_struc(n)%laifile = trim(laidir(n))//'.'//&
+                           trim(months(k))//'.1gd4r'
+                      write(LDT_logunit,*) 'Reading '//trim(LDT_laisai_struc(n)%laifile)
+                      call readlai(trim(LDT_laisai_struc(n)%lai%source)//char(0),&
+                           n,LDT_laisai_struc(n)%lai%value(:,:,k))
+                      write(LDT_logunit,*) 'Done reading '//&
+                           trim(LDT_laisai_struc(n)%laifile)
+                   enddo
+                end if
+             endif   ! End interval check
+          endif  
           if( lai%filltype == "average" .or. lai%filltype == "neighbor" ) then
              write(LDT_logunit,*) "Checking/filling mask values for: ", &
                                 trim(LDT_laisai_struc(n)%lai%short_name)
@@ -429,7 +444,7 @@ contains
              lai%watervalue = LDT_rc%udef
 !       fill_option = "average"
 !       fill_value = 1.0
-!       fill_rad = 2.
+             !       fill_rad = 2.
              call LDT_contIndivParam_Fill(n, LDT_rc%lnc(n), LDT_rc%lnr(n), &
                  laisai_gridtransform(n), LDT_laisai_struc(n)%lai%num_times, &
                  LDT_laisai_struc(n)%lai%value, lai%watervalue,       &
@@ -450,7 +465,7 @@ contains
                enddo
             enddo
        !- Read maximum LAI file:
-          else
+         else
              call readlaimax(trim(LDT_laisai_struc(n)%lai%source)//char(0),&
                              n,LDT_laisai_struc(n)%laimax%value(:,:,1))
           endif 

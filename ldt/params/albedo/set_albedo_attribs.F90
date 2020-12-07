@@ -53,7 +53,7 @@ subroutine set_albedo_attribs(n,source)
       LDT_albedo_struc(n)%albedo%num_bins = 1
       LDT_albedo_struc(n)%albedo%num_times = 12
 
-   case( "MCD43GF-CLSM", "MCD43GF")
+   case( "MCD43GFv6-CLSM", "MCD43GF")
       call ESMF_ConfigGetAttribute(LDT_config,albInterval,label = "Albedo climatology interval:", rc=rc)
       
             if(albInterval == "monthly") LDT_albedo_struc(:)%albedo%num_times = 12
