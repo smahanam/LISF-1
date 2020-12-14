@@ -118,23 +118,13 @@ contains
       ! Initialize parameter description
       ! --------------------------------
 
-      call this%init_bcs (trim(SOURCE),nest)
+      call this%init_bcs (trim(SOURCE),nest, project)
       
       if (out_interval == "daily"  ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24  , rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "5day"   ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24*5, rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "8day"   ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24*8, rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "monthly") call ESMF_TimeIntervalSet(this%out_dtstep,mm=1   , rc=status ) ; VERIFY_(STATUS)
       if (trim(project)== 'latlon' ) this%param_gridDesc(1)  = 0.
-
-      ! ------------------------------------------------------------
-      !    PREPARE SUBSETTED PARAMETER GRID FOR READING IN BCS DATA
-      ! ------------------------------------------------------------
-
-      !- Map Parameter Grid Info to LIS Target Grid/Projection Info -- 
-      this%subparam_gridDesc = 0.
-      call LDT_RunDomainPts( nest, project, this%param_gridDesc(:), &
-           this%glpnc, this%glpnr, this%subpnc, this%subpnr, this%subparam_gridDesc, &
-           this%lat_line, this%lon_line)
 
       ! ------------------------------------------------
       !    READ REGRID INTERPOLATE AND POPULATE CLIMDATA
@@ -183,23 +173,13 @@ contains
       ! Initialize parameter description
       ! --------------------------------
 
-      call this%init_bcs (trim(SOURCE), nest)
+      call this%init_bcs (trim(SOURCE), nest, project)
       
       if (out_interval == "daily"  ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24  , rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "5day"   ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24*5, rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "8day"   ) call ESMF_TimeIntervalSet(this%out_dtstep, h=24*8, rc=status ) ; VERIFY_(STATUS)
       if (out_interval == "monthly") call ESMF_TimeIntervalSet(this%out_dtstep,mm=1   , rc=status ) ; VERIFY_(STATUS)
       if (trim (project)== 'latlon') this%param_gridDesc(1)  = 0.
-
-      ! ------------------------------------------------------------
-      !    PREPARE SUBSETTED PARAMETER GRID FOR READING IN BCS DATA
-      ! ------------------------------------------------------------
-
-      !- Map Parameter Grid Info to LIS Target Grid/Projection Info -- 
-      this%subparam_gridDesc = 0.
-      call LDT_RunDomainPts( nest, project, this%param_gridDesc(:), &
-           this%glpnc, this%glpnr, this%subpnc, this%subpnr, this%subparam_gridDesc, &
-           this%lat_line, this%lon_line)   
 
       ! ------------------------------------------------
       !    READ REGRID INTERPOLATE AND POPULATE CLIMDATA
@@ -226,12 +206,12 @@ contains
     
     !###################################################################################
 
-    SUBROUTINE init_bcs (CP, SOURCE, nest)
+    SUBROUTINE init_bcs (CP, SOURCE, nest, project)
           
       implicit none
       class (ClimateBCsReader), intent(inout) :: CP
       integer, intent (in)      :: nest
-      character(*), intent (in) :: SOURCE
+      character(*), intent (in) :: SOURCE, project
       integer, parameter  :: N_MONTHLY_DATES = 12
       integer, parameter  :: N_MODIS_DATES8  = 46
       integer, parameter  :: N_MODIS_DATES5  = 73
@@ -392,6 +372,16 @@ contains
             if(LDT_rc%global_mask(gc,gr) > 0. ) CP%local_mask(c,r) = 1
          end do
       end do
+
+      ! ------------------------------------------------------------
+      !    PREPARE SUBSETTED PARAMETER GRID FOR READING IN BCS DATA
+      ! ------------------------------------------------------------
+      
+      !- Map Parameter Grid Info to LIS Target Grid/Projection Info -- 
+      CP%subparam_gridDesc = 0.
+      call LDT_RunDomainPts( nest, project, CP%param_gridDesc(:),          &
+           CP%glpnc, CP%glpnr, CP%subpnc, CP%subpnr, CP%subparam_gridDesc, &
+           CP%lat_line, CP%lon_line)
       
     END SUBROUTINE init_bcs
    
@@ -567,7 +557,7 @@ contains
           
           ! arrays read from LL
           integer,parameter :: k10 = selected_int_kind(10)
-          integer(kind=8) :: mi               ! Total number of input param grid array points
+          integer   :: mi                     ! Total number of input param grid array points
           integer   :: mo                     ! Total number of output LIS grid array points
           integer   :: nc, nr, i, j
           integer, allocatable  :: n11(:)     ! Array that maps the location of each input grid
@@ -581,7 +571,8 @@ contains
           real, allocatable, dimension (:)      :: go2     ! Output lis 1d grid
           logical*1, allocatable, dimension (:) :: lo2  ! Output logical mask (to match go)
 
-          mi = INT(dble(CP%NX)*dble(CP%NY), 8)
+          !mi = INT(dble(CP%NX)*dble(CP%NY), 8)
+          mi = CP%subpnc*CP%subpnr
           mo = LDT_rc%lnc(nest)*LDT_rc%lnr(nest)
 
           allocate (var_in(CP%subpnc,CP%subpnr))                
@@ -600,7 +591,7 @@ contains
                    var_in (nc,nr) = data_in (CP%lon_line(nc,1),CP%lat_line (1,nr),j)
                 end do
              end do
-             
+ 
              ! -------------------------------------------------------------------
              !     AGGREGATING FINE-SCALE GRIDS TO COARSER LIS OUTPUT GRID
              ! -------------------------------------------------------------------
