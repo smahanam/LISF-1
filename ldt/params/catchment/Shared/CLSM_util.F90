@@ -60,7 +60,7 @@ module CLSM_util
       integer                          :: i, j, n, r, c, status, ncid, dx_esa, dy_esa, NBINS, &
            NPLUS, nc_global,nr_global,msk2rst, catNo,ix1,ix2,iy1,iy2, ii, jj, catCount,ncells,  glpnr, glpnc, ftil
       real   , dimension (:), allocatable           :: lat, lon, lat_g5, lon_g5
-      integer, allocatable, target, dimension (:,:) :: geos_msk, high_msk 
+      integer, allocatable, target, dimension (:,:) :: geos_msk, high_msk, load_array 
       real (kind =8)                                :: dxh, dyh
       logical                                       :: regrid, counted
       REAL,    allocatable, DIMENSION (:)           :: loc_val
@@ -118,7 +118,8 @@ module CLSM_util
       ! ----------------------------
       
       status    = NF_OPEN (trim(G5_BCSDIR)//'GEOS5_10arcsec_mask.nc', NF_NOWRITE, ncid) ; VERIFY_(STATUS)
-      
+      allocate (load_array (1: nc_esa, 1: nr_esa))
+      status  = NF_GET_VARA_INT (ncid,4,(/1,1/), (/nc_esa,nr_esa/),load_array);  VERIFY_(STATUS)
       x0 = -180. + dx/2.
       y0 = -90.  + dy/2.
       nc_global = nint(360./dx)
@@ -165,8 +166,9 @@ module CLSM_util
          
          do jj = iy1,iy2
             do ii = ix1,ix2
-               status  = NF_GET_VARA_INT (ncid,4,(/(ii-1)*msk2rst+1,(jj-1)*msk2rst +1/),  &
-                    (/msk2rst,msk2rst/),high_msk);  VERIFY_(STATUS)
+!               status  = NF_GET_VARA_INT (ncid,4,(/(ii-1)*msk2rst+1,(jj-1)*msk2rst +1/),  &
+!                    (/msk2rst,msk2rst/),high_msk);  VERIFY_(STATUS)
+               high_msk = load_array ((ii-1)*msk2rst+1:ii*msk2rst, (jj-1)*msk2rst +1: jj*msk2rst)
                if(count(high_msk >= 1 .and. high_msk <= SRTM_maxcat) > 0) then
                   if (.not. counted) catCount       = catCount + 1
                   LDT_g5map%rst (ii,jj) = catCount
@@ -176,9 +178,9 @@ module CLSM_util
          end do
          
          if (counted) then
-            status  = NF_GET_VARA_INT (ncid,4,(/(ix1-1)*msk2rst+1,(iy1-1)*msk2rst +1/), &
-                 (/dx_esa,dy_esa/),geos_msk)  ; VERIFY_(STATUS)
-            
+!            status  = NF_GET_VARA_INT (ncid,4,(/(ix1-1)*msk2rst+1,(iy1-1)*msk2rst +1/), &
+!                 (/dx_esa,dy_esa/),geos_msk)  ; VERIFY_(STATUS)
+            high_msk = load_array ((ix1-1)*msk2rst+1:(ix1-1)*msk2rst+dx_esa ,(iy1-1)*msk2rst +1:(iy1-1)*msk2rst + dy_esa)
             if(maxval (geos_msk) > SRTM_maxcat) then
                if(maxval (geos_msk) == 200000000) where (geos_msk == 200000000) geos_msk = SRTM_maxcat + 2 
                if(maxval (geos_msk) == 190000000) where (geos_msk == 190000000) geos_msk = SRTM_maxcat + 1
@@ -251,15 +253,18 @@ module CLSM_util
       else
 
          write(LDT_logunit,*)'[CLSM INIT GEOS2LIS] filling GEOS5 gaps ... '
+
          ! (2) gap filling
          ! ---------------
          allocate (tid_geos (1: LDT_g5map%NT_GEOS))
          allocate (mask     (1: LDT_g5map%NT_GEOS))
-
-         LDT_g5map%ID_LOC(:) = 9999
+         do n = 1,  LDT_g5map%NT_GEOS
+            tid_geos(n) = n
+         end do
+         LDT_g5map%ID_LOC(:) = -9999
          
          LIS_TILES : do n = 1,  LDT_g5map%NT_LIS
-            
+
             dw = 0.5
             
             ZOOMOUT : do  
@@ -274,9 +279,9 @@ module CLSM_util
                min_lat = MAX(lat (n) - dw,  -90.)
                max_lat = MIN(lat (n) + dw,   90.) 
                mask = .false.
-               mask =  ((lat_g5 >= min_lat .and. lat_g5 <= max_lat).and.(lon_g5 >= min_lon .and. lon_g5 <= max_lon))
+               mask =  ((lat_g5(1:ncells)  >= min_lat .and. lat_g5(1:ncells)  <= max_lat).and.(lon_g5(1:ncells)  >= min_lon .and. lon_g5(1:ncells)  <= max_lon))
                nplus =  count(mask = mask)
-               
+ 
                if(nplus < 0) then
                   dw = dw + 0.5
                   CYCLE
@@ -288,8 +293,8 @@ module CLSM_util
                allocate (rev_dist  (1:nplus))
                
                sub_tid = PACK (tid_geos  , mask= mask) 
-               sub_lon = PACK (lon_g5    , mask= mask)
-               sub_lat = PACK (lat_g5    , mask= mask)
+               sub_lon = PACK (lon_g5(1:ncells), mask= mask)
+               sub_lat = PACK (lat_g5(1:ncells), mask= mask)
                
                ! compute distance from the tile
                
@@ -325,7 +330,7 @@ module CLSM_util
             
 100         continue
             
-            !     write (10,'(2I6, 4f8.2)') n, Id_loc(n), lis_lat(n), geos_lat( Id_loc(n)),  lis_lon(n), geos_lon( Id_loc(n))
+!           write (10,'(2I6, 4f8.2)') n, LDT_g5map%Id_loc(n), lat(n), lat_g5( LDT_g5map%Id_loc(n)),  lon(n), lon_g5( LDT_g5map%Id_loc(n))
             
          END do LIS_TILES
       endif
