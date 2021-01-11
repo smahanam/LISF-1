@@ -63,6 +63,7 @@ contains
 ! 
 ! !INTERFACE:
   subroutine catchmentParms_init_J32
+!  subroutine catchmentParms_init_J32 (nest, num_types, fgrd, maskarray )
 ! !USES:
     use LDT_fileIOMod, only : LDT_readDomainConfigSpecs
     use LDT_logMod,    only : LDT_verify
@@ -83,6 +84,7 @@ contains
 !
 !EOP
     implicit none
+    integer      :: nest
     integer      :: n, c, r, ntiles, i, glpnr, glpnc
     integer      :: rc
     character*50 :: catchparms_proj
@@ -96,14 +98,17 @@ contains
     type (ClimateBCsReader):: bcr
 ! ________________________________________________________
 
+    nest = 1
+    
     write(LDT_logunit,*)" - - - - - - - - - Catchment LSM Parameters - - - - - - - - - - - -"
     
-    allocate(CLSMJ32_struc(LDT_rc%nnest))
-
+    !allocate(CLSMJ32_struc(LDT_rc%nnest))
+    allocate(CLSMJ32_struc(1))
+    
     ! (1) initialize LDT_g5map
     ! ------------------------
 
-    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+    if (associated(LDT_g5map) .eqv. .false.) call init_geos2lis_mapping (nest)
     
     ! (2) Derive soil types, atau and btau
     ! ------------------------------------
@@ -160,7 +165,7 @@ contains
 
     write(LDT_logunit,'(A60)')'[CLSM catchmentParms_init_J32] writing LIS input file ...'
 
-    do n=1,LDT_rc%nnest  
+    do n=nest, nest !1,LDT_rc%nnest  
 
        param_grid(:) = LDT_rc%mask_gridDesc(n,:)
        glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
@@ -448,46 +453,46 @@ contains
 
 !-- Read in Catchment Parameter Datasets:
 
-    do n=1,LDT_rc%nnest
+    do n=nest, nest ! 1,LDT_rc%nnest
 
        call LDT_gridOptChecks( n, "CLSMJ32", &
             CLSMJ32_struc(n)%catchparms_gridtransform, &
             CLSMJ32_struc(n)%catchparms_proj, &
             CLSMJ32_struc(n)%catchparms_gridDesc(9) )
 
-       CLSMJ32_struc(n)%ars1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars1))
-       CLSMJ32_struc(n)%ars2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars2))
-       CLSMJ32_struc(n)%ars3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ars3))
-       CLSMJ32_struc(n)%ara1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara1))
-       CLSMJ32_struc(n)%ara2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara2))
-       CLSMJ32_struc(n)%ara3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara3))
-       CLSMJ32_struc(n)%ara4%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (ara4))
-       CLSMJ32_struc(n)%arw1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw1))
-       CLSMJ32_struc(n)%arw2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw2))
-       CLSMJ32_struc(n)%arw3%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw3))
-       CLSMJ32_struc(n)%arw4%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (arw4))
-       CLSMJ32_struc(n)%bf1%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf1 ))
-       CLSMJ32_struc(n)%bf2%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf2 ))
-       CLSMJ32_struc(n)%bf3%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bf3 ))
-       CLSMJ32_struc(n)%tsa1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsa1))
-       CLSMJ32_struc(n)%tsa2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsa2))
-       CLSMJ32_struc(n)%tsb1%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb1))
-       CLSMJ32_struc(n)%tsb2%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (tsb2))
+       CLSMJ32_struc(n)%ars1%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ars1))
+       CLSMJ32_struc(n)%ars2%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ars2))
+       CLSMJ32_struc(n)%ars3%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ars3))
+       CLSMJ32_struc(n)%ara1%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ara1))
+       CLSMJ32_struc(n)%ara2%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ara2))
+       CLSMJ32_struc(n)%ara3%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ara3))
+       CLSMJ32_struc(n)%ara4%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (ara4))
+       CLSMJ32_struc(n)%arw1%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (arw1))
+       CLSMJ32_struc(n)%arw2%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (arw2))
+       CLSMJ32_struc(n)%arw3%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (arw3))
+       CLSMJ32_struc(n)%arw4%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (arw4))
+       CLSMJ32_struc(n)%bf1%value (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (bf1 ))
+       CLSMJ32_struc(n)%bf2%value (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (bf2 ))
+       CLSMJ32_struc(n)%bf3%value (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (bf3 ))
+       CLSMJ32_struc(n)%tsa1%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (tsa1))
+       CLSMJ32_struc(n)%tsa2%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (tsa2))
+       CLSMJ32_struc(n)%tsb1%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (tsb1))
+       CLSMJ32_struc(n)%tsb2%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (tsb2))
        if(CLSMJ32_struc(n)%dzsfcrd == 0.02) then
-          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau2))
-          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau2))
+          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (atau2))
+          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (btau2))
        else
-          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (atau))
-          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (btau))          
+          CLSMJ32_struc(n)%atau%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (atau))
+          CLSMJ32_struc(n)%btau%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (btau))          
        endif
-       CLSMJ32_struc(n)%psisat%value   (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (psis))
-       CLSMJ32_struc(n)%bexp%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (bee ))
-       CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (wpwet))
-       CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (Ks))
-       CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (glpnc,glpnr,G52LIS (soildepth))
-       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (poros))
-       CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (gnu))
-       CLSMJ32_struc(n)%z2%value       (:,:,1) = LISv2g (glpnc,glpnr,G52LIS (z2ch))
+       CLSMJ32_struc(n)%psisat%value   (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (psis))
+       CLSMJ32_struc(n)%bexp%value     (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (bee ))
+       CLSMJ32_struc(n)%wpwet%value    (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (wpwet))
+       CLSMJ32_struc(n)%ksat%value     (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (Ks))
+       CLSMJ32_struc(n)%bdrckdpth%value(:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (soildepth))
+       CLSMJ32_struc(n)%porosity%value (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (poros))
+       CLSMJ32_struc(n)%gnu%value      (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (gnu))
+       CLSMJ32_struc(n)%z2%value       (:,:,1) = LISv2g (n,LDT_rc%lnc(n),LDT_rc%lnr(n),G52LIS (z2ch))
        
        call populate_param_attribs( "ALBNIRDIFF", &
            "Alb near-IR diffuse scale factor", "-",  &
@@ -504,8 +509,8 @@ contains
     call ESMF_ConfigGetAttribute(LDT_config,albInterval, label = "Albedo climatology interval:",rc=rc) ; VERIFY_(RC)
     call ESMF_ConfigGetAttribute(LDT_config,source, label = "Albedo data source:", rc=rc)              ; VERIFY_(RC)
     call ESMF_ConfigGetAttribute(LDT_config,catchparms_proj,label = "Albedo map projection:", rc=rc)              ; VERIFY_(RC)
-   
-    do n=1,LDT_rc%nnest
+
+    do n=nest, nest ! 1,LDT_rc%nnest
        write(LDT_logunit,*) 'Reading CLSM ALBEDO : '//trim(source)
        call bcr%readDataset (n, SOURCE, albinterval, catchparms_proj, &
             CLSMJ32_struc(n)%albvisdif%value, CLSMJ32_struc(n)%albnirdif%value, &
@@ -513,9 +518,6 @@ contains
        CLSMJ32_struc(n)%albnirdir%value = CLSMJ32_struc(n)%albnirdif%value
        CLSMJ32_struc(n)%albvisdir%value = CLSMJ32_struc(n)%albvisdif%value
  
-!       LDT_rc%monthlyData(n) = .true.
-!       LDT_albedo_struc(n)%albInterval = "monthly"
-!       LDT_gfrac_struc(n)%gfracInterval = "monthly"
     enddo
 
   end subroutine catchmentParms_init_J32

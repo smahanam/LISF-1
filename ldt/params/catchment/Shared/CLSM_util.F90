@@ -15,7 +15,8 @@ module CLSM_util
        LDT_releaseUnitNumber, LDT_endrun
   use LDT_domainMod
   use LDT_gridmappingMod
-
+  use map_utils,   only : ij_to_latlon
+  
   implicit none
   include 'netcdf.inc'	
 
@@ -32,10 +33,10 @@ module CLSM_util
 
   type :: GEOS2LIS
 
-     integer :: NX
-     integer :: NY
-     integer :: NT_LIS
-     integer :: NT_GEOS
+     integer :: NX =0
+     integer :: NY =0
+     integer :: NT_LIS = 0
+     integer :: NT_GEOS = 0
      logical :: init = .false.
      real,    allocatable, dimension (:)   :: lat, lon
      integer, allocatable, dimension (:)   :: ID_LOC, catid_index
@@ -45,20 +46,20 @@ module CLSM_util
 
   integer  , parameter  :: nc_esa = 129600, nr_esa = 64800, SRTM_maxcat = 291284, nc_g5_rst = 43200, nr_g5_rst = 21600
   character*300         :: G5_BCSDIR = '/discover/nobackup/rreichle/l_data/LandBCs_files_for_mkCatchParam/V001/'
-  type (GEOS2LIS), save :: LDT_g5map
-  logical               :: write_clsm_files = .true.
+  type (GEOS2LIS), pointer, save :: LDT_g5map => null()
+  logical                        :: write_clsm_files = .false.
 
   contains
 
     ! -----------------------------------------------------------
 
-    subroutine init_geos2lis_mapping 
+    subroutine init_geos2lis_mapping (nestin) 
 
       implicit none
-
+      integer, intent (in)             :: nestin
       real                             :: dx, dy, x0, y0
-      integer                          :: i, j, n, r, c, status, ncid, dx_esa, dy_esa, NBINS, &
-           NPLUS, nc_global,nr_global,msk2rst, catNo,ix1,ix2,iy1,iy2, ii, jj, catCount,ncells,  glpnr, glpnc, ftil
+      integer                          :: nest, i, j, n, r, c, status, ncid, dx_esa, dy_esa, NBINS, &
+           NPLUS, nc_global,nr_global,msk2rst, catNo,ix1,ix2,iy1,iy2, ii, jj, catCount,ncells,  glpnr, glpnc, ftil, gr, gc
       real   , dimension (:), allocatable           :: lat, lon, lat_g5, lon_g5
       integer, allocatable, target, dimension (:,:) :: geos_msk, high_msk, load_array 
       real (kind =8)                                :: dxh, dyh
@@ -71,26 +72,37 @@ module CLSM_util
       integer, allocatable, dimension (:) :: sub_tid, id_loc, tid_geos 
       real   , allocatable, dimension (:) :: sub_lon, sub_lat, rev_dist
       character(10)                       :: tmpstr
-      real                                :: dw, dx2, dy2, min_lon, max_lon, min_lat, max_lat     
+      real                                :: dw, dx2, dy2, min_lon, max_lon, min_lat, max_lat, rlat, rlon   
       real                                :: param_grid(20)
 
+      nest = 1
       if (write_clsm_files) call system('mkdir -p LDT_clsm')
-
-      ! Talk to Kristi about the right full domain
-      ! ------------------------------------------
-
+      allocate(LDT_g5map,   stat=status) ;  VERIFY_(STATUS)
+      LDT_g5map = GEOS2LIS()
       LDT_g5map%init = .true.
-      i = 1 ! for now 1 nest
-      param_grid(:) = LDT_rc%mask_gridDesc(i,:)
+
+      param_grid(:) = LDT_rc%mask_gridDesc(nest,:)
       glpnr = nint((param_grid(7)-param_grid(4))/param_grid(10)) + 1
       glpnc = nint((param_grid(8)-param_grid(5))/param_grid(9)) + 1      
       
-      dx = LDT_rc%mask_gridDesc(i, 9)  ! LDT_fileIOMod.F90 L702
-      dy = LDT_rc%mask_gridDesc(i,10)  ! LDT_fileIOMod.F90 L708     
+      dx = LDT_rc%mask_gridDesc(nest, 9)  ! LDT_fileIOMod.F90 L702
+      dy = LDT_rc%mask_gridDesc(nest,10)  ! LDT_fileIOMod.F90 L708     
             
       LDT_g5map%NX = nc_g5_rst
       LDT_g5map%NY = nr_g5_rst
-      LDT_g5map%NT_LIS = NINT(SUM (LDT_rc%global_mask (:, :))) 
+      LDT_g5map%NT_LIS = 0
+
+      do r = 1,  LDT_rc%lnr(nest)
+         do c = 1, LDT_rc%lnc(nest)
+            call ij_to_latlon(LDT_domain(nest)%ldtproj,float(c),float(r),&
+                 rlat,rlon)
+            gr = nint((rlat-param_grid(4))/param_grid(10)) + 1
+            gc = nint((rlon-param_grid(5))/param_grid( 9)) + 1
+            if( LDT_rc%global_mask (gc, gr) == 1. ) then 
+               LDT_g5map%NT_LIS =  LDT_g5map%NT_LIS + 1
+            endif
+         end do
+      end do
                          ! LDT_LSMparam_struc(i)%landmask%value(:, :,i)))
       
       allocate (lat    (1: LDT_g5map%NT_LIS))
@@ -102,24 +114,31 @@ module CLSM_util
 
       n = 0
 
-      do r = 1, glpnr
-         do c = 1, glpnc
-!            if( LDT_LSMparam_struc(i)%landmask%value(c, r,i) > 0. ) then 
-           if( LDT_rc%global_mask (c, r) > 0. ) then 
-               j = (r-1)*glpnc + c
+      do r = 1,  LDT_rc%lnr(nest)
+         do c = 1, LDT_rc%lnc(nest)
+            call ij_to_latlon(LDT_domain(nest)%ldtproj,float(c),float(r),&
+                 rlat,rlon)
+            gr = nint((rlat-param_grid(4))/param_grid(10)) + 1
+            gc = nint((rlon-param_grid(5))/param_grid( 9)) + 1
+            if( LDT_rc%global_mask (gc, gr) == 1. ) then
+               if((LDT_rc%lnr(nest) == glpnr).and.(LDT_rc%lnc(nest) == glpnc)) then
+                  j = (gr-1)*glpnc + gc
+               else
+                  j = (r-1)*LDT_rc%lnc(nest) + c
+               endif
                n = n+1
-               lat(n) = LDT_domain(i)%lat(j)
-               lon(n) = LDT_domain(i)%lon(j)
+               lat(n) = LDT_domain(nest)%lat(j)
+               lon(n) = LDT_domain(nest)%lon(j)
             endif
          end do
       end do
-      
+
       ! (1) rst/til arrays for GEOS5
       ! ----------------------------
       
       status    = NF_OPEN (trim(G5_BCSDIR)//'GEOS5_10arcsec_mask.nc', NF_NOWRITE, ncid) ; VERIFY_(STATUS)
-      allocate (load_array (1: nc_esa, 1: nr_esa))
-      status  = NF_GET_VARA_INT (ncid,4,(/1,1/), (/nc_esa,nr_esa/),load_array);  VERIFY_(STATUS)
+    !  allocate (load_array (1: nc_esa, 1: nr_esa))
+    !  status  = NF_GET_VARA_INT (ncid,4,(/1,1/), (/nc_esa,nr_esa/),load_array);  VERIFY_(STATUS)
       x0 = -180. + dx/2.
       y0 = -90.  + dy/2.
       nc_global = nint(360./dx)
@@ -166,9 +185,9 @@ module CLSM_util
          
          do jj = iy1,iy2
             do ii = ix1,ix2
-!               status  = NF_GET_VARA_INT (ncid,4,(/(ii-1)*msk2rst+1,(jj-1)*msk2rst +1/),  &
-!                    (/msk2rst,msk2rst/),high_msk);  VERIFY_(STATUS)
-               high_msk = load_array ((ii-1)*msk2rst+1:ii*msk2rst, (jj-1)*msk2rst +1: jj*msk2rst)
+               status  = NF_GET_VARA_INT (ncid,4,(/(ii-1)*msk2rst+1,(jj-1)*msk2rst +1/),  &
+                    (/msk2rst,msk2rst/),high_msk);  VERIFY_(STATUS)
+!               high_msk = load_array ((ii-1)*msk2rst+1:ii*msk2rst, (jj-1)*msk2rst +1: jj*msk2rst)
                if(count(high_msk >= 1 .and. high_msk <= SRTM_maxcat) > 0) then
                   if (.not. counted) catCount       = catCount + 1
                   LDT_g5map%rst (ii,jj) = catCount
@@ -178,9 +197,9 @@ module CLSM_util
          end do
          
          if (counted) then
-!            status  = NF_GET_VARA_INT (ncid,4,(/(ix1-1)*msk2rst+1,(iy1-1)*msk2rst +1/), &
-!                 (/dx_esa,dy_esa/),geos_msk)  ; VERIFY_(STATUS)
-            high_msk = load_array ((ix1-1)*msk2rst+1:(ix1-1)*msk2rst+dx_esa ,(iy1-1)*msk2rst +1:(iy1-1)*msk2rst + dy_esa)
+            status  = NF_GET_VARA_INT (ncid,4,(/(ix1-1)*msk2rst+1,(iy1-1)*msk2rst +1/), &
+                 (/dx_esa,dy_esa/),geos_msk)  ; VERIFY_(STATUS)
+!            geos_msk = load_array ((ix1-1)*msk2rst+1:(ix1-1)*msk2rst+dx_esa ,(iy1-1)*msk2rst +1:(iy1-1)*msk2rst + dy_esa)
             if(maxval (geos_msk) > SRTM_maxcat) then
                if(maxval (geos_msk) == 200000000) where (geos_msk == 200000000) geos_msk = SRTM_maxcat + 2 
                if(maxval (geos_msk) == 190000000) where (geos_msk == 190000000) geos_msk = SRTM_maxcat + 1
@@ -549,19 +568,26 @@ module CLSM_util
 ! ====================================================================
 !
    
-   function LISv2g (nc,nr, lis_array) result (lis_2D)
+   function LISv2g (nest, nc,nr, lis_array) result (lis_2D)
 
      implicit none 
-     integer, intent (in)             :: nc, nr 
+     integer, intent (in)             :: nc, nr, nest 
      real, dimension (:), intent (in) :: lis_array
      real, dimension (nc,nr)          :: lis_2D
-     integer                          :: c, r, i
-
+     integer                          :: c, r, i, gc, gr
+     real                             :: rlat, rlon
+     real                             :: param_grid(20)
+     
+     param_grid(:) = LDT_rc%mask_gridDesc(nest,:)
      lis_2D = LDT_rc%udef
      i = 1
      do r = 1, nr
         do c = 1, nc
-           if( LDT_rc%global_mask(c,r) > 0. ) then
+           call ij_to_latlon(LDT_domain(nest)%ldtproj,float(c),float(r),&
+                rlat,rlon)
+           gr = nint((rlat-param_grid(4))/param_grid(10)) + 1
+           gc = nint((rlon-param_grid(5))/param_grid( 9)) + 1
+           if( LDT_rc%global_mask (gc, gr) >= 1. ) then
               lis_2D (c,r) = lis_array(i)
               i = i + 1
            endif

@@ -28,7 +28,7 @@ module mod_ESA_lc
        NC_VarID, LDT_g5map,                 &
        c_data => G5_BCSDIR,                 &
        NX => nc_g5_rst,                     &
-       NY => nr_g5_rst, histogram , write_clsm_files, init_geos2lis_mapping,G52LIS, LISv2g , read_clsm_maskfile
+       NY => nr_g5_rst, histogram , write_clsm_files, init_geos2lis_mapping,G52LIS, read_clsm_maskfile
   use LDT_numericalMethodsMod, only : LDT_quicksort
   use map_utils
   use LDT_ClimateBCsReader,    ONLY : ClimateBCsReader
@@ -345,8 +345,8 @@ module mod_ESA_lc
     ! ---------------------------------------------------
 
     call read_clsm_maskfile(n, maskarray)
-
-    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+    if (associated(LDT_g5map) .eqv. .false.) call init_geos2lis_mapping (n) 
+   ! if (.not.LDT_g5map%init) call init_geos2lis_mapping (n) 
 
     LDT_rc%waterclass   = 7
     LDT_rc%bareclass    = 5
@@ -564,10 +564,14 @@ module mod_ESA_lc
 
 ! - For now - complete domains:
     k = 0
-    do r = 1, glpnr
-       do c = 1, glpnc
+    do r = 1,  LDT_rc%lnr(n) !glpnr
+       do c = 1, LDT_rc%lnc(n) ! glpnc
+         call ij_to_latlon(LDT_domain(n)%ldtproj,float(c),float(r),&
+                           rlat(c,r),rlon(c,r))
+         gr = nint((rlat(c,r)-param_grid(4))/param_grid(10))+1
+         gc = nint((rlon(c,r)-param_grid(5))/param_grid(9))+1
           
-          if( LDT_rc%global_mask(c,r) > 0. ) then
+          if( LDT_rc%global_mask(gc,gr) >= 1. ) then
              k = k + 1
              if( ityp_lis(k) > 0 ) then
                 vegtype(c,r) = ityp_lis(k)
@@ -599,6 +603,7 @@ module mod_ESA_lc
 
    call BCR%update_sibinputs(n, ITYP = vegtype_lc)
    deallocate (veg, vegtype, vegtype_lc, ityp, ityp_lis)
+  ! nullify (LDT_g5map)
    
   END SUBROUTINE ESA2MOSAIC
 
@@ -606,11 +611,11 @@ module mod_ESA_lc
 ! ---------------------------------------------------------------------
 !
 
-  SUBROUTINE ESA2CLM45 (nc, nr, gfile)
+  SUBROUTINE ESA2CLM45 (nest, nc, nr, gfile)
 
     implicit none
 
-    integer  , intent (in) :: nc, nr
+    integer  , intent (in) :: nc, nr, nest
     character (*)          :: gfile
     
     integer  , parameter   :: N_lon_clm = 7200, N_lat_clm = 3600, lsmpft = 25
@@ -639,9 +644,9 @@ module mod_ESA_lc
     ! ---------------------------------------------------
 
     allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
-    call read_clsm_maskfile(1, maskarray)
+    call read_clsm_maskfile(nest, maskarray)
 
-    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+    if (associated(LDT_g5map) .eqv. .false.) call init_geos2lis_mapping (nest) 
 
     ! These 2 values are assumed as same as they are in surfdata_0.23x0.31_simyr2000_c100406.nc
 
@@ -1334,11 +1339,11 @@ module mod_ESA_lc
 
 ! ------------------------------------------------------------------------------------------------
 
-  SUBROUTINE ESA2CLM4 (nc, nr, gfile)
+  SUBROUTINE ESA2CLM4 (nest, nc, nr, gfile)
 
     implicit none
 
-    integer  , intent (in) :: nc, nr
+    integer  , intent (in) :: nc, nr, nest
     character (*)          :: gfile
     
     integer  , parameter   :: N_lon_clm = 1152, N_lat_clm = 768, lsmpft = 17
@@ -1366,10 +1371,10 @@ module mod_ESA_lc
     ! Initialize the global mask and GEOS5 to LIS mapping
     ! ---------------------------------------------------
 
-    allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
-    call read_clsm_maskfile(1, maskarray)
+!    allocate (maskarray(1: LDT_rc%lnc(1),1: LDT_rc%lnr(1)))
+    call read_clsm_maskfile(nest, maskarray)
 
-    if (.not.LDT_g5map%init) call init_geos2lis_mapping 
+    if (associated(LDT_g5map) .eqv. .false.) call init_geos2lis_mapping (nest) 
 
     ! Reading CLM pft data file
     !--------------------------
