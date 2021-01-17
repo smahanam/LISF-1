@@ -587,7 +587,7 @@ module CLSM_util
                 rlat,rlon)
            gr = nint((rlat-param_grid(4))/param_grid(10)) + 1
            gc = nint((rlon-param_grid(5))/param_grid( 9)) + 1
-           if( LDT_rc%global_mask (gc, gr) >= 1. ) then
+           if( LDT_rc%global_mask (gc, gr) == 1. ) then
               lis_2D (c,r) = lis_array(i)
               i = i + 1
            endif
