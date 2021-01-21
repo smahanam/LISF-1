@@ -786,7 +786,9 @@ contains
                 i1 = n - k
                 i2 = n + k
                 if((i1 >=     1).and.(soil_class_com (i1) >=1)) j = i1
-                if((i2 <=maxcat).and.(soil_class_com (i2) >=1)) j = i2
+                if(i2 <=maxcat) then
+                   if(soil_class_com (i2) >=1) j = i2
+                endif
                 
                 if (j > 0) then
                    soil_class_com (n) = soil_class_com (j)

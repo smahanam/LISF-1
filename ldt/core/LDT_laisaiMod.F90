@@ -222,7 +222,8 @@ contains
        
        if ( (trim(LDT_laisai_struc(1)%lai%source).ne.'GLASSA').AND. &
             (trim(LDT_laisai_struc(1)%lai%source).ne.'GLASSM').AND. &
-            (trim(LDT_laisai_struc(1)%lai%source).ne.'MCD15A2H')) THEN
+            (trim(LDT_laisai_struc(1)%lai%source).ne.'MCD15A2H').AND. &
+            (trim(LDT_laisai_struc(1)%lai%source).ne.'GSWPHL')) THEN
           
           call ESMF_ConfigFindLabel(LDT_config,"LAI map:",rc=rc)
           do n=1,LDT_rc%nnest
@@ -400,7 +401,8 @@ contains
        if(LDT_laisai_struc(n)%lai%selectOpt.eq.1) then 
           if ( (trim(LDT_laisai_struc(1)%lai%source).eq.'GLASSA').OR. &
                (trim(LDT_laisai_struc(1)%lai%source).eq.'GLASSM').OR. &
-               (trim(LDT_laisai_struc(1)%lai%source).eq.'MCD15A2H')) THEN
+               (trim(LDT_laisai_struc(1)%lai%source).eq.'MCD15A2H').OR. &
+               (trim(LDT_laisai_struc(1)%lai%source).eq.'GSWPHL')) THEN
              write(LDT_logunit,*) "Reading single-file, monthly climatologies for: "&
                         //trim(LDT_laisai_struc(1)%lai%source)
              call readlai( trim(LDT_laisai_struc(n)%lai%source)//char(0),&

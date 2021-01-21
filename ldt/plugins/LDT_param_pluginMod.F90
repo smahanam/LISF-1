@@ -890,6 +890,12 @@ contains
    call registerreadlai   (trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_lai) 
    call registerreadlaimax(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMax)
    call registerreadlaimin(trim(LDT_mcd15a2laiId)//char(0),read_ClimateBCs_laiMin)
+
+   !- GSWPH climatology
+   call registersetlaiattribs (trim(LDT_GSWPHlaiId)//char(0),set_ClimateBCs_laiattribs)  
+   call registerreadlai   (trim(LDT_GSWPHlaiId)//char(0),read_ClimateBCs_lai) 
+   call registerreadlaimax(trim(LDT_GSWPHlaiId)//char(0),read_ClimateBCs_laiMax)
+   call registerreadlaimin(trim(LDT_GSWPHlaiId)//char(0),read_ClimateBCs_laiMin)
    
    ! Constant values:
    call registerreadlai(trim(LDT_constId)//char(0),read_CONSTANT_lai)

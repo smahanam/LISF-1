@@ -96,7 +96,7 @@ module module_climateBCs_lai
       real,    intent(inout) :: array (LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       real, optional, intent(inout) :: maskarray(LDT_rc%lnc(nest),LDT_rc%lnr(nest))
       integer :: i,j
-      print *, 'MIN : ', size (clim_data,1), size (clim_data,2), size (clim_data,3)
+
       array = LDT_rc%udef
       do j = 1, LDT_rc%lnr(nest)
          do i = 1, LDT_rc%lnc(nest)

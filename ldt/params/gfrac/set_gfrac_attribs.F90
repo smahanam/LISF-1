@@ -37,7 +37,7 @@ subroutine set_gfrac_attribs(n,source)
 
    select case( source )
 
-    case( "NCEP_LIS", "NCEP_Native", "CLSMF2.5", "SACHTET.3.5.6", "GSWPH" )
+    case( "NCEP_LIS", "NCEP_Native", "CLSMF2.5", "SACHTET.3.5.6", "GSWPHG" )
       LDT_gfrac_struc(n)%gfrac%num_bins = 1
       LDT_gfrac_struc(n)%gfrac%num_times = 12
 

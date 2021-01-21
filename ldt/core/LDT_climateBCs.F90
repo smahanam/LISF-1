@@ -253,7 +253,7 @@ contains
 
       select case (trim(SOURCE))
          
-      case ('GSWPH')
+      case ('GSWPHG')
          CP%NTIMES   = N_MONTHLY_DATES
          CP%NX       = 43200
          CP%NY       = 21600
@@ -319,6 +319,19 @@ contains
          allocate (CP%data_doys (1: CP%NTIMES))
          CP%data_doys = MODIS_DOYS
          call ESMF_TimeIntervalSet(CP%data_dtstep, h=24*8, rc=status ) ; VERIFY_(STATUS)
+
+      case ('GSWPHL')
+         CP%NTIMES   = N_MONTHLY_DATES
+         CP%NX       = 43200
+         CP%NY       = 21600
+         CP%var1     = 'LAI'
+         CP%sf       = 0.01
+         CP%range(1) = 0
+         CP%range(2) = 1000
+         CP%BCS_PATH = trim(c_data)//'/GSWP2_30sec_VegParam/GSWP2_VegParam_'
+         allocate (CP%data_doys (1: CP%NTIMES))
+         CP%data_doys= MONTHLY_DOYS
+         call ESMF_TimeIntervalSet(CP%data_dtstep, mm=1, rc=status )   ; VERIFY_(STATUS)
          
       case ('MCD15A2H')
          CP%NTIMES   = N_MODIS_DATES8
@@ -399,7 +412,7 @@ contains
       datain     = LDT_rc%udef
       var_subset = LDT_rc%udef
 
-      if((trim(CP%source) == 'GSWPH') .OR. (trim(CP%source) == 'MCD43GFv5')) &
+      if((trim(CP%source) == 'GSWPHG') .OR. (trim(CP%source) == 'GSWPHL') .OR. (trim(CP%source) == 'MCD43GFv5')) &
            call read_10deg_geos5tiles (time_slice, datain)
       
       if((trim(CP%source) == 'GLASSA')  .OR. (trim(CP%source) == 'GLASSM') .OR.  &
@@ -699,11 +712,11 @@ contains
 
       if(LDT_rc%lsm.eq."CLSMJ3.2")then
          select case (trim(CP%SOURCE))
-         case ('GSWPH')
+         case ('GSWPHG')
             save_green = .true.
             if(allocated (sibinputs%GREEN )) deallocate (sibinputs%GREEN)
             allocate (sibinputs%GREEN(1:LDT_rc%lnc(nest), 1:LDT_rc%lnr(nest),1:366))
-         case ('GLASSA','GLASSM','MCD15A2H')
+         case ('GLASSA','GLASSM','MCD15A2H','GSWPHL')
             save_lai= .true.
             if(allocated (sibinputs%LAI )) deallocate (sibinputs%LAI)
             allocate (sibinputs%LAI(1:LDT_rc%lnc(nest), 1:LDT_rc%lnr(nest),1:366))            

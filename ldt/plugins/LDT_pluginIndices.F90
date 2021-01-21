@@ -267,6 +267,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_glassalaiId   = "GLASSA"
    character*50, public,  parameter :: LDT_glassmlaiId   = "GLASSM"
    character*50, public,  parameter :: LDT_mcd15a2laiId  = "MCD15A2H"
+   character*50, public,  parameter :: LDT_GSWPHlaiId    = "GSWPHL"
    
 !-------------------------------------------------------------------------
 ! Greenness data sources
@@ -274,7 +275,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_gfracClimLISId = "NCEP_LIS"
    character*50, public,  parameter :: LDT_gfracClimNATId = "NCEP_Native"
    character*50, public,  parameter :: LDT_gfracClsmf25Id = "CLSMF2.5"
-   character*50, public,  parameter :: LDT_gfracGSWPHId   = "GSWPH"
+   character*50, public,  parameter :: LDT_gfracGSWPHId   = "GSWPHG"
    character*50, public,  parameter :: LDT_gfracSACHTETId = "SACHTET.3.5.6"
 !-------------------------------------------------------------------------
 ! Maximum greenness data sources
