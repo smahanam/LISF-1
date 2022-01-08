@@ -50,6 +50,7 @@ module LIS_irrigationMod
      logical            :: stats_file_open
      character*50       :: cropcalendar
      integer            :: cropseasons
+     real               :: veg_thresh       
      real               :: sprinkler_start  !sprinkler start time
      real               :: sprinkler_duration   !sprinkler duration
      real               :: sprinkler_thresh  !sprinkler threshold
@@ -127,17 +128,19 @@ contains
 
      ! Parameters to control the GVF threshold based on the range of GVF
      ! (shdmax-shdmin) for which sprinkler irrigation is triggered:(WN)
-       call ESMF_ConfigGetAttribute(LIS_config,LIS_rc%irrigation_GVFparam1,&
-            label="Irrigation GVF parameter 1:",rc=rc)
-       call LIS_verify(rc,"Irrigation GVF parameter 1: not defined")
-       write(LIS_logunit,*) "and irrigation GVF parameter 1:  ",&
-                             LIS_rc%irrigation_GVFparam1
+     ! SM - Commented out reading  LIS_rc%irrigation_GVFparam1 and  LIS_rc%irrigation_GVFparam2
+     !      since that are not being used by Noah.3.3     
+     !  call ESMF_ConfigGetAttribute(LIS_config,LIS_rc%irrigation_GVFparam1,&
+     !       label="Irrigation GVF parameter 1:",rc=rc)
+     !  call LIS_verify(rc,"Irrigation GVF parameter 1: not defined")
+     !  write(LIS_logunit,*) "and irrigation GVF parameter 1:  ",&
+     !                        LIS_rc%irrigation_GVFparam1
 
-       call ESMF_ConfigGetAttribute(LIS_config,LIS_rc%irrigation_GVFparam2,&
-            label="Irrigation GVF parameter 2:",rc=rc)
-       call LIS_verify(rc,"Irrigation GVF parameter 2: not defined")
-       write(LIS_logunit,*) "and irrigation GVF parameter 2:  ",&
-                             LIS_rc%irrigation_GVFparam2
+     !  call ESMF_ConfigGetAttribute(LIS_config,LIS_rc%irrigation_GVFparam2,&
+     !       label="Irrigation GVF parameter 2:",rc=rc)
+     !  call LIS_verify(rc,"Irrigation GVF parameter 2: not defined")
+     !  write(LIS_logunit,*) "and irrigation GVF parameter 2:  ",&
+     !                        LIS_rc%irrigation_GVFparam2
 
      ! Max. soil layer depth for irrigation to reach to (available for flood only):
        LIS_rc%irrigation_mxsoildpth = 1

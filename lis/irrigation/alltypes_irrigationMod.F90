@@ -22,7 +22,6 @@ module alltypes_irrigationMod
 !               type map and calendar information as well as a routine for 
 !               mapping croptypes to specific irrigation type (developped by 
 !               Matt). Updated IrrigScale determination.
-!  29 Oct 2021: Sarith Mahanama; Added mapping croptypes to irrigation types.
 !
 ! !USES: 
   use ESMF
@@ -87,7 +86,7 @@ contains
             label="Irrigation type to crop mapping method:",rc=rc)
        call LIS_verify(rc,&
             'Irrigation type to crop mapping method: option not specified in the config file')
-       call get_irrigType(n, irrigtypetocrop, nlctypes, irrigType)
+       call get_irrigType(n, irrigtypetocrop, irrigType)
 
 !HKB ! Read plant/harvest dates if opted:
        if ( LIS_irrig_struc(n)%cropcalendar .ne. "none" ) then
@@ -279,8 +278,8 @@ contains
 
 
     ! HKB check 
-    ftn = LIS_getNextUnitNumber()
-    open(ftn,file="tileirrtype2.txt",status='unknown',form='formatted')
+    !ftn = LIS_getNextUnitNumber()
+    !open(ftn,file="tileirrtype.txt",status='unknown',form='formatted')
 
     do t=1,LIS_rc%npatch(n,LIS_rc%lsm_index)
 
@@ -319,11 +318,11 @@ contains
          call LIS_endrun
        endif
      ! HKB check 
-       write(ftn,fmt='(i8,2f10.4,f3.0)') &
-       t,LIS_domain(n)%grid(gid)%lon,LIS_domain(n)%grid(gid)%lat,irrigType(t)
+     !  write(ftn,fmt='(i8,2f10.4,f3.0)') &
+     !  t,LIS_domain(n)%grid(gid)%lon,LIS_domain(n)%grid(gid)%lat,irrigType(t)
 
     enddo
-    call LIS_releaseUnitNumber(ftn)  !HKB
+    !call LIS_releaseUnitNumber(ftn)  !HKB
     deallocate(irrigAmt)
     
   end subroutine alltypes_irrigation_updates
@@ -632,7 +631,7 @@ contains
 #endif
   end subroutine read_cropcalendar
 
-  subroutine get_irrigType(n,irrigtypetocrop,nlctypes,itype)
+  subroutine get_irrigType(n,irrigtypetocrop,itype)
 
 !HKB new routine for reading in grid level irrigType field and mapping to 
 !crop tiles using A) Matt's algorithm, B) dominant, or C) single type
@@ -647,8 +646,7 @@ contains
 #endif
     integer,  intent(in) :: n 
     character*50,intent(in) :: irrigtypetocrop
-    integer, intent(in)  :: nlctypes ! non-crop land cover types
-    real,intent(inout)   :: itype(LIS_rc%npatch(n,LIS_rc%lsm_index))
+    real                 :: itype(LIS_rc%npatch(n,LIS_rc%lsm_index))
 
     integer              :: t,col,row,j
     integer              :: nid,ios,status,itypeId
@@ -809,13 +807,13 @@ contains
          end do
          
          call MA_USA%git(LIS_rc%gnc(n),LIS_rc%gnr(n),cell_area, l_county, l_croptype, l_itype, PREFTYPE, usa = .true.)
-         !do t = 21, 46
-         !   do j=1, LIS_rc%lnr(n)
-         !      write(800, '(1440i3)') NINT(preftype(:,j,t))
-         !   end do
-         !end do
+!         do t = 21, 46
+!            do j=1, LIS_rc%lnr(n)
+!               write(800, '(1440i3)') NINT(preftype(:,j,t))
+!            end do
+!         end do
          deallocate (cell_area)
-         !stop
+         stop
        endif
 
        TILE_LOOP: do t=1,LIS_rc%npatch(n,LIS_rc%lsm_index)
@@ -853,7 +851,7 @@ contains
            case("distribute")
 
               itype(t) = PREFTYPE(col,row,vegt)
-              if ( itype(t).lt.0 .and. itype(t).ne.LIS_rc%udef .and. vegt.gt.nlctypes) then
+              if ( itype(t).lt.0 .and. itype(t).ne.LIS_rc%udef ) then
                  print*,'invalid entry',PREFTYPE(col,row,vegt),col,row,vegt
               endif
 
