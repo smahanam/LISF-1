@@ -23,7 +23,6 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
   use clsmf25_lsmMod
   use LIS_vegDataMod
   use LIS_irrigationMod
-  use LIS_constantsMod, ONLY : pi => LIS_CONST_PI
   use IRRIGATION_MODULE
   
 ! !DESCRIPTION:        
@@ -83,10 +82,9 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
   
   real,  pointer       :: irrigRate(:), irrigFrac(:), irrigType(:)
   real,  pointer       :: irrigRootDepth(:), irrigScale(:)
-  real                 :: ltime, T1, T2, rdpth, laifac, laithresh, smcwlt, smcref, smcmax
-  integer              :: veg_index1,veg_index2, season
+  real                 :: rdpth, laifac, laithresh, smcwlt, smcref, smcmax
+  integer              :: veg_index1,veg_index2
   real,  allocatable   :: laimax(:,:),laimin(:,:)
-  logical              :: season_active
   type(irrigation_model) :: IM
   
   if(clsmf25_struc(nest)%modelStart) then 
@@ -183,19 +181,6 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
      
      gid = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%index
      tid = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%tile_id
-
-     ! Set time
-     ! --------
-     ltime = real(LIS_rc%hr) + real(LIS_rc%mn)/60. + real(LIS_rc%ss)/3600. + &
-          12.* (LIS_domain(nest)%grid(gid)%lon/pi)
-     IF (ltime >= 24.) ltime = ltime - 24.
-     IF (ltime <   0.) ltime = ltime + 24.
-     T1 = CEILING (ltime)     - real(LIS_rc%ts)/3600.
-     T2 = FLOOR   (ltime + 1) + real(LIS_rc%ts)/3600.
-
-     if((ltime >= T1).and.(ltime < T2))then
-        ltime = real(NINT(ltime))
-     end if
      
      ! Process only irrigated tiles
      IRRF: if(irrigFrac(TileNo).gt.0) then
@@ -204,8 +189,10 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
         VEGIF:  if(vegt.ge.veg_index1.and.vegt.le.veg_index2&
              .and.vegt.ne.LIS_rc%bareclass.and.&
              vegt.ne.LIS_rc%urbanclass) then
-           
-           ! Calculate vegetation and root depth parameters
+
+           ! Calculate active root depth
+           ! ---------------------------           
+
            if(clsmf25_struc(nest)%cat_param(TileNo)%laimax.ne.&
                 clsmf25_struc(nest)%cat_param(TileNo)%laimin) then 
               laifac = (LIS_lai(nest)%tlai(tid) -                     &
@@ -217,76 +204,31 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
            endif
            
            rdpth = irrigRootdepth(TileNo)*laifac
-           season_active = .false.
            
-           CALENDAR: if ( LIS_irrig_struc(nest)%cropcalendar .eq. "none" ) then
-              
-              ! -----------------------------
-              ! Vegetation Trigger
-              ! -----------------------------
-
-              laithresh =   clsmf25_struc(nest)%cat_param(TileNo)%laimin + & 
-                   LIS_irrig_struc(nest)%veg_thresh *         &
-                   (clsmf25_struc(nest)%cat_param(TileNo)%laimax - &
-                   clsmf25_struc(nest)%cat_param(TileNo)%laimin)
-
-              if(LIS_lai(nest)%tlai(tid) .ge. laithresh) season_active = .true.
-
-           else
-              
-              ! -----------------------------
-              ! Crop calendar
-              ! -----------------------------
-
-              NOF_SEASONS: do season = 1, SIZE(LIS_irrig_struc(nest)%plantDay(TileNo,:))
-                 IF(IM%IS_WITHIN_SEASON(LIS_rc%doy,NINT(LIS_irrig_struc(nest)%PLANTDAY(TileNo, season)), &
-                      NINT(LIS_irrig_struc(nest)%harvestDay(TileNo, season)))) season_active = .true.
-              END do NOF_SEASONS
-              
-           endif CALENDAR
+           ! compute vegetation threshold for the trigger
+           ! --------------------------------------------
            
-           ! Run irrigation model if the crop growing season is active
-           ! ----------------------------------------------------------
+           laithresh =   clsmf25_struc(nest)%cat_param(TileNo)%laimin + & 
+                LIS_irrig_struc(nest)%veg_thresh *         &
+                (clsmf25_struc(nest)%cat_param(TileNo)%laimax - &
+                clsmf25_struc(nest)%cat_param(TileNo)%laimin)
+       
+           smcmax = clsmf25_struc(nest)%cat_param(TileNo)%poros
+           smcwlt = clsmf25_struc(nest)%cat_param(TileNo)%wpwet*           &  
+                clsmf25_struc(nest)%cat_param(TileNo)%poros
+           smcref = (clsmf25_struc(nest)%cat_param(TileNo)%wpwet +         & 
+                0.333* (1.-clsmf25_struc(nest)%cat_param(TileNo)%wpwet))*  &
+                clsmf25_struc(nest)%cat_param(TileNo)%poros
+
+           ! get irrigation rates from the irrigation model
+           ! ----------------------------------------------
            
-           CROP_GROWING_SEASON: if (season_active) then
-              
-              smcmax = clsmf25_struc(nest)%cat_param(TileNo)%poros
-              smcwlt = clsmf25_struc(nest)%cat_param(TileNo)%wpwet*              &  
-                      clsmf25_struc(nest)%cat_param(TileNo)%poros
-              smcref = (clsmf25_struc(nest)%cat_param(TileNo)%wpwet +            & 
-                      0.333* (1.-clsmf25_struc(nest)%cat_param(TileNo)%wpwet))*  &
-                      clsmf25_struc(nest)%cat_param(TileNo)%poros
-              
-              ! Sprinkler
-              if (irrigType(TileNo) == 1) call IM%irrig_by_type (nest,ltime,     &
-                   smcwlt,                                                       &
-                   smcmax,                                                       &
-                   smcref,                                                       &
-                   (/clsmf25_struc(nest)%cat_diagn(TileNo)%rzmc/),               &
-                   (/rdpth/),IrrigScale(TileNo),SRATE = irrigRate(TileNo))
-              
-              ! Drip
-              if (irrigType(TileNo) == 2) call IM%irrig_by_type (nest,ltime,     &
-                   smcwlt,                                                       &
-                   smcmax,                                                       &
-                   smcref,                                                       &
-                   (/clsmf25_struc(nest)%cat_diagn(TileNo)%rzmc/),               &
-                   (/rdpth/),IrrigScale(TileNo),DRATE = irrigRate(TileNo))
-              
-              ! Flood
-              if (irrigType(TileNo) == 3) call IM%irrig_by_type (nest,ltime,     &
-                   smcwlt,                                                       &
-                   smcmax,                                                       &
-                   smcref,                                                       &
-                   (/clsmf25_struc(nest)%cat_diagn(TileNo)%sfmc/),               &
-                   (/clsmf25_struc(nest)%cat_param(TileNo)%dzsf/1000./),         &
-                   IrrigScale(TileNo),FRATE = irrigRate(TileNo))
-              
-           else
-              !  Outside the season
-              irrigRate(TileNo) = 0.
-              
-           endif CROP_GROWING_SEASON
+           call IM%update_irrigrate (nest,TileNo, LIS_domain(nest)%grid(gid)%lon,     &
+                LIS_lai(nest)%tlai(tid),laithresh,                                    &
+                smcwlt,smcmax,smcref,                                                 &
+                (/clsmf25_struc(nest)%cat_diagn(TileNo)%rzmc/),                       &
+                (/rdpth/),IrrigScale(TileNo),irrigType(TileNo),                       &
+                irrigRate(TileNo))
                       
         endif VEGIF
      endif IRRF

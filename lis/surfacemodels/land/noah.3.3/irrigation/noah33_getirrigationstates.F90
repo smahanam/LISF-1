@@ -23,7 +23,6 @@ subroutine noah33_getirrigationstates(nest,irrigState)
   use LIS_constantsMod, only : LIS_CONST_TKFRZ
   use noah33_lsmMod
   use LIS_irrigationMod
-  use LIS_constantsMod, ONLY : pi => LIS_CONST_PI
   use IRRIGATION_MODULE
   
 ! !DESCRIPTION:        
@@ -107,11 +106,9 @@ subroutine noah33_getirrigationstates(nest,irrigState)
   real                 :: rdpth(noah33_struc(nest)%nslay)
   real                 :: zdpth(noah33_struc(nest)%nslay)
   real                 :: crootd
-  integer              :: lroot,veg_index1,veg_index2, season
+  integer              :: lroot,veg_index1,veg_index2
   real                 :: gsthresh
   logical              :: irrig_check_frozen_soil
-  real                 :: ltime, T1, T2
-  logical              :: season_active
   type(irrigation_model) :: IM 
 ! _______________________________________________________
 
@@ -194,19 +191,6 @@ subroutine noah33_getirrigationstates(nest,irrigState)
      gid = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%index
      tid = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%tile_id
      
-     ! Set time
-     ! --------
-     ltime = real(LIS_rc%hr) + real(LIS_rc%mn)/60. + real(LIS_rc%ss)/3600. + &
-          12.* (LIS_domain(nest)%grid(gid)%lon/pi)
-     IF (ltime >= 24.) ltime = ltime - 24.
-     IF (ltime <   0.) ltime = ltime + 24.
-     T1 = CEILING (ltime)     - real(LIS_rc%ts)/3600.
-     T2 = FLOOR   (ltime + 1) + real(LIS_rc%ts)/3600.
-     
-     if((ltime >= T1).and.(ltime < T2))then
-        ltime = real(NINT(ltime))
-     end if
-     
      ! frozen tile check
      irrig_check_frozen_soil = .false.
      
@@ -245,7 +229,9 @@ subroutine noah33_getirrigationstates(nest,irrigState)
                    .and.vegt.ne.LIS_rc%bareclass                      &
                    .and.vegt.ne.LIS_rc%urbanclass) then
 
-                 ! Calculate vegetation and root depth parameters
+                 ! Calculate active root depth
+                 ! ---------------------------
+                 
                  crootd = irrigRootdepth(TileNo)*noah33_struc(nest)%noah(TileNo)%shdfac
                  lroot  = 0
                  if(crootd.gt.0.and.crootd.lt.zdpth(1)) then 
@@ -272,79 +258,26 @@ subroutine noah33_getirrigationstates(nest,irrigState)
                     write(LIS_logunit,*) '[ERR] lroot should be > 0!'
                     call LIS_endrun()
                  endif
+
+                 ! compute vegetation threshold for the trigger
+                 ! --------------------------------------------
                  
-                 season_active = .false.
-                 
-                 CALENDAR: if ( LIS_irrig_struc(nest)%cropcalendar .eq. "none" ) then
-                    
-                    ! -----------------------------
-                    ! Vegetation Trigger
-                    ! -----------------------------
-                    
-                    gsthresh = noah33_struc(nest)%noah(TileNo)%shdmin +   & 
-                         LIS_irrig_struc(nest)%veg_thresh * (noah33_struc(nest)%noah(TileNo)%shdmax - &
-                         noah33_struc(nest)%noah(TileNo)%shdmin)
+                 gsthresh = noah33_struc(nest)%noah(TileNo)%shdmin +   & 
+                      LIS_irrig_struc(nest)%veg_thresh * (noah33_struc(nest)%noah(TileNo)%shdmax - &
+                      noah33_struc(nest)%noah(TileNo)%shdmin)
 
-                    ! HKB ==> Change to below after benchmarking
-                    ! let gsthresh be a function of the range, which means the larger
-                    ! the range is, the higher GVF threshold will be for this grid. (WN)
-                    !   gsthresh = noah33_struc(nest)%noah(TileNo)%shdmin + & 
-                    !           (LIS_rc%irrigation_GVFparam1 + LIS_rc%irrigation_GVFparam2*&
-                    !     (noah33_struc(nest)%noah(TileNo)%shdmax - noah33_struc(nest)%noah(TileNo)%shdmin))*&
-                    !     (noah33_struc(nest)%noah(TileNo)%shdmax - noah33_struc(nest)%noah(TileNo)%shdmin)
-
-                    ! check vegetation seasonal cycle and invoke the trigger                         
-
-                    if(noah33_struc(nest)%noah(TileNo)%shdfac .ge. gsthresh) season_active = .true.
-
-                 else
-
-                    ! -----------------------------
-                    ! Crop calendar
-                    ! -----------------------------
-
-                    NOF_SEASONS: do season = 1, SIZE(LIS_irrig_struc(nest)%plantDay(TileNo,:))
-                       IF(IM%IS_WITHIN_SEASON(LIS_rc%doy,NINT(LIS_irrig_struc(nest)%PLANTDAY(TileNo, season)), &
-                            NINT(LIS_irrig_struc(nest)%harvestDay(TileNo, season)))) season_active = .true.
-                    END do NOF_SEASONS
-                    
-                 endif CALENDAR
-
-                 ! Run irrigation model if the crop growing season is active
-                 ! ----------------------------------------------------------
-
-                 CROP_GROWING_SEASON: if (season_active) then
-                                           
-                    ! Sprinkler
-                    if (irrigType(TileNo) == 1) call IM%irrig_by_type (nest,ltime,     &
-                         noah33_struc(nest)%noah(TileNo)%smcwlt,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcmax,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcref,                       &
-                         noah33_struc(nest)%noah(TileNo)%smc(:lroot),                  &
-                         rdpth(:lroot),IrrigScale(TileNo),SRATE = irrigRate(TileNo))
-                    
-                    ! Drip
-                    if (irrigType(TileNo) == 2) call IM%irrig_by_type (nest,ltime,     &
-                         noah33_struc(nest)%noah(TileNo)%smcwlt,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcmax,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcref,                       &
-                         noah33_struc(nest)%noah(TileNo)%smc(:lroot),                  &
-                         rdpth(:lroot),IrrigScale(TileNo),DRATE = irrigRate(TileNo))
-                    
-                    ! Flood
-                    if (irrigType(TileNo) == 3) call IM%irrig_by_type (nest,ltime,     &
-                         noah33_struc(nest)%noah(TileNo)%smcwlt,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcmax,                       &
-                         noah33_struc(nest)%noah(TileNo)%smcref,                       &
-                         noah33_struc(nest)%noah(TileNo)%smc(:lroot),                  &
-                         rdpth(:lroot),IrrigScale(TileNo),FRATE = irrigRate(TileNo))
-                    
-                 else
-                    !  Outside the season
-                    irrigRate(TileNo) = 0.
-                    
-                 endif CROP_GROWING_SEASON
-                 
+                 ! get irrigation rates from the irrigation model
+                 ! ----------------------------------------------
+           
+                 call IM%update_irrigrate (nest,TileNo, LIS_domain(nest)%grid(gid)%lon, &
+                      noah33_struc(nest)%noah(TileNo)%shdfac,gsthresh,                  &
+                      noah33_struc(nest)%noah(TileNo)%smcwlt,                           &
+                      noah33_struc(nest)%noah(TileNo)%smcmax,                           &
+                      noah33_struc(nest)%noah(TileNo)%smcref,                           &
+                      noah33_struc(nest)%noah(TileNo)%smc(:lroot),                      &
+                      rdpth(:lroot),IrrigScale(TileNo),irrigType(TileNo),               &
+                      irrigRate(TileNo))
+                                   
               endif VEGIF
            endif IRRS
         endif IRRF
