@@ -48,6 +48,8 @@
 ! Dec 2020: Hiroko Beaudoing; Updated things based on old LIS/Noah and 
 !                             incorporated Sarith's concurrent irrigation types
 !                             and Wanshu/Ben's modifications.
+! Apr 2021: Wanshu Nie; Add option to interact with DVEG
+! May 2021: Wanshu Nie; update irrigation using ensemble mean when runing with DA.
 
 !EOP
 
@@ -69,6 +71,7 @@ MODULE IRRIGATION_MODULE
      real,  pointer :: irrigType(:)
      real,  pointer :: irrigScale(:)
      real,  pointer :: irrigRootDepth(:)
+     real,  pointer :: irriggwratio(:)
      
   end type irrig_state
      
@@ -91,7 +94,7 @@ contains
     class (irrigation_model), intent(inout) :: IM
     type(ESMF_State)                        :: irrigState
     type(ESMF_Field)                        :: irrigRateField,irrigFracField,irrigTypeField
-    type(ESMF_Field)                        :: irrigRootDepthField,irrigScaleField
+    type(ESMF_Field)                        :: irrigRootDepthField,irrigScaleField,irriggwratioField
     integer                                 :: rc
 
     call ESMF_StateGet(irrigState, "Irrigation rate",irrigRateField,rc=rc)
@@ -125,7 +128,14 @@ contains
     call LIS_verify(rc,'ESMF_StateGet failed for Irrigation type')    
     call ESMF_FieldGet(irrigTypeField, localDE=0,&
          farrayPtr=IM%irrigType,rc=rc)
-    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')    
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')
+
+    call ESMF_StateGet(irrigState, "Groundwater irrigation ratio",&
+         irriggwratioField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Groundwater irrigation ratio')
+    call ESMF_FieldGet(irriggwratioField, localDE=0,&
+         farrayPtr=IM%irriggwratio,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Groundwater irrigation ratio')
         
   END SUBROUTINE get_irrigstate
   
