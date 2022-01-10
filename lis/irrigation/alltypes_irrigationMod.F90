@@ -71,15 +71,19 @@ contains
        allocate(irrigRootDepth(LIS_rc%npatch(n,LIS_rc%lsm_index)))
        allocate(irrigScale(LIS_rc%npatch(n,LIS_rc%lsm_index)))
        allocate(irrigType(LIS_rc%npatch(n,LIS_rc%lsm_index)))   ! HKB
-       allocate(irriggwratio(LIS_rc%npatch(n,LIS_rc%lsm_index)))
-       
+             
        write(LIS_logunit,*) "[INFO] Setting up irrigation method ... "
 
      ! Read irrigation fraction (or "intensity") input:
        call read_irrigFrac(n, irrigFrac)
-       call read_irriggwratio(n,irriggwratio)
-       
-     ! Read crop type maximum root depth file (combined landcover/crop classifications):
+
+       ! Read groundwater extraction data
+       if (LIS_rc%irrigation_GWabstraction == 1) then
+          allocate(irriggwratio(LIS_rc%npatch(n,LIS_rc%lsm_index)))
+          call read_irriggwratio(n,irriggwratio)
+       endif
+          
+       ! Read crop type maximum root depth file (combined landcover/crop classifications):
 !HKB the file is the same for Sprinkler, Drip, and Flood
        call ESMF_ConfigGetAttribute(LIS_config,maxrootdepthfile,&
             label="Irrigation max root depth file:",rc=rc)
@@ -141,19 +145,21 @@ contains
        call LIS_verify(status,&
             "ESMF_StateAdd for irrigFrac failed in alltypes_irrigation_init")
        deallocate(irrigFrac)
-
-       irriggwratioField = ESMF_FieldCreate(&
-            grid=LIS_vecPatch(n,LIS_rc%lsm_index),&
-            arrayspec=arrspec1,&
-            name="Groundwater irrigation ratio", rc=status)
-       call LIS_verify(status, &
-            "ESMF_FieldCreate failed in sprinkler_irrigation_init")
        
-       call ESMF_FieldGet(irriggwratioField,localDE=0,&
-            farrayPtr=gwratio,rc=status)
-       call LIS_verify(status,'ESMF_FieldGet failed for irriggwratio')
+       if (LIS_rc%irrigation_GWabstraction == 1) then
+          irriggwratioField = ESMF_FieldCreate(&
+               grid=LIS_vecPatch(n,LIS_rc%lsm_index),&
+               arrayspec=arrspec1,&
+               name="Groundwater irrigation ratio", rc=status)
+          call LIS_verify(status, &
+               "ESMF_FieldCreate failed in sprinkler_irrigation_init")
+       
+          call ESMF_FieldGet(irriggwratioField,localDE=0,&
+               farrayPtr=gwratio,rc=status)
+          call LIS_verify(status,'ESMF_FieldGet failed for irriggwratio')
 
-       gwratio = irriggwratio
+          gwratio = irriggwratio
+       endif
 
        call ESMF_StateAdd(irrigState(n),(/irriggwratioField/),rc=status)
        call LIS_verify(status,&

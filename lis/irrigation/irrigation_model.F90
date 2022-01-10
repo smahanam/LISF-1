@@ -44,12 +44,13 @@
 ! Feb 2014: Sujay Kumar; Implemented in LIS based on the work of
 !           John Bolten and student. 
 ! Jul 2014: Ben Zaitchik; added flood routine
+! May 2019: Jessica Erlingis; Incorporate W. Nie's updates into LIS
+!                             and add optional flag for groundwater abstraction
 ! Feb 2020: Jessica Erlingis; Fix sprinkler irrigation winodw 
 ! Dec 2020: Hiroko Beaudoing; Updated things based on old LIS/Noah and 
 !                             incorporated Sarith's concurrent irrigation types
 !                             and Wanshu/Ben's modifications.
-! Apr 2021: Wanshu Nie; Add option to interact with DVEG
-! May 2021: Wanshu Nie; update irrigation using ensemble mean when runing with DA.
+
 
 !EOP
 
@@ -130,13 +131,15 @@ contains
          farrayPtr=IM%irrigType,rc=rc)
     call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')
 
-    call ESMF_StateGet(irrigState, "Groundwater irrigation ratio",&
-         irriggwratioField,rc=rc)
-    call LIS_verify(rc,'ESMF_StateGet failed for Groundwater irrigation ratio')
-    call ESMF_FieldGet(irriggwratioField, localDE=0,&
-         farrayPtr=IM%irriggwratio,rc=rc)
-    call LIS_verify(rc,'ESMF_FieldGet failed for Groundwater irrigation ratio')
-        
+    if (LIS_rc%irrigation_GWabstraction == 1) then
+       call ESMF_StateGet(irrigState, "Groundwater irrigation ratio",&
+            irriggwratioField,rc=rc)
+       call LIS_verify(rc,'ESMF_StateGet failed for Groundwater irrigation ratio')
+       call ESMF_FieldGet(irriggwratioField, localDE=0,&
+            farrayPtr=IM%irriggwratio,rc=rc)
+       call LIS_verify(rc,'ESMF_FieldGet failed for Groundwater irrigation ratio')
+    endif
+    
   END SUBROUTINE get_irrigstate
   
   ! ----------------------------------------------------------------------------
