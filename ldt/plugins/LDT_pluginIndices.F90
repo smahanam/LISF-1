@@ -306,6 +306,7 @@ module LDT_pluginIndices
    character*50, public,  parameter :: LDT_gripcirrigId  = "GRIPC"
    character*50, public,  parameter :: LDT_giairrigId    = "GIA"
    character*50, public,  parameter :: LDT_aquairrigId   = "AQUASTAT"
+   character*50, public,  parameter :: LDT_irriggwratioId= "USGS_Native"
 
    character*50, public,  parameter :: LDT_userinputirrigId = "UserDerived"
 

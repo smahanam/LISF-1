@@ -17,6 +17,8 @@
 !  19 Sep 2014: K. Arsenault; Initial Specification
 !  17 May 2019: H. Beaudoing; added GRIPC_AQUASTAT irrigation type and 
 !                             GIA_GRIPC irrigation fraction sources
+!  11 Apr 2021: Wanshu Nie; add support for reading irrigation groundwater ratio
+
 !
 ! !INTERFACE:
 subroutine setIrrigParmsFullnames(n,datatype,source)
@@ -76,12 +78,19 @@ subroutine setIrrigParmsFullnames(n,datatype,source)
               "GIA (Meier et al, 2018) Irrig gridcell fraction"
         case( "UserDerived" )
           LDT_irrig_struc(n)%irrigfrac%standard_name =&
-              "User Derived Irrig gridcell fraction"
-      end select
-
+               "User Derived Irrig gridcell fraction"
+       end select
+       
+    case( "irriggwratio" )
+       select case ( source )
+       case( "USGS_Native" )
+          LDT_irrig_struc(n)%irriggwratio%standard_name =&
+               "USGS groundwater irrigation ratio (0.125 deg gridcell) "
+       end select
+ 
     case default
-      print *, "[ERR] Irrig data type not recognized: ",trim(source)
-      print *, " Program stopping ..."
+      write (LDT_logunit,*), "[ERR] Irrig data type not recognized: ",trim(source)
+      write (LDT_logunit,*), " Program stopping ..."
       stop
    end select
 
