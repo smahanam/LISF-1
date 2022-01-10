@@ -79,29 +79,11 @@ subroutine noah33_getirrigationstates(nest,irrigState)
 !                             
 !EOP
   implicit none
-! moved to lis.config
-  ! Sprinkler parameters
-!  real, parameter      :: otimess = 6.0 ! local trigger check start time [hour]
-!  real, parameter      :: irrhrs = 4.   ! duration of irrigation hours 
-  ! Drip parameters (not currently implemented)
-!  real, parameter      :: otimeds = 6.0 ! local trigger check start time [hour]
-!  real, parameter      :: irrhrd = 12.0   ! duration of irrigation hours 
- ! Flood parameters
-!  real, parameter      :: otimefs = 6.0 ! local trigger check start time [hour]
-!  real, parameter      :: irrhrf = 1.0   ! duration of irrigation hours 
-  !!!real, parameter      :: ffreq = 0.0 ! frequency of flood irrig [days] set to 0.0 to use thresh instead
-  
-!  real, parameter      :: efcor = 0.0      ! Efficiency Correction (%)
 
   integer, intent(in)  :: nest
   integer              :: rc
   integer              :: TileNo,tid,gid,vegt
   type(ESMF_State)     :: irrigState
-  type(ESMF_Field)     :: irrigRateField,irrigFracField,irrigTypeField
-  type(ESMF_Field)     :: irrigRootDepthField,irrigScaleField
-  
-  real,  pointer       :: irrigRate(:), irrigFrac(:), irrigType(:)
-  real,  pointer       :: irrigRootDepth(:), irrigScale(:)
   real                 :: sldpth(noah33_struc(nest)%nslay)
   real                 :: rdpth(noah33_struc(nest)%nslay)
   real                 :: zdpth(noah33_struc(nest)%nslay)
@@ -110,40 +92,10 @@ subroutine noah33_getirrigationstates(nest,irrigState)
   real                 :: gsthresh
   logical              :: irrig_check_frozen_soil
   type(irrigation_model) :: IM 
-! _______________________________________________________
 
-  call ESMF_StateGet(irrigState, "Irrigation rate",irrigRateField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation rate')    
-  call ESMF_FieldGet(irrigRateField, localDE=0,farrayPtr=irrigRate,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation rate')
+  ! _______________________________________________________
 
-  call ESMF_StateGet(irrigState, "Irrigation frac",&
-       irrigFracField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation frac')    
-  call ESMF_FieldGet(irrigFracField, localDE=0,&
-       farrayPtr=irrigFrac,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation frac')
-
-  call ESMF_StateGet(irrigState, "Irrigation max root depth",&
-       irrigRootDepthField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation max root depth')    
-  call ESMF_FieldGet(irrigRootDepthField, localDE=0,&
-       farrayPtr=irrigRootDepth,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation root depth')
-
-  call ESMF_StateGet(irrigState, "Irrigation scale",&
-       irrigScaleField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation scale')    
-  call ESMF_FieldGet(irrigScaleField, localDE=0,&
-       farrayPtr=irrigScale,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation scale')  
-
-  call ESMF_StateGet(irrigState, "Irrigation type",&
-       irrigTypeField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation type')    
-  call ESMF_FieldGet(irrigTypeField, localDE=0,&
-       farrayPtr=irrigType,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')
+  call IM%get_irrigstate (irrigState)
 
   ! Set vegetation type index to be irrigated
   ! -----------------------------------------
@@ -218,10 +170,10 @@ subroutine noah33_getirrigationstates(nest,irrigState)
      FROZEN: if(.not.irrig_check_frozen_soil) then
         
         ! Process only irrigated tiles
-        IRRF: if(irrigFrac(TileNo).gt.0) then
+        IRRF: if(IM%irrigFrac(TileNo).gt.0) then
            
            ! Determine the amount of irrigation to apply if irrigated tile
-           IRRS: if( IrrigScale(TileNo).gt.0.0 ) then ! irrigated tile
+           IRRS: if( IM%IrrigScale(TileNo).gt.0.0 ) then ! irrigated tile
            
               ! Proceed if it is non-forest, non-baresoil, non-urban
               vegt = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%vegt  
@@ -232,7 +184,7 @@ subroutine noah33_getirrigationstates(nest,irrigState)
                  ! Calculate active root depth
                  ! ---------------------------
                  
-                 crootd = irrigRootdepth(TileNo)*noah33_struc(nest)%noah(TileNo)%shdfac
+                 crootd = IM%irrigRootdepth(TileNo)*noah33_struc(nest)%noah(TileNo)%shdfac
                  lroot  = 0
                  if(crootd.gt.0.and.crootd.lt.zdpth(1)) then 
                     lroot = 1
@@ -275,13 +227,15 @@ subroutine noah33_getirrigationstates(nest,irrigState)
                       noah33_struc(nest)%noah(TileNo)%smcmax,                           &
                       noah33_struc(nest)%noah(TileNo)%smcref,                           &
                       noah33_struc(nest)%noah(TileNo)%smc(:lroot),                      &
-                      rdpth(:lroot),IrrigScale(TileNo),irrigType(TileNo),               &
-                      irrigRate(TileNo))
+                      rdpth(:lroot))
                                    
               endif VEGIF
            endif IRRS
         endif IRRF
      endif FROZEN
   end do TILE_LOOP
+
+  ! Update land surface model's moisture state
+  ! ------------------------------------------
     
 end subroutine noah33_getirrigationstates

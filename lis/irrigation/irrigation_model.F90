@@ -1,29 +1,138 @@
+!-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
+! NASA Goddard Space Flight Center
+! Land Information System Framework (LISF)
+! Version 7.3
+!
+! Copyright (c) 2020 United States Government as represented by the
+! Administrator of the National Aeronautics and Space Administration.
+! All Rights Reserved.
+!-------------------------END NOTICE -- DO NOT EDIT-----------------------
+
+! BOP
+! 
+! !ROUTINE: irrigation_model
+! \label{irrigation_model}
+
+! !DESCRIPTION:        
+!
+! Calculate water requirement and apply the amount to precipitation.
+!
+! Irrigate when root zone soil moisture falls below 50 % of 
+! the field capacity (reference soil moiture) at 6 am LST.  
+! The root zone is actual maximum root depth rather than NOAH root zone.
+! Method of irrigation is by precipitation between 6-10 am LST.
+!
+! Irrigation amount is scaled to grid total crop fraction when intensity
+! is less than the fraction.  Irrigation is expanded to non-crop, non-forest,
+! non-baresoil/urban tiles if intensity exceeds grid total crop fraction.
+! In latter case, scaled irrigation is applied to grassland first, 
+! then further applied over the rest of tiles equally if the intensity 
+! exceeds grassland fraction as well.   
+!
+! Optionally efficiency correction is applied to account for field loss. 
+!
+! Optionally outputs amount of water put into the system to a text file. 
+!
+! This version includes modifications to irr4 as follows:
+! 1) Use location specific growing season threshold (40% of GFRAC range)
+! 2) Allow irrigation in non-crop/non-forest tiles when irrigation 
+!    intensity exceeds total crop fraction
+!
+! REVISION HISTORY:
+!
+! Aug 2008: Hiroko Kato; Initial code for Noah LSM
+! Feb 2014: Sujay Kumar; Implemented in LIS based on the work of
+!           John Bolten and student. 
+! Jul 2014: Ben Zaitchik; added flood routine
+! Feb 2020: Jessica Erlingis; Fix sprinkler irrigation winodw 
+! Dec 2020: Hiroko Beaudoing; Updated things based on old LIS/Noah and 
+!                             incorporated Sarith's concurrent irrigation types
+!                             and Wanshu/Ben's modifications.
+
+!EOP
+
 MODULE IRRIGATION_MODULE
 
   use ESMF
   use LIS_coreMod
   use LIS_irrigationMod
+  use LIS_logMod
   
   IMPLICIT NONE
 
-  ! This module computes irrigation rates by 3 different methods: sprinkler, flood and drip.
-
   PRIVATE
   
-  type, public :: irrigation_model
+  type, public :: irrig_state
+     
+     real,  pointer :: irrigRate(:)
+     real,  pointer :: irrigFrac(:)
+     real,  pointer :: irrigType(:)
+     real,  pointer :: irrigScale(:)
+     real,  pointer :: irrigRootDepth(:)
+     
+  end type irrig_state
+     
+  type, public, extends (irrig_state) :: irrigation_model
      
    contains
      
      ! public
+     procedure, public :: get_irrigstate
      procedure, public :: update_irrigrate
           
   end type irrigation_model
 
 contains
 
+  SUBROUTINE get_irrigstate (IM,irrigState)
+
+    implicit none
+    
+    class (irrigation_model), intent(inout) :: IM
+    type(ESMF_State)                        :: irrigState
+    type(ESMF_Field)                        :: irrigRateField,irrigFracField,irrigTypeField
+    type(ESMF_Field)                        :: irrigRootDepthField,irrigScaleField
+    integer                                 :: rc
+
+    call ESMF_StateGet(irrigState, "Irrigation rate",irrigRateField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Irrigation rate')    
+    call ESMF_FieldGet(irrigRateField, localDE=0,farrayPtr=IM%irrigRate,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation rate')
+    
+    call ESMF_StateGet(irrigState, "Irrigation frac",&
+         irrigFracField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Irrigation frac')    
+    call ESMF_FieldGet(irrigFracField, localDE=0,&
+         farrayPtr=IM%irrigFrac,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation frac')
+    
+    call ESMF_StateGet(irrigState, "Irrigation max root depth",&
+         irrigRootDepthField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Irrigation max root depth')    
+    call ESMF_FieldGet(irrigRootDepthField, localDE=0,&
+         farrayPtr=IM%irrigRootDepth,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation root depth')
+    
+    call ESMF_StateGet(irrigState, "Irrigation scale",&
+         irrigScaleField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Irrigation scale')    
+    call ESMF_FieldGet(irrigScaleField, localDE=0,&
+         farrayPtr=IM%irrigScale,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation scale')  
+
+    call ESMF_StateGet(irrigState, "Irrigation type",&
+         irrigTypeField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Irrigation type')    
+    call ESMF_FieldGet(irrigTypeField, localDE=0,&
+         farrayPtr=IM%irrigType,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')    
+        
+  END SUBROUTINE get_irrigstate
+  
   ! ----------------------------------------------------------------------------
-  SUBROUTINE update_irrigrate (this, nest, TileNo, longitude, veg_trigger, veg_thresh, SMWP, SMSAT, &
-       SMREF, SMCNT, RDPTH, IrrigScale,irrigType, irrigRate)
+
+  SUBROUTINE update_irrigrate (IM, nest, TileNo, longitude, veg_trigger, veg_thresh, SMWP, SMSAT, &
+       SMREF, SMCNT, RDPTH)
     
     ! INPUTS:
     ! -------
@@ -37,18 +146,15 @@ contains
     ! SMREF        : ~soil field capacity - the upper limit of water content that soil can hold for plants [m^3/m^3]
     ! SMCNT(layers): soil moisture content in soil layers where plant roots are active [m^3/m^3]
     ! RDPTH(layers): thicknesses of active soil layers [m]
-    ! IrrigScale   : IrrigScale parameter
-    ! irrigType    : Irrigation Type : (1) Sprinkler; (2) Drip; and (3) Flood
 
     ! OUTPUT
     ! ------
-    ! irrigRate    : irrigation rate  [kg m-2 s-1]
+    ! irrigRate    : irrigation rate  [kg m-2 s-1] - internal state
     
     implicit none
-    class (irrigation_model), intent(inout) :: this
+    class (irrigation_model), intent(inout) :: IM
     integer, intent (in)                    :: nest, TileNo
-    real, intent (in)                       :: longitude, veg_trigger, veg_thresh, SMWP, SMSAT, SMREF, SMCNT(:), RDPTH(:), IrrigScale, irrigType 
-    REAL, intent (inout)                    :: irrigRate
+    real, intent (in)                       :: longitude, veg_trigger, veg_thresh, SMWP, SMSAT, SMREF, SMCNT(:), RDPTH(:)
  
     ! locals
     real     :: HC, T1, T2, ma, asmc, tsmcwlt,tsmcref
@@ -126,14 +232,14 @@ contains
        
        SOILM: if(ma >= 0) then       
 
-          if (irrigType == 1.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IrrigScale, SRATE = irrigRate)
-          if (irrigType == 2.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IrrigScale, DRATE = irrigRate)
-          if (irrigType == 3.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IrrigScale, FRATE = irrigRate)
+          if (IM%irrigType(TileNo) == 1.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), SRATE = IM%irrigRate(TileNo))
+          if (IM%irrigType(TileNo) == 2.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), DRATE = IM%irrigRate(TileNo))
+          if (IM%irrigType(TileNo) == 3.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), FRATE = IM%irrigRate(TileNo))
  
        endif SOILM
     else
        !  Outside the season
-       irrigRate = 0.
+       IM%irrigRate(TileNo) = 0.
        
     endif CROP_GROWING_SEASON
     

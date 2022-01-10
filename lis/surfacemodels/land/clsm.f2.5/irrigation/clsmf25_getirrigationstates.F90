@@ -25,67 +25,21 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
   use LIS_irrigationMod
   use IRRIGATION_MODULE
   
-! !DESCRIPTION:        
-!
-! Calculate water requirement and apply the amount to precipitation.
-!
-! Irrigate when root zone soil moisture falls below 50 % of 
-! the field capacity (reference soil moiture) at 6 am LST.  
-! The root zone is actual maximum root depth rather than NOAH root zone.
-! Method of irrigation is by precipitation between 6-10 am LST.
-!
-! Irrigation amount is scaled to grid total crop fraction when intensity
-! is less than the fraction.  Irrigation is expanded to non-crop, non-forest,
-! non-baresoil/urban tiles if intensity exceeds grid total crop fraction.
-! In latter case, scaled irrigation is applied to grassland first, 
-! then further applied over the rest of tiles equally if the intensity 
-! exceeds grassland fraction as well.   
-!
-! Optionally efficiency correction is applied to account for field loss. 
-!
-! Optionally outputs amount of water put into the system to a text file. 
-!
-! This version includes modifications to irr4 as follows:
-! 1) Use location specific growing season threshold (40% of GFRAC range)
-! 2) Allow irrigation in non-crop/non-forest tiles when irrigation 
-!    intensity exceeds total crop fraction
-!
-! REVISION HISTORY:
-!
-! Aug 2008: Hiroko Kato; Initial code for Noah LSM
-! Feb 2014: Sujay Kumar; Implemented in LIS based on the work of
-!           John Bolten and student. 
-! Jul 2014: Ben Zaitchik; added flood routine
 
-!EOP
   implicit none
-  ! moved to lis.config
-  ! Sprinkler parameters
-  !real, parameter      :: otimess = 6.0 ! local trigger check start time [hour]
-  !real, parameter      :: irrhrs = 4.   ! duration of irrigation hours 
-  ! Drip parameters (not currently implemented)
-  !real, parameter      :: otimeds = 6.0 ! local trigger check start time [hour]
-  !real, parameter      :: irrhrd = 12.0   ! duration of irrigation hours 
- ! Flood parameters
-  !real, parameter      :: otimefs = 6.0 ! local trigger check start time [hour]
-  !real, parameter      :: irrhrf = 1.0   ! duration of irrigation hours 
-  !!!real, parameter      :: ffreq = 0.0 ! frequency of flood irrig [days] set to 0.0 to use thresh instead
-  
-  ! real, parameter      :: efcor = 76.0      ! Efficiency Correction (%)
 
   integer,intent(in)   :: nest
   integer              :: rc
   integer              :: TileNo,tid,gid,vegt
   type(ESMF_State)     :: irrigState
-  type(ESMF_Field)     :: irrigRateField,irrigFracField,irrigTypeField
-  type(ESMF_Field)     :: irrigRootDepthField,irrigScaleField
-  
-  real,  pointer       :: irrigRate(:), irrigFrac(:), irrigType(:)
-  real,  pointer       :: irrigRootDepth(:), irrigScale(:)
   real                 :: rdpth, laifac, laithresh, smcwlt, smcref, smcmax
   integer              :: veg_index1,veg_index2
   real,  allocatable   :: laimax(:,:),laimin(:,:)
   type(irrigation_model) :: IM
+
+  ! _______________________________________________________
+
+  call IM%get_irrigstate (irrigState)
   
   if(clsmf25_struc(nest)%modelStart) then 
      clsmf25_struc(nest)%modelStart = .false. 
@@ -119,39 +73,6 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
      deallocate(laimin)
 
   endif
-
-  call ESMF_StateGet(irrigState, "Irrigation rate",irrigRateField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation rate')    
-  call ESMF_FieldGet(irrigRateField, localDE=0,farrayPtr=irrigRate,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation rate')
-
-  call ESMF_StateGet(irrigState, "Irrigation frac",&
-       irrigFracField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation frac')    
-  call ESMF_FieldGet(irrigFracField, localDE=0,&
-       farrayPtr=irrigFrac,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation frac')
-
-  call ESMF_StateGet(irrigState, "Irrigation max root depth",&
-       irrigRootDepthField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation max root depth')    
-  call ESMF_FieldGet(irrigRootDepthField, localDE=0,&
-       farrayPtr=irrigRootDepth,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation root depth')
-
-  call ESMF_StateGet(irrigState, "Irrigation scale",&
-       irrigScaleField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation scale')    
-  call ESMF_FieldGet(irrigScaleField, localDE=0,&
-       farrayPtr=irrigScale,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation scale')
-
-  call ESMF_StateGet(irrigState, "Irrigation type",&
-       irrigTypeField,rc=rc)
-  call LIS_verify(rc,'ESMF_StateGet failed for Irrigation type')    
-  call ESMF_FieldGet(irrigTypeField, localDE=0,&
-       farrayPtr=irrigType,rc=rc)
-  call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')
   
   ! Set vegetation type index to be irrigated   
   select case ( LIS_rc%lcscheme )
@@ -183,7 +104,7 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
      tid = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%tile_id
      
      ! Process only irrigated tiles
-     IRRF: if(irrigFrac(TileNo).gt.0) then
+     IRRF: if(IM%irrigFrac(TileNo).gt.0) then
         ! Proceed if it is non-forest, non-baresoil, non-urban
         vegt = LIS_surface(nest,LIS_rc%lsm_index)%tile(TileNo)%vegt
         VEGIF:  if(vegt.ge.veg_index1.and.vegt.le.veg_index2&
@@ -203,7 +124,7 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
               laifac = 0.0
            endif
            
-           rdpth = irrigRootdepth(TileNo)*laifac
+           rdpth = IM%irrigRootdepth(TileNo)*laifac
            
            ! compute vegetation threshold for the trigger
            ! --------------------------------------------
@@ -227,11 +148,13 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
                 LIS_lai(nest)%tlai(tid),laithresh,                                    &
                 smcwlt,smcmax,smcref,                                                 &
                 (/clsmf25_struc(nest)%cat_diagn(TileNo)%rzmc/),                       &
-                (/rdpth/),IrrigScale(TileNo),irrigType(TileNo),                       &
-                irrigRate(TileNo))
+                (/rdpth/))
                       
         endif VEGIF
      endif IRRF
   end do
   
+  ! Update land surface model's moisture state
+  ! ------------------------------------------  
+
 end subroutine clsmf25_getirrigationstates
