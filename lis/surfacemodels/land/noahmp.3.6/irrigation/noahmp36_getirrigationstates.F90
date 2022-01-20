@@ -20,6 +20,7 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
   use ESMF
   use LIS_coreMod
   use LIS_logMod
+  use LIS_irrigationMod
   use NoahMP36_lsmMod
   use MODULE_SF_NOAHMPLSM_36, only: MAXSMC, REFSMC, WLTSMC
   use LIS_vegDataMod, only: LIS_read_shdmin, LIS_read_shdmax
@@ -269,7 +270,7 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
                ! JE Gsthresh is a GVF threshold used to identify a growing season for each
                ! pixel and allow irrigation during that time
                   gsthresh = shdmin + & 
-                      (LIS_rc%irrigation_GVFparam1 + LIS_rc%irrigation_GVFparam2*&
+                      (LIS_irrig_struc(n)%irrigation_GVFparam1 + LIS_irrig_struc(n)%irrigation_GVFparam2*&
                        (shdmax-shdmin)) * (shdmax - shdmin)
 
 
@@ -324,7 +325,7 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
                          !     Get the root zone moisture availability to the plant
                          !--------------------------------------------------------------- 
                              ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)
-                             if(ma.le.LIS_rc%irrigation_thresh) then 
+                             if(ma.le.LIS_irrig_struc(n)%irrigation_thresh) then 
                                 do k=1,lroot
                                    water(k) = &
                                         (smcref-NOAHMP36_struc(n)%noahmp36(t)%smc(k))*&
@@ -394,8 +395,8 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
 !                            ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)   ! Original
                             ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)/IrrigScale(t) ! BZ added IrrigScale
 
-                            if( ma .le. LIS_rc%irrigation_thresh ) then
-                              do l = 1, LIS_rc%irrigation_mxsoildpth
+                            if( ma .le. LIS_irrig_struc(n)%irrigation_thresh ) then
+                              do l = 1, LIS_irrig_struc(n)%irrigation_mxsoildpth
                                  if( l == 1 ) then
                                    twater = (SMCMAX - NOAHMP36_struc(n)%noahmp36(t)%smc(l))*sldpth(l)*1000.0
                                  else
@@ -428,7 +429,7 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
 !                              noah33_struc(n)%noah(t)%smc(1) = smcmax   ! Original
 
                             ! BZ modification 4/2/2015 to account for ippix and all soil layers:
-                               do l = 1, LIS_rc%irrigation_mxsoildpth
+                               do l = 1, LIS_irrig_struc(n)%irrigation_mxsoildpth
                                   NOAHMP36_struc(n)%noahmp36(t)%smc(l) = IrrigScale(t)*smcmax + &
                                                  (1-IrrigScale(t))*NOAHMP36_struc(n)%noahmp36(t)%smc(l)
                                end do
@@ -452,7 +453,7 @@ subroutine noahmp36_getirrigationstates(n,irrigState)
   
            ! Remove irrigated water from groundwater 
            !JE Add in flag to turn groundwater abstraction on/off
-           if (LIS_rc%irrigation_GWabstraction.eq.1) then
+           if (LIS_irrig_struc(n)%irrigation_GWabstraction.eq.1) then
               AWS = NOAHMP36_struc(n)%noahmp36(t)%wa
               Dtime = NOAHMP36_struc(n)%dt
               NOAHMP36_struc(n)%noahmp36(t)%wa = AWS - irrigRate(t)*Dtime

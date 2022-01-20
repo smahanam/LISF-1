@@ -20,6 +20,7 @@ subroutine RUC37_getirrigationstates(n,irrigState)
   use ESMF
   use LIS_coreMod
   use LIS_logMod
+  use LIS_irrigationMod
   use RUC37_lsmMod
 
 ! !DESCRIPTION:        
@@ -310,7 +311,7 @@ subroutine RUC37_getirrigationstates(n,irrigState)
                          !     Get the root zone moisture availability to the plant
                          !--------------------------------------------------------------- 
                              ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)
-                             if(ma.le.LIS_rc%irrigation_thresh) then 
+                             if(ma.le.LIS_irrig_struc(n)%irrigation_thresh) then 
                                 do k=1,lroot
                                    water(k) = &
                                         (smcref-RUC37_struc(n)%ruc37(t)%smc(k))*&
@@ -380,8 +381,8 @@ subroutine RUC37_getirrigationstates(n,irrigState)
 !                            ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)   ! Original
                             ma = (asmc-tsmcwlt) /(tsmcref - tsmcwlt)/IrrigScale(t) ! BZ added IrrigScale
 
-                            if( ma .le. LIS_rc%irrigation_thresh ) then
-                              do l = 1, LIS_rc%irrigation_mxsoildpth
+                            if( ma .le. LIS_irrig_struc(n)%irrigation_thresh ) then
+                              do l = 1, LIS_irrig_struc(n)%irrigation_mxsoildpth
                                  if( l == 1 ) then
                                    twater = (smcmax - RUC37_struc(n)%ruc37(t)%smc(l))*sldpth(l)*1000.0
                                  else
@@ -410,7 +411,7 @@ subroutine RUC37_getirrigationstates(n,irrigState)
                               irrigRate(t) = twater/LIS_rc%ts
 
                             ! BZ modification 4/2/2015 to account for ippix and all soil layers:
-                               do l = 1, LIS_rc%irrigation_mxsoildpth
+                               do l = 1, LIS_irrig_struc(n)%irrigation_mxsoildpth
                                   RUC37_struc(n)%ruc37(t)%smc(l) = IrrigScale(t)*smcmax + &
                                                  (1-IrrigScale(t))*RUC37_struc(n)%ruc37(t)%smc(l)
                                end do

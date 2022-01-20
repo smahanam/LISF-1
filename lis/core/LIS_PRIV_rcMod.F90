@@ -944,18 +944,11 @@ module LIS_PRIV_rcMod
      character*50           :: routingmodel
      character*50           :: runoffdatasource
 
+     ! Irrigation model main switch
      character*50           :: irrigation_type
-     real                   :: irrigation_thresh !BZ
-     integer                :: irrigation_mxsoildpth
-
+     
      integer                :: forecastMode
      logical                :: zterp_correction
-
-     real                   :: irrigation_GVFparam1   !WN
-     real                   :: irrigation_GVFparam2   !WN
-     integer                :: irrigation_SourcePartition  !WN
-     integer                :: irrigation_GWabstraction !JE 
-
      logical, allocatable       :: LSM_DAinst_valid(:)
      logical, allocatable       :: Routing_DAinst_valid(:)
 

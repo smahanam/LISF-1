@@ -33,13 +33,13 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
   integer              :: TileNo,tid,gid,vegt
   type(ESMF_State)     :: irrigState
   real                 :: rdpth, laifac, laithresh, smcwlt, smcref, smcmax
-  integer              :: veg_index1,veg_index2
+  integer              :: veg_index1,veg_index2, nlctypes
   real,  allocatable   :: laimax(:,:),laimin(:,:)
   type(irrigation_model) :: IM
 
   ! _______________________________________________________
 
-  call IM%get_irrigstate (irrigState)
+  call IM%get_irrigstate (nest, irrigState)
   
   if(clsmf25_struc(nest)%modelStart) then 
      clsmf25_struc(nest)%modelStart = .false. 
@@ -79,15 +79,19 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
   case( "UMD" )
      veg_index1 = 6
      veg_index2 = 11
+     nlctypes   = 13
   case( "IGBP", "IGBPNCEP", "MODIS" )
      veg_index1 = 6
      veg_index2 = 14
+     nlctypes   = 20     
   case( "IGBPNCEP+MIRCA")
      veg_index1 = 6
      veg_index2 = 46
+     nlctypes   = 20     
   case( "USGS" )
      veg_index1 = 2
      veg_index2 = 10
+     nlctypes   = 24     
   case default
      write(LIS_logunit,*) "The landcover scheme, ",trim(LIS_rc%lcscheme),","
      write(LIS_logunit,*) "is not supported for irrigation. Stopping program ... "
@@ -144,7 +148,8 @@ subroutine clsmf25_getirrigationstates(nest,irrigState)
            ! get irrigation rates from the irrigation model
            ! ----------------------------------------------
            
-           call IM%update_irrigrate (nest,TileNo, LIS_domain(nest)%grid(gid)%lon,     &
+           call IM%update_irrigrate (                                                 &
+                nest,TileNo, vegt - nlctypes, LIS_domain(nest)%grid(gid)%lon,         &
                 LIS_lai(nest)%tlai(tid),laithresh,                                    &
                 smcwlt,smcmax,smcref,                                                 &
                 (/clsmf25_struc(nest)%cat_diagn(TileNo)%rzmc/),                       &

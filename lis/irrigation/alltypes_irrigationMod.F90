@@ -30,6 +30,7 @@ module alltypes_irrigationMod
   use LIS_logMod
   use LIS_irrigationMod
   
+  
   implicit none
 
   PRIVATE
@@ -50,7 +51,7 @@ contains
     type(ESMF_Field)     :: irrigRateField, irrigFracField
     type(ESMF_Field)     :: irrigRootDepthField, irrigScaleField
     type(ESMF_Field)     :: irrigTypeField
-    type(ESMF_Field)     :: irriggwratioField
+    type(ESMF_Field)     :: irriggwratioField, accumPField
     real,  allocatable   :: irriggwratio(:)
     real,  pointer       :: gwratio(:)
     real,  allocatable   :: irrigFrac(:)
@@ -58,9 +59,8 @@ contains
     real,  allocatable   :: irrigScale(:)
     real,  allocatable   :: irrigType(:)
     real, pointer        :: frac(:),scale(:),rootdepth(:),irrigRate(:)
-    real, pointer        :: itype(:)
+    real, pointer        :: itype(:), aprcp(:)
     character*100        :: maxrootdepthfile
-    character*50         :: irrigtypetocrop
     integer              :: nlctypes ! non-crop land cover types
     
 ! __________________________________________________________
@@ -78,7 +78,7 @@ contains
        call read_irrigFrac(n, irrigFrac)
 
        ! Read groundwater extraction data
-       if (LIS_rc%irrigation_GWabstraction == 1) then
+       if (LIS_irrig_struc(n)%irrigation_GWabstraction == 1) then
           allocate(irriggwratio(LIS_rc%npatch(n,LIS_rc%lsm_index)))
           call read_irriggwratio(n,irriggwratio)
        endif
@@ -92,12 +92,12 @@ contains
 
        call read_irrigRootdepth( n, maxrootdepthfile, irrigRootDepth, nlctypes )
 
-!HKB ! Read irrigation type frac and assign a type for the tile by opted method:
-       call ESMF_ConfigGetAttribute(LIS_config,irrigtypetocrop,&
-            label="Irrigation type to crop mapping method:",rc=rc)
-       call LIS_verify(rc,&
-            'Irrigation type to crop mapping method: option not specified in the config file')
-       call get_irrigType(n, irrigtypetocrop, irrigType)
+!!HKB ! Read irrigation type frac and assign a type for the tile by opted method:
+!       call ESMF_ConfigGetAttribute(LIS_config,irrigtypetocrop,&
+!            label="Irrigation type to crop mapping method:",rc=rc)
+!       call LIS_verify(rc,&
+!            'Irrigation type to crop mapping method: option not specified in the config file')
+       call get_irrigType(n, irrigType)
 
 !HKB ! Read plant/harvest dates if opted:
        if ( LIS_irrig_struc(n)%cropcalendar .ne. "none" ) then
@@ -146,13 +146,13 @@ contains
             "ESMF_StateAdd for irrigFrac failed in alltypes_irrigation_init")
        deallocate(irrigFrac)
        
-       if (LIS_rc%irrigation_GWabstraction == 1) then
+       if (LIS_irrig_struc(n)%irrigation_GWabstraction == 1) then
           irriggwratioField = ESMF_FieldCreate(&
                grid=LIS_vecPatch(n,LIS_rc%lsm_index),&
                arrayspec=arrspec1,&
                name="Groundwater irrigation ratio", rc=status)
           call LIS_verify(status, &
-               "ESMF_FieldCreate failed in sprinkler_irrigation_init")
+               "ESMF_FieldCreate failed in alltypes_irrigation_init")
        
           call ESMF_FieldGet(irriggwratioField,localDE=0,&
                farrayPtr=gwratio,rc=status)
@@ -218,6 +218,24 @@ contains
             'ESMF_StateAdd for irrigation type failed in alltypes_irrigation_init')
        deallocate(irrigType)
 
+       ! create accumulated precip field
+       accumPField = ESMF_FieldCreate(&
+            grid=LIS_vecPatch(n,LIS_rc%lsm_index),&
+            arrayspec=arrspec1,&
+            name="Accumulated Precipitation",rc=status)
+       call LIS_verify(status, &
+            'ESMF_FieldCreate accumulated precipitation failed in alltypes_irrigation_init')
+       
+       call ESMF_FieldGet(accumPField,localDE=0,&
+            farrayPtr = aprcp ,rc=status)
+       call LIS_verify(status, 'ESMF_FieldGet failed for accumulated precipitation')
+
+       aprcp = 0.
+       call ESMF_StateAdd(irrigState(n),(/accumPField/),rc=status)
+       call LIS_verify(status,&
+            'ESMF_StateAdd for accumulated precipitation failed in alltypes_irrigation_init')
+       deallocate(irrigType)       
+       
     enddo
 
   end subroutine alltypes_irrigation_init
@@ -238,8 +256,8 @@ contains
 !    real, parameter     :: otimes = 6.0 ! local trigger check start time [hour]
 !    real, parameter     :: otimee = 10.0 !local trigger check end time [hour]
     integer             :: t,gid
-    real                :: ltime
-    integer             :: chhr, lhr
+!    real                :: ltime
+!    integer             :: chhr, lhr
     integer             :: status
     integer             :: ftn
 
@@ -248,15 +266,14 @@ contains
     real,    pointer    :: prcp(:)
     real,    pointer    :: irrigRate(:)
     real,    pointer    :: irrigType(:)
-    real,  allocatable  :: irrigAmt(:)    ! local variable
-
+!    real,  allocatable  :: irrigAmt(:)    ! local variable
     integer             :: tmpval
 
-    real                :: timestep, shift_otimess, shift_otimese
-    real                :: shift_otimeds, shift_otimede
-    real                :: shift_otimefs, shift_otimefe
+!    real                :: timestep, shift_otimess, shift_otimese
+!    real                :: shift_otimeds, shift_otimede
+!    real                :: shift_otimefs, shift_otimefe
 
-    allocate(irrigAmt(LIS_rc%npatch(n,LIS_rc%lsm_index)))
+!    allocate(irrigAmt(LIS_rc%npatch(n,LIS_rc%lsm_index)))
     call ESMF_StateGet(irrigState,&
          "Irrigation rate",&
          irrigRateField,rc=status)
@@ -288,24 +305,24 @@ contains
     call LIS_verify(status,&
          'ESMF_FieldGet failed for rainf in alltypes_irrigation')
 
-    irrigAmt = 0.0
+    ! irrigAmt = 0.0
 
-    timestep = LIS_rc%ts
+    ! timestep = LIS_rc%ts
 
     ! Adjust bounds by timestep to account for the fact that LIS_rc%hr, etc.
     ! will represents the END of the integration timestep window
     ! Sprinkler
-    shift_otimess = LIS_irrig_struc(n)%sprinkler_start + (timestep/3600.)
-    shift_otimese = (LIS_irrig_struc(n)%sprinkler_start + &
-                     LIS_irrig_struc(n)%sprinkler_duration) + (timestep/3600.)
+    ! shift_otimess = LIS_irrig_struc(n)%sprinkler_start + (timestep/3600.)
+    ! shift_otimese = (LIS_irrig_struc(n)%sprinkler_start + &
+    !                 LIS_irrig_struc(n)%sprinkler_duration) + (timestep/3600.)
     ! Drip
-    shift_otimeds = LIS_irrig_struc(n)%drip_start + (timestep/3600.)
-    shift_otimede = (LIS_irrig_struc(n)%drip_start + &
-                     LIS_irrig_struc(n)%drip_duration) + (timestep/3600.)
+    ! shift_otimeds = LIS_irrig_struc(n)%drip_start + (timestep/3600.)
+    ! shift_otimede = (LIS_irrig_struc(n)%drip_start + &
+    !                 LIS_irrig_struc(n)%drip_duration) + (timestep/3600.)
     ! Flood
-    shift_otimefs = LIS_irrig_struc(n)%flood_start + (timestep/3600.)
-    shift_otimefe = (LIS_irrig_struc(n)%flood_start + &
-                     LIS_irrig_struc(n)%flood_duration) + (timestep/3600.)
+    ! shift_otimefs = LIS_irrig_struc(n)%flood_start + (timestep/3600.)
+    ! shift_otimefe = (LIS_irrig_struc(n)%flood_start + &
+    !                 LIS_irrig_struc(n)%flood_duration) + (timestep/3600.)
 
 
     ! HKB check 
@@ -314,36 +331,35 @@ contains
 
     do t=1,LIS_rc%npatch(n,LIS_rc%lsm_index)
 
-       gid = LIS_surface(n,LIS_rc%lsm_index)%tile(t)%index
-       chhr = nint(24.0*(LIS_domain(n)%grid(gid)%lon/360.0))
-       if((LIS_domain(n)%grid(gid)%lon.lt.0.0).and.&
-            (abs(mod(LIS_domain(n)%grid(gid)%lon,15.0)).ge.0.0001)) &
-          chhr = chhr -1
-       lhr = LIS_rc%hr+chhr
-       if(lhr.ge.24) lhr = lhr-24
-       if(lhr.lt.0) lhr = lhr+24
-       
-       ltime = real(lhr)+real(LIS_rc%mn)/60.0+real(LIS_rc%ss)/3600.0
+!       gid = LIS_surface(n,LIS_rc%lsm_index)%tile(t)%index
+!       chhr = nint(24.0*(LIS_domain(n)%grid(gid)%lon/360.0))
+!       if((LIS_domain(n)%grid(gid)%lon.lt.0.0).and.&
+!            (abs(mod(LIS_domain(n)%grid(gid)%lon,15.0)).ge.0.0001)) &
+!          chhr = chhr -1
+!       lhr = LIS_rc%hr+chhr
+!       if(lhr.ge.24) lhr = lhr-24
+!       if(lhr.lt.0) lhr = lhr+24
+!       
+!       ltime = real(lhr)+real(LIS_rc%mn)/60.0+real(LIS_rc%ss)/3600.0
 !HKB apply water during specified hours for the irrigation type
        if ( irrigType(t) .eq. 1 ) then  ! sprinkler, add to rain
-         if((ltime.ge.shift_otimess).and.(ltime.lt.shift_otimese)) then 
           prcp(t)=prcp(t)+irrigRate(t)
-          irrigAmt(t) = irrigRate(t)
-         end if
-       elseif ( irrigType(t) .eq. 2 ) then  ! drip
-         if((ltime.ge.shift_otimeds).and.(ltime.lt.shift_otimede)) then 
-          irrigAmt(t) = irrigRate(t)
-         end if
-       elseif ( irrigType(t) .eq. 3 ) then  ! flood
-         if((ltime.ge.shift_otimefs).and.(ltime.lt.shift_otimefe)) then 
-          irrigAmt(t) = irrigRate(t)
-         end if
+!          irrigAmt(t) = irrigRate(t)
        endif
+!       elseif ( irrigType(t) .eq. 2 ) then  ! drip
+!         if((ltime.ge.shift_otimeds).and.(ltime.lt.shift_otimede)) then 
+!          irrigAmt(t) = irrigRate(t)
+!         end if
+!       elseif ( irrigType(t) .eq. 3 ) then  ! flood
+!         if((ltime.ge.shift_otimefs).and.(ltime.lt.shift_otimefe)) then 
+!          irrigAmt(t) = irrigRate(t)
+!         end if
+!       endif
     
      ! Write out irrigated amount of water to separate directory:
        if( LIS_MOC_IRRIGATEDWATER == 1 ) then
          call LIS_diagnoseIrrigationOutputVar(n,t,LIS_MOC_IRRIGATEDWATER,&
-               value=irrigAmt(t),unit="kg m-2 s-1",direction="-",vlevel=1)
+               value=irrigRate(t),unit="kg m-2 s-1",direction="-",vlevel=1)
        else
          write(LIS_logunit,*) "[ERR] 'Irrigated water:' was not selected. Program stopping ..."
          call LIS_endrun
@@ -354,7 +370,7 @@ contains
 
     enddo
     !call LIS_releaseUnitNumber(ftn)  !HKB
-    deallocate(irrigAmt)
+    ! deallocate(irrigAmt)
     
   end subroutine alltypes_irrigation_updates
 
@@ -375,7 +391,7 @@ contains
     real,  allocatable   :: glb_frac(:,:)
     
 #if (defined USE_NETCDF3 || defined USE_NETCDF4)
-
+    ! LIS input file
     inquire(file=LIS_rc%paramfile(n), exist=file_exists)
     if(file_exists) then 
 
@@ -440,8 +456,8 @@ contains
 
 #if (defined USE_NETCDF3 || defined USE_NETCDF4)
 
-    if ( LIS_rc%irrigation_GWabstraction .ne. 0 .and. &
-         LIS_rc%irrigation_SourcePartition .ne. 0 ) then
+    if ( LIS_irrig_struc(n)%irrigation_GWabstraction .ne. 0 .and. &
+         LIS_irrig_struc(n)%irrigation_SourcePartition .ne. 0 ) then
        inquire(file=LIS_rc%paramfile(n), exist=file_exists)
        if(file_exists) then
 
@@ -522,7 +538,7 @@ contains
     inquire(file=LIS_rc%paramfile(n), exist=file_exists)
     if(file_exists) then
      ! Read in LDT-generated netcdf file information:
-       write(LIS_logunit,*)"[INFO] Reading crop classification information ..."
+       write(LIS_logunit,*)"[INFO] Reading crop classification inf ormation ..."
        ios = nf90_open(path=LIS_rc%paramfile(n),&
                        mode=NF90_NOWRITE,ncid=nid)
        call LIS_verify(ios,'Error in nf90_open in read_irrigRootdepth')
@@ -731,7 +747,7 @@ contains
 #endif
   end subroutine read_cropcalendar
 
-  subroutine get_irrigType(n,irrigtypetocrop,itype)
+  subroutine get_irrigType(n,itype)
 
 !HKB new routine for reading in grid level irrigType field and mapping to 
 !crop tiles using A) Matt's algorithm, B) dominant, or C) single type
@@ -745,7 +761,6 @@ contains
     use netcdf
 #endif
     integer,  intent(in) :: n 
-    character*50,intent(in) :: irrigtypetocrop
     real                 :: itype(LIS_rc%npatch(n,LIS_rc%lsm_index))
 
     integer              :: t,col,row,j
@@ -784,7 +799,7 @@ contains
        call LIS_verify(ios,'Error in nf90_open in the lis input netcdf file')
 
        write(LIS_logunit,*) "[INFO] Reading in the irrigation type field ... "
-       write(LIS_logunit,*) "[INFO] type determination method is ",irrigtypetocrop
+       write(LIS_logunit,*) "[INFO] type determination method is ",LIS_rc%irrigation_type
        
        ios = nf90_inq_dimid(nid, "irrigtypes", irrigdimid)
        call LIS_verify(ios,'nf90_inq_dimid failed for IRRIGTYPE, NEED new lis_input')
@@ -858,7 +873,7 @@ contains
           LIS_nse_halo_ind(n,LIS_localPet+1),:)
        s_itype = l_itype
        
-       if (irrigtypetocrop .eq. "distribute") then
+       if (trim(LIS_rc%irrigation_type) .eq. "distribute") then
  
         allocate(PREFTYPE(LIS_rc%lnc(n),LIS_rc%lnr(n),LIS_rc%nsurfacetypes))
         PREFTYPE = -1
@@ -914,26 +929,29 @@ contains
 !         end do
          deallocate (cell_area)
          stop
-       endif
+      endif
+      
 
        TILE_LOOP: do t=1,LIS_rc%npatch(n,LIS_rc%lsm_index)
           
           col = LIS_surface(n,LIS_rc%lsm_index)%tile(t)%col
           row = LIS_surface(n,LIS_rc%lsm_index)%tile(t)%row
           vegt= LIS_surface(n,LIS_rc%lsm_index)%tile(t)%vegt
-
-          select case (irrigtypetocrop)
-           case("single")
+          
+          select case (trim(LIS_rc%irrigation_type))
+          case("Sprinkler","Drip","Flood")             
              ! Simple case: single irrigation type (0 or 1)
              ! it will be overwritten with latter type if more than one type
               do j=1,nirrigtypes
-               if ( l_itype(col,row,j).gt.0 ) then
-                 itype(t) = j * 1.0
-               else
-                 itype(t) = 0         ! no irrigation
-               endif
+                 if (l_itype(col,row,j).gt.0 ) then                    
+                    if(trim(LIS_rc%irrigation_type) .eq. "Sprinkler") itype(t) = 1.0
+                    if(trim(LIS_rc%irrigation_type) .eq. "Drip"     ) itype(t) = 2.0
+                    if(trim(LIS_rc%irrigation_type) .eq. "Flood"    ) itype(t) = 3.0
+                 else
+                    itype(t) = 0         ! no irrigation
+                 endif
               enddo   ! j
-           case("dominant")  ! find the max fraction
+           case("dominant", "Concurrent")  ! find the max fraction
               temp = l_itype(col,row,:)
               if ( maxval(temp).gt.0 ) then
                  iindex = 0
@@ -957,7 +975,7 @@ contains
 
            case default
               write(LIS_logunit,*) "[ERR] Irrigation type is not supported for ", &
-                trim(irrigtypetocrop)
+                trim(LIS_rc%irrigation_type)
               call LIS_endrun()
           end select
 

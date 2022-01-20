@@ -60,10 +60,14 @@ MODULE IRRIGATION_MODULE
   use LIS_coreMod
   use LIS_irrigationMod
   use LIS_logMod
+  use LIS_FORC_AttributesMod 
+  use LIS_metforcingMod, only : LIS_FORC_State
   
   IMPLICIT NONE
 
   PRIVATE
+
+  real, parameter :: NOF_paccum_DAYS = 3, paccum_cutoff = 25.4, schedule_irate = 25.4/2. ! 1 inch in 48 hrs in [mm/day]
   
   type, public :: irrig_state
      
@@ -73,6 +77,8 @@ MODULE IRRIGATION_MODULE
      real,  pointer :: irrigScale(:)
      real,  pointer :: irrigRootDepth(:)
      real,  pointer :: irriggwratio(:)
+     real,  pointer :: prcp(:)
+     real,  pointer :: aprcp(:)
      
   end type irrig_state
      
@@ -88,16 +94,18 @@ MODULE IRRIGATION_MODULE
 
 contains
 
-  SUBROUTINE get_irrigstate (IM,irrigState)
+  SUBROUTINE get_irrigstate (IM,nest,irrigState)
 
     implicit none
     
     class (irrigation_model), intent(inout) :: IM
+    integer, intent(in)                     :: nest
     type(ESMF_State)                        :: irrigState
-    type(ESMF_Field)                        :: irrigRateField,irrigFracField,irrigTypeField
+    type(ESMF_Field)                        :: irrigRateField,irrigFracField,irrigTypeField,prcpField
     type(ESMF_Field)                        :: irrigRootDepthField,irrigScaleField,irriggwratioField
     integer                                 :: rc
-
+    real                                    :: Nsteps_paccum
+    
     call ESMF_StateGet(irrigState, "Irrigation rate",irrigRateField,rc=rc)
     call LIS_verify(rc,'ESMF_StateGet failed for Irrigation rate')    
     call ESMF_FieldGet(irrigRateField, localDE=0,farrayPtr=IM%irrigRate,rc=rc)
@@ -131,7 +139,7 @@ contains
          farrayPtr=IM%irrigType,rc=rc)
     call LIS_verify(rc,'ESMF_FieldGet failed for Irrigation type')
 
-    if (LIS_rc%irrigation_GWabstraction == 1) then
+    if (LIS_irrig_struc(nest)%irrigation_GWabstraction == 1) then
        call ESMF_StateGet(irrigState, "Groundwater irrigation ratio",&
             irriggwratioField,rc=rc)
        call LIS_verify(rc,'ESMF_StateGet failed for Groundwater irrigation ratio')
@@ -140,17 +148,39 @@ contains
        call LIS_verify(rc,'ESMF_FieldGet failed for Groundwater irrigation ratio')
     endif
     
+    call ESMF_StateGet(LIS_FORC_State(nest),       &
+         trim(LIS_FORC_Rainf%varname(1)),prcpField,&
+         rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for prcp')
+    call ESMF_FieldGet(prcpField, localDE=0,&
+         farrayPtr=IM%prcp,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for rainfall')
+
+    call ESMF_StateGet(irrigState, "Accumulated Precipitation",&
+         irrigTypeField,rc=rc)
+    call LIS_verify(rc,'ESMF_StateGet failed for Accumulated Precipitation')    
+    call ESMF_FieldGet(irrigTypeField, localDE=0,&
+         farrayPtr=IM%aprcp,rc=rc)
+    call LIS_verify(rc,'ESMF_FieldGet failed for Accumulated Precipitation')
+
+    !  set number of time steps within the preceding accumulative precip period "running average"
+    ! -------------------------------------------------------------------------------------------
+
+    Nsteps_paccum = NOF_paccum_DAYS * 86400. / LIS_rc%ts
+    IM%aprcp = ((Nsteps_paccum - 1.)*IM%aprcp + IM%prcp) /  Nsteps_paccum ! mean precip rate during NOF_paccum_DAYS [kg/m^2/s]
+    
   END SUBROUTINE get_irrigstate
   
   ! ----------------------------------------------------------------------------
 
-  SUBROUTINE update_irrigrate (IM, nest, TileNo, longitude, veg_trigger, veg_thresh, SMWP, SMSAT, &
+  SUBROUTINE update_irrigrate (IM, nest, TileNo, croptype, longitude, veg_trigger, veg_thresh, SMWP, SMSAT, &
        SMREF, SMCNT, RDPTH)
     
     ! INPUTS:
     ! -------
     ! NEST         : LIS grid nest identifier
     ! TileNo       : Tile ID
+    ! croptype     : 1-26
     ! LONGITUDE    : Tile longitude
     ! VEG_TRIGGER  : Current vegetation trigger value
     ! VEG_THRESH   : vegetation threshold to turn the trigger on
@@ -166,7 +196,7 @@ contains
     
     implicit none
     class (irrigation_model), intent(inout) :: IM
-    integer, intent (in)                    :: nest, TileNo
+    integer, intent (in)                    :: nest, TileNo, croptype
     real, intent (in)                       :: longitude, veg_trigger, veg_thresh, SMWP, SMSAT, SMREF, SMCNT(:), RDPTH(:)
  
     ! locals
@@ -242,14 +272,45 @@ contains
     ! ----------------------------------------------------------
     
     CROP_GROWING_SEASON: if (season_active) then
-       
-       SOILM: if(ma >= 0) then       
 
-          if (IM%irrigType(TileNo) == 1.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), SRATE = IM%irrigRate(TileNo))
-          if (IM%irrigType(TileNo) == 2.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), DRATE = IM%irrigRate(TileNo))
-          if (IM%irrigType(TileNo) == 3.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), FRATE = IM%irrigRate(TileNo))
- 
-       endif SOILM
+       PADDY: if(croptype == 3) then
+          ! PADDY
+          T1 = LIS_irrig_struc(nest)%flood_start
+          T2 = LIS_irrig_struc(nest)%flood_start + LIS_irrig_struc(nest)%flood_duration
+          
+          if ((HC >= T1).AND.(HC < T2)) then
+             ! within flood irrigation period
+             if (T1 == HC) then
+                ! set rate at start time
+                do layer = 1,SIZE (SMCNT)
+                   IM%irrigRate(TileNo) = IM%irrigRate(TileNo) + (smsat -smcnt(layer))*rdpth(layer)*1000.0*100.0/ &
+                        (100.0-LIS_irrig_struc(nest)%flood_efcor)
+                enddo
+                IM%irrigRate(TileNo) = IM%irrigRate(TileNo)*IM%IrrigScale(TileNo)/(T2 - T1)/3600.
+             endif
+          else
+             IM%irrigRate(TileNo) = 0
+          endif
+       else
+          
+          SM_DEFICIT_OR_SCHEDULE: if (LIS_irrig_struc(nest)%irrigation_schedule ==0) then
+
+             SOILM: if(ma >= 0) then                      
+                if (IM%irrigType(TileNo) == 1.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), SRATE = IM%irrigRate(TileNo))
+                if (IM%irrigType(TileNo) == 2.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), DRATE = IM%irrigRate(TileNo))
+                if (IM%irrigType(TileNo) == 3.) call irrig_by_type (nest,HC, ma, smref,SMCNT, RDPTH, IM%IrrigScale(TileNo), FRATE = IM%irrigRate(TileNo))                
+             endif SOILM
+
+          else
+             
+             CHECK_ACUUM_PRECIP: if (IM%aprcp(TileNo)*86400*NOF_paccum_DAYS < paccum_cutoff) then                
+                if (IM%irrigType(TileNo) == 1.) call irrig_on_schedule (nest,HC, IM%IrrigScale(TileNo), SRATE = IM%irrigRate(TileNo))
+                if (IM%irrigType(TileNo) == 2.) call irrig_on_schedule (nest,HC, IM%IrrigScale(TileNo), DRATE = IM%irrigRate(TileNo))
+                if (IM%irrigType(TileNo) == 3.) call irrig_on_schedule (nest,HC, IM%IrrigScale(TileNo), FRATE = IM%irrigRate(TileNo))                
+             endif CHECK_ACUUM_PRECIP             
+
+          endif SM_DEFICIT_OR_SCHEDULE
+       endif PADDY
     else
        !  Outside the season
        IM%irrigRate(TileNo) = 0.
@@ -260,13 +321,69 @@ contains
   
   ! ----------------------------------------------------------------------------
   
+  SUBROUTINE irrig_on_schedule (nest, HC, IrrigScale, SRATE, DRATE, FRATE)
+    
+    implicit none
+
+    INTEGER, intent (in)                    :: nest    
+    REAL, intent (in)                       :: HC, IrrigScale
+    REAL, optional, intent (inout)          :: SRATE, DRATE, FRATE
+    REAL                                    :: H1, H2, IT
+    
+    if(present (SRATE)) then
+       ! SPRINKLER IRRIGATION
+       H1 = LIS_irrig_struc(nest)%sprinkler_start
+       H2 = LIS_irrig_struc(nest)%sprinkler_start + LIS_irrig_struc(nest)%sprinkler_duration
+       IT = LIS_irrig_struc(nest)%sprinkler_thresh
+       
+       if ((HC >= H1).AND.(HC < H2)) then
+          ! Irrirate is set to a predifined value
+          ! rates for the day and maintains the same rate through out the irrigation
+          ! duration (H1 <= HC < H2).
+          SRATE = schedule_irate*IrrigScale*100.0/(100.0-LIS_irrig_struc(nest)%sprinkler_efcor)/(H2 - H1)/3600.
+       else
+          SRATE = 0.
+       endif
+    endif
+       
+    if(present (DRATE)) then
+       ! DRIP IRRIGATION
+       H1 = LIS_irrig_struc(nest)%drip_start
+       H2 = LIS_irrig_struc(nest)%drip_start + LIS_irrig_struc(nest)%drip_duration
+       IT = LIS_irrig_struc(nest)%drip_thresh
+       
+       if ((HC >= H1).AND.(HC < H2)) then
+          ! Notice drip uses the same soil moisture threshold of sprinkler but with 0.% efficiency correction.
+          DRATE = schedule_irate*IrrigScale*100.0/(100.0-LIS_irrig_struc(nest)%drip_efcor)/(H2 - H1)/3600.
+       else
+          DRATE = 0.
+       endif
+    endif
+    
+    if(present (FRATE)) then
+       ! FLOOD IRRIGATION
+       H1 = LIS_irrig_struc(nest)%flood_start
+       H2 = LIS_irrig_struc(nest)%flood_start + LIS_irrig_struc(nest)%flood_duration
+       IT = LIS_irrig_struc(nest)%flood_thresh
+       
+       if ((HC >= H1).AND.(HC < H2)) then
+          FRATE = schedule_irate*IrrigScale*100.0/(100.0-LIS_irrig_struc(nest)%flood_efcor)/(H2 - H1)/3600.
+       else
+          FRATE = 0.
+       endif
+    endif
+     
+  END SUBROUTINE irrig_on_schedule
+  
+  ! ----------------------------------------------------------------------------
+  
   SUBROUTINE irrig_by_type (nest, HC, ma, SMREF, SMCNT, RDPTH, IrrigScale, SRATE, DRATE, FRATE)
     
     implicit none
 
     INTEGER, intent (in)                    :: nest    
     REAL, intent (in)                       :: HC, ma, SMREF, SMCNT(:), RDPTH(:), IrrigScale
-    REAL, optional, intent (inout)          :: SRATE, DRATE, FRATE 
+    REAL, optional, intent (inout)          :: SRATE, DRATE, FRATE
     REAL                                    :: H1, H2, IT
     
     if(present (SRATE)) then

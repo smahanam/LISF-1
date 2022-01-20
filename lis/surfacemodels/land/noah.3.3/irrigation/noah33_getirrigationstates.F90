@@ -88,14 +88,14 @@ subroutine noah33_getirrigationstates(nest,irrigState)
   real                 :: rdpth(noah33_struc(nest)%nslay)
   real                 :: zdpth(noah33_struc(nest)%nslay)
   real                 :: crootd
-  integer              :: lroot,veg_index1,veg_index2
+  integer              :: lroot,veg_index1,veg_index2, nlctypes
   real                 :: gsthresh
   logical              :: irrig_check_frozen_soil
   type(irrigation_model) :: IM 
 
   ! _______________________________________________________
 
-  call IM%get_irrigstate (irrigState)
+  call IM%get_irrigstate (nest, irrigState)
 
   ! Set vegetation type index to be irrigated
   ! -----------------------------------------
@@ -103,21 +103,27 @@ subroutine noah33_getirrigationstates(nest,irrigState)
   if(LIS_rc%lcscheme.eq."UMD") then !UMD
      veg_index1 = 6
      veg_index2 = 11
+     nlctypes   = 13
   elseif(LIS_rc%lcscheme.eq."UMD+MIRCA") then !UMD+MIRCA (Temporary, KRA)
      veg_index1 = 6
      veg_index2 = 40
+     nlctypes   = 14
   elseif(LIS_rc%lcscheme.eq."MODIS".or.LIS_rc%lcscheme.eq."IGBPNCEP") then
      veg_index1 = 6
      veg_index2 = 14
+     nlctypes   = 20
   elseif(LIS_rc%lcscheme.eq."IGBPNCEP+MIRCA") then  
      veg_index1 = 6
      veg_index2 = 46
+     nlctypes   = 20
   elseif(LIS_rc%lcscheme.eq."USGS") then 
      veg_index1 = 2
      veg_index2 = 10
+     nlctypes   = 24
   elseif(LIS_rc%lcscheme.eq."UMDCROPMAP") then 
      veg_index1 = 5
      veg_index2 = 32
+     nlctypes   = 13
   else
      write(LIS_logunit,*) '[ERR] The landcover scheme ',trim(LIS_rc%lcscheme)
      write(LIS_logunit,*) '[ERR] is not supported for the Noah.3.3 irrigation module.'
@@ -221,7 +227,8 @@ subroutine noah33_getirrigationstates(nest,irrigState)
                  ! get irrigation rates from the irrigation model
                  ! ----------------------------------------------
            
-                 call IM%update_irrigrate (nest,TileNo, LIS_domain(nest)%grid(gid)%lon, &
+                 call IM%update_irrigrate (                                             &
+                      nest,TileNo, vegt - nlctypes, LIS_domain(nest)%grid(gid)%lon,     &
                       noah33_struc(nest)%noah(TileNo)%shdfac,gsthresh,                  &
                       noah33_struc(nest)%noah(TileNo)%smcwlt,                           &
                       noah33_struc(nest)%noah(TileNo)%smcmax,                           &
