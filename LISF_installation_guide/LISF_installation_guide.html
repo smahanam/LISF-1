@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="generator" content="Asciidoctor 2.0.20">
+<meta name="generator" content="Asciidoctor 2.0.23">
 <title>LISF Installation Guide</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700">
 <style>
@@ -140,7 +140,7 @@ p a>code:hover{color:rgba(0,0,0,.9)}
 #content::before{content:none}
 #header>h1:first-child{color:rgba(0,0,0,.85);margin-top:2.25rem;margin-bottom:0}
 #header>h1:first-child+#toc{margin-top:8px;border-top:1px solid #dddddf}
-#header>h1:only-child,body.toc2 #header>h1:nth-last-child(2){border-bottom:1px solid #dddddf;padding-bottom:8px}
+#header>h1:only-child{border-bottom:1px solid #dddddf;padding-bottom:8px}
 #header .details{border-bottom:1px solid #dddddf;line-height:1.45;padding-top:.25em;padding-bottom:.25em;padding-left:.25em;color:rgba(0,0,0,.6);display:flex;flex-flow:row wrap}
 #header .details span:first-child{margin-left:-.125em}
 #header .details span.email a{color:rgba(0,0,0,.85)}
@@ -162,6 +162,7 @@ p a>code:hover{color:rgba(0,0,0,.9)}
 #toctitle{color:#7a2518;font-size:1.2em}
 @media screen and (min-width:768px){#toctitle{font-size:1.375em}
 body.toc2{padding-left:15em;padding-right:0}
+body.toc2 #header>h1:nth-last-child(2){border-bottom:1px solid #dddddf;padding-bottom:8px}
 #toc.toc2{margin-top:0!important;background:#f8f8f7;position:fixed;width:15em;left:0;top:0;border-right:1px solid #e7e7e9;border-top-width:0!important;border-bottom-width:0!important;z-index:1000;padding:1.25em 1em;height:100%;overflow:auto}
 #toc.toc2 #toctitle{margin-top:0;margin-bottom:.8rem;font-size:1.2em}
 #toc.toc2>ul{font-size:.9em;margin-bottom:0}
@@ -327,7 +328,7 @@ a.image{text-decoration:none;display:inline-block}
 a.image object{pointer-events:none}
 sup.footnote,sup.footnoteref{font-size:.875em;position:static;vertical-align:super}
 sup.footnote a,sup.footnoteref a{text-decoration:none}
-sup.footnote a:active,sup.footnoteref a:active{text-decoration:underline}
+sup.footnote a:active,sup.footnoteref a:active,#footnotes .footnote a:first-of-type:active{text-decoration:underline}
 #footnotes{padding-top:.75em;padding-bottom:.75em;margin-bottom:.625em}
 #footnotes hr{width:20%;min-width:6.25em;margin:-.25em 0 .75em;border-width:1px 0 0}
 #footnotes .footnote{padding:0 .375em 0 .225em;line-height:1.3334;font-size:.875em;margin-left:1.2em;margin-bottom:.2em}
@@ -437,8 +438,8 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <div id="header">
 <h1>LISF Installation Guide</h1>
 <div class="details">
-<span id="revnumber">version 1.1,</span>
-<span id="revdate">30 Nov 2022</span>
+<span id="revnumber">version 2.0,</span>
+<span id="revdate">11 Jan 2024</span>
 </div>
 <div id="toc" class="toc">
 <div id="toctitle">Table of Contents</div>
@@ -479,6 +480,11 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </tr>
 </thead>
 <tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.0</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">LISF Public 7.5.0 release</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Jan 11, 2024</p></td>
+</tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">1.1</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">LISF 557WW 7.5.0 release</p></td>
@@ -553,10 +559,10 @@ and IBM Power9 systems.</p>
 <div class="ulist">
 <ul>
 <li>
-<p>Intel Fortran Compiler versions 18, 19, 20, or 21 with corresponding Intel C Compiler along with GNU&#8217;s Compiler Collection version 9.2.0 or 11.2.0.</p>
+<p>Intel Fortran Compiler versions 2021 or 2022 with corresponding Intel C Compiler along with GNU&#8217;s Compiler Collection version 11.2.0 or 12.1.0.</p>
 </li>
 <li>
-<p>or GNU&#8217;s Compiler Collection version 9.2.0 or 11.2.0, both gfortran and gcc.</p>
+<p>or GNU&#8217;s Compiler Collection version 11.2.0, both gfortran and gcc.</p>
 </li>
 </ul>
 </div>
@@ -572,7 +578,7 @@ and IBM Power9 systems.</p>
 <p>Perl, version 5.10</p>
 </li>
 <li>
-<p>Python, version 2.7 or 3.8</p>
+<p>Python, version 3.6</p>
 </li>
 </ul>
 </div>
@@ -583,7 +589,7 @@ and IBM Power9 systems.</p>
 <div class="title">Important</div>
 </td>
 <td class="content">
-Support for Python 2.7 is now deprecated.  Future releases will depend on Python 3.
+The use of Python 2.7 for building LISF is now deprecated.  See Section <a href="#_python_support">Python support</a>.
 </td>
 </tr>
 </table>
@@ -597,13 +603,10 @@ Support for Python 2.7 is now deprecated.  Future releases will depend on Python
 <div class="ulist">
 <ul>
 <li>
-<p>Intel Fortran Compiler version 18 or 19 with corresponding Intel C Compiler, along with GNU&#8217;s Compiler Collection version 7.3.0</p>
+<p>Intel Fortran Compiler version 2021 or 2022 with corresponding Intel C Compiler, along with GNU&#8217;s Compiler Collection version 11.2.0 or 12.1.0.</p>
 </li>
 <li>
-<p>or Intel Fortran Compiler version 21 with corresponding Intel C Compiler, along with GNU&#8217;s Compiler Collection version 7.5.0</p>
-</li>
-<li>
-<p>or Cray Compiler Environment (cce) version 12.0.3 or 13.0.0, along with GNU&#8217;s Compiler Collection version 11.2.0</p>
+<p>or Cray Compiler Environment (cce) version 14.0.0, along with GNU&#8217;s Compiler Collection version 11.2.0.</p>
 </li>
 </ul>
 </div>
@@ -619,7 +622,7 @@ Support for Python 2.7 is now deprecated.  Future releases will depend on Python
 <p>Perl, version 5.10</p>
 </li>
 <li>
-<p>Python, version 2.7 or 3.8</p>
+<p>Python, version 3.6</p>
 </li>
 </ul>
 </div>
@@ -630,7 +633,7 @@ Support for Python 2.7 is now deprecated.  Future releases will depend on Python
 <div class="title">Important</div>
 </td>
 <td class="content">
-Support for Python 2.7 is now deprecated.  Future releases will depend on Python 3.
+The use of Python 2.7 for building LISF is now deprecated.  See Section <a href="#_python_support">Python support</a>.
 </td>
 </tr>
 </table>
@@ -660,7 +663,7 @@ Support for Python 2.7 is now deprecated.  Future releases will depend on Python
 <p>Perl, version 5.10</p>
 </li>
 <li>
-<p>Python, version 2.7 or 3.8</p>
+<p>Python, version 3.6</p>
 </li>
 </ul>
 </div>
@@ -671,11 +674,52 @@ Support for Python 2.7 is now deprecated.  Future releases will depend on Python
 <div class="title">Important</div>
 </td>
 <td class="content">
-Support for Python 2.7 is now deprecated.  Future releases will depend on Python 3.
+The use of Python 2.7 for building LISF is now deprecated.  See Section <a href="#_python_support">Python support</a>.
 </td>
 </tr>
 </table>
 </div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_python_support">2.1.4. Python support</h4>
+<div class="paragraph">
+<p>The use of Python 2.7 for building LISF is now deprecated.  If you only have Python 2.7, then edit the following four files</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>ldt/make/makedep.py</p>
+</li>
+<li>
+<p>lis/make/makedep.py</p>
+</li>
+<li>
+<p>lis/make/plugins.py</p>
+</li>
+<li>
+<p>lvt/make/makedep.py</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>changing</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>#!/usr/bin/env python3</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>to</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>#!/usr/bin/env python</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Future releases will depend on Python 3 only.</p>
 </div>
 </div>
 </div>
@@ -956,7 +1000,7 @@ LIS-only dependency
 </table>
 </div>
 <div class="paragraph">
-<p>If you wish to enable LIS' RTM support, then you must install the CRTM library from the Joint Centers for Satellite Data Assimilation (JCSDA).  First go to <a href="http://ftp.emc.ncep.noaa.gov/jcsda/CRTM/Repository/" class="bare">http://ftp.emc.ncep.noaa.gov/jcsda/CRTM/Repository/</a> and fill out the CRTM.Subversion_Account_Request.pdf form.  Once you have access to their Subversion repository, checkout revision 9604 of the trunk.</p>
+<p>If you wish to enable LIS&#8217; RTM support, then you must install the CRTM library from the Joint Centers for Satellite Data Assimilation (JCSDA).  First go to <a href="http://ftp.emc.ncep.noaa.gov/jcsda/CRTM/Repository/" class="bare">http://ftp.emc.ncep.noaa.gov/jcsda/CRTM/Repository/</a> and fill out the CRTM.Subversion_Account_Request.pdf form.  Once you have access to their Subversion repository, checkout revision 9604 of the trunk.</p>
 </div>
 <div class="paragraph">
 <p>Please create a directory outside of the LIS source code to checkout the CRTM library into.  Then, within that new directory, run:</p>
@@ -999,13 +1043,37 @@ LIS-only dependency
 </table>
 </div>
 <div class="paragraph">
-<p>If you wish to enable LIS' RTM support, then you must manually compile an included library.</p>
+<p>If you wish to enable LIS&#8217; RTM support, then you must manually compile an included library.</p>
 </div>
 <div class="literalblock">
 <div class="content">
 <pre>% cd $WORKING/lib/lis-cmem3
-% gmake</pre>
+% LIS_ARCH=linux_ifc make</pre>
 </div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+If using the GNU compilers, set <code>LIS_ARCH</code> to linux_gfortran.
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+linux_ifc and linux_gfortran are the only supported architectures.
+</td>
+</tr>
+</table>
 </div>
 </div>
 <div class="sect3">
@@ -1023,14 +1091,38 @@ LIS-only dependency
 </table>
 </div>
 <div class="paragraph">
-<p>If you wish to enable LIS' RTM support, then you must manually compile an included library.</p>
+<p>If you wish to enable LIS&#8217; RTM support, then you must manually compile an included library.</p>
 </div>
 <div class="literalblock">
 <div class="content">
 <pre>% cd $WORKING/lib/lis-crtm-profile-utility
-% gmake
-% gmake install</pre>
+% LIS_ARCH=linux_ifc make
+% LIS_ARCH=linux_ifc make install</pre>
 </div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+If using the GNU compilers, set <code>LIS_ARCH</code> to linux_gfortran.
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Important</div>
+</td>
+<td class="content">
+linux_ifc and linux_gfortran are the only supported architectures.
+</td>
+</tr>
+</table>
 </div>
 </div>
 </div>
@@ -1085,6 +1177,24 @@ Required by PROJ.
 </td>
 <td class="content">
 Required by GeoTIFF and GDAL.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_petsc_3_16_1">3.3.4. PETSc 3.16.1</h4>
+<div class="paragraph">
+<p><strong>URL</strong>: <a href="https://petsc.org/" class="bare">https://petsc.org/</a></p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">
+Required by RAPID router
 </td>
 </tr>
 </table>
@@ -1151,6 +1261,10 @@ GeoTIFF and GDAL depend on PROJ</p>
 <li>
 <p>FortranGIS (optional)<br>
 Required to use GDAL</p>
+</li>
+<li>
+<p>PETSc (optional)<br>
+Required to use RAPID router</p>
 </li>
 </ol>
 </div>
@@ -1229,7 +1343,7 @@ Required to use GDAL</p>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">PROJ</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">7.1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">9.1.0</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GeoTIFF</p></td>
@@ -1237,11 +1351,15 @@ Required to use GDAL</p>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GDAL</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.5.2</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">FortranGIS</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">2.6</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">PETSc</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.16.1</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JPEG</p></td>
@@ -1300,7 +1418,7 @@ Required to use GDAL</p>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">HDF-EOS2</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2.20v.1.00 <span class="red">Not installed; failed make check</span></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.0</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">SQLite3</p></td>
@@ -1308,7 +1426,7 @@ Required to use GDAL</p>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">PROJ</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">7.1.1</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">9.1.0</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GeoTIFF</p></td>
@@ -1316,11 +1434,15 @@ Required to use GDAL</p>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GDAL</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.5.2</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">FortranGIS</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock">2.6</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">PETSc</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.16.1</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">JPEG</p></td>
@@ -1571,7 +1693,169 @@ Required to use GDAL</p>
 <h2 id="sec_additional_platforms">Appendix A: Additional platforms</h2>
 <div class="sectionbody">
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 6. Red Hat Enterprise Linux Server 7.8</caption>
+<caption class="title">Table 6. SUSE Linux Enterprise Server 12.3</caption>
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Library</th>
+<th class="tableblock halign-left valign-top">Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GNU compiler</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">11.2.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Intel compiler</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2021.4.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Intel MPI</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2021.4.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF 5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1.12.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NetCDF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.8.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NetCDF-Fortran</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.5.3</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">openJPEG</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ecCodes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.23.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ESMF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8.1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF 4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.2.15</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF-EOS2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.20v.1.00</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SQLite3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.35.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">PROJ</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7.1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GeoTIFF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1.7.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GDAL</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.4</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FortranGIS</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.6</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">JPEG</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8d</p></td>
+</tr>
+</tbody>
+</table>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 7. SUSE Linux Enterprise Server 12.3</caption>
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Library</th>
+<th class="tableblock halign-left valign-top">Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GNU compiler</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">11.2.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Intel MPI</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2021.4.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF 5</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1.12.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NetCDF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.8.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">NetCDF-Fortran</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.5.3</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">openJPEG</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ecCodes</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.23.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">ESMF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8.1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF 4</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">4.2.15</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">HDF-EOS2</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.20v.1.00 <span class="red">Not installed; failed make check</span></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">SQLite3</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">3.35.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">PROJ</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">7.1.1</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GeoTIFF</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">1.7.0</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GDAL</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.4.4</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">FortranGIS</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">2.6</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">JPEG</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">8d</p></td>
+</tr>
+</tbody>
+</table>
+<table class="tableblock frame-all grid-all stretch">
+<caption class="title">Table 8. Red Hat Enterprise Linux Server 7.8</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -1654,7 +1938,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 7. Red Hat Enterprise Linux Server 7.8</caption>
+<caption class="title">Table 9. Red Hat Enterprise Linux Server 7.8</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -1725,7 +2009,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 8. Red Hat Enterprise Linux Server 7.8</caption>
+<caption class="title">Table 10. Red Hat Enterprise Linux Server 7.8</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -1796,7 +2080,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 9. SUSE Linux Enterprise Server 12.3</caption>
+<caption class="title">Table 11. SUSE Linux Enterprise Server 12.3</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -1871,7 +2155,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 10. Cray XC40</caption>
+<caption class="title">Table 12. Cray XC40</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -1954,7 +2238,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 11. Cray XC40</caption>
+<caption class="title">Table 13. Cray XC40</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2009,7 +2293,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 12. Cray XC40</caption>
+<caption class="title">Table 14. Cray XC40</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2064,7 +2348,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 13. Cray XC40</caption>
+<caption class="title">Table 15. Cray XC40</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2115,7 +2399,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 14. Red Hat Enterprise Linux Server 6.8</caption>
+<caption class="title">Table 16. Red Hat Enterprise Linux Server 6.8</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2170,7 +2454,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 15. Red Hat Enterprise Linux Server 6.7</caption>
+<caption class="title">Table 17. Red Hat Enterprise Linux Server 6.7</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2225,7 +2509,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 16. Red Hat Enterprise Linux Server 6.7</caption>
+<caption class="title">Table 18. Red Hat Enterprise Linux Server 6.7</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2280,7 +2564,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 17. SUSE Linux Enterprise Server 11.3</caption>
+<caption class="title">Table 19. SUSE Linux Enterprise Server 11.3</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2335,7 +2619,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 18. SUSE Linux Enterprise Server 11.3</caption>
+<caption class="title">Table 20. SUSE Linux Enterprise Server 11.3</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2390,7 +2674,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 19. SUSE Linux Enterprise Server 11.3</caption>
+<caption class="title">Table 21. SUSE Linux Enterprise Server 11.3</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2445,7 +2729,7 @@ Required to use GDAL</p>
 </tbody>
 </table>
 <table class="tableblock frame-all grid-all stretch">
-<caption class="title">Table 20. SUSE Linux Enterprise Server 11.3</caption>
+<caption class="title">Table 22. SUSE Linux Enterprise Server 11.3</caption>
 <colgroup>
 <col style="width: 50%;">
 <col style="width: 50%;">
@@ -2504,8 +2788,8 @@ Required to use GDAL</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Version 1.1<br>
-Last updated 2023-07-21 19:47:20 UTC
+Version 2.0<br>
+Last updated 2024-06-25 17:37:54 UTC
 </div>
 </div>
 <script type="text/x-mathjax-config">
