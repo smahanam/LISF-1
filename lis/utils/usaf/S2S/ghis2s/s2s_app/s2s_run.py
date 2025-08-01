@@ -589,25 +589,25 @@ class S2Srun(DownloadForecasts):
                     inherits = ','.join(map(str, inherit_list))
                 else:
                     inherits = str(inherit_list)
-                file.write(f"        inherit = {inherits}\n")
+                #file.write(f"        inherit = {inherits}\n")
             sh_script = self.SCRDIR + subdir + '/' + jfile + '.sh'
             file.write(f"        script = {sh_script}\n")
             
             # Write pre-script
-            file.write("        pre-script = \n")
-            for command in pre_script:
-                file.write(f"                     {command}\n")
+            #file.write("        pre-script = \n")
+            #for command in pre_script:
+            #    file.write(f"                     {command}\n")
         
             # Write directives
             file.write("        [[[directives]]]\n")
             for directive in directives:
                 file.write(f"            {directive}\n")
 
-            if len(environment) > 0:
-                # Write environment variables
-                file.write("        [[[environment]]]\n")
-                for env in environment:
-                    file.write(f"            {env}\n")
+            #if len(environment) > 0:
+            #    # Write environment variables
+            #    file.write("        [[[environment]]]\n")
+            #    for env in environment:
+            #        file.write(f"            {env}\n")
         
         ''' the main function '''
         cylc_file = f"{self.SCRDIR}CYLC_workflow.rc"
@@ -623,21 +623,52 @@ class S2Srun(DownloadForecasts):
                     dependency_map[task_name] = prev_tasks
                      
         with open(cylc_file, 'w') as file:
-            # Write scheduling section first
+            # Write header
+            file.write("#!jinja2\n")
+            file.write("# S2S Forecast Workflow\n")
+            file.write("  \n")
+            file.write("[meta]\n")
+            file.write("    title = S2S Forecast Workflow\n")
+            file.write("    description = S2S Forecast Initialized on YYYY-MM\n")
+            file.write("  \n")
+            file.write("[cylc]\n")
+            file.write("    UTC mode = True\n")
+            file.write("    cycle point format = %Y-%m-%dT%H\n")
+            file.write("  \n")
+            
+            # Write scheduling section
             file.write("[scheduling]\n")
-            file.write("[[dependencies]]\n")
-            file.write("    [[[T00]]] # validity (hours)\n")
-            file.write("        graph = \"\"\"\n")
+            file.write("    initial cycle point = YYYY-MM-01T00\n")
+            file.write("    max active cycle points = 1\n")
+            file.write("  \n")
+            file.write("    [[dependencies]]\n")
+            file.write("        [[[R1]]] # validity (hours)\n")
+            file.write("            graph = \"\"\"\n")
             
             # Generate dependency graph from dependency_map
             for task, dependencies in dependency_map.items():
                 if dependencies:
                     dep_str = " & ".join(dependencies)
-                    file.write(f"            {dep_str} => {task}\n")        
-            file.write("        \"\"\"\n")
-
+                    file.write(f"                {dep_str} => {task}\n")        
+            file.write("            \"\"\"\n")
+            
             # Write runtime section
             file.write("[runtime]\n")
+            file.write("    [[root]]\n")
+            file.write("        # Default settings for all tasks\n")
+            file.write("        [[[job]]]\n")
+            file.write("            batch system = slurm\n")
+            file.write("        [[[environment]]]\n")
+            file.write("            datetime = $CYLC_TASK_CYCLE_POINT\n")
+            file.write("            config = $CYLC_SUITE_DEF_PATH/config.yml\n")
+            file.write("            inputdata = $CYLC_SUITE_DEF_PATH/inputdata.yml\n")
+            file.write("            INSTALL_PATH = $CYLC_SUITE_DEF_PATH\n")
+            file.write(f"            PYTHONPATH = {self.LISFDIR}lis/utils/usaf/S2S/\n")
+            file.write("        [[[events]]]\n")
+            file.write("            mail to = USEREMAIL\n")
+            file.write("            mail events = failed\n")
+            file.write("  \n")
+            
             for jfile in self.schedule.keys():
                 subdir = self.schedule[jfile]['subdir']
                 directives, pre_script, environment = extract_slurm_info(self.SCRDIR + subdir + '/' + jfile)
@@ -649,7 +680,7 @@ class S2Srun(DownloadForecasts):
                 if len(inherit_list) == 0:
                     inherit_list = None
                 write_lines(file, jfile.removesuffix('.j'), inherit_list, subdir, pre_script, directives, environment)
-                
+                                
     def lis_darun(self):
         """ LIS DARUN STEP """
         
