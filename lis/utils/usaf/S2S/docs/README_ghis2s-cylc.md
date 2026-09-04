@@ -4,7 +4,7 @@
 
 **E2ESDIR**: The GHI-S2S forecast directory where S2S forecasts reside and are run  
 **GHIS2S**: GHI-S2S software system developed by the LIS team  
-**OPERATIONAL_FRAMEWORK**: Operational software developed by downstream users
+**OPERATIONAL_FRAMEWORK**: Operational software developed by downstream users  
 **LISFDIR**: The path to LISF installation  
 
 ![GHI-S2S Workflow Diagram](https://github.com/NASA-LIS/LISF/blob/support/lisf-557ww-7.8/lis/utils/usaf/S2S/docs/workflow.png)
