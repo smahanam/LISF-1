@@ -3,7 +3,6 @@ import os
 import sys
 from time import ctime as t_ctime
 from time import time as t_time
-import calendar
 from datetime import datetime
 import numpy as np
 import xarray as xr
