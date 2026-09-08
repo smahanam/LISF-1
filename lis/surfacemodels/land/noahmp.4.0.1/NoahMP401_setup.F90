@@ -246,7 +246,7 @@ subroutine NoahMP401_setup()
              "STAS (default, cannot change)" 
 
         if (comm_rank == 0) then 
-           write(LIS_logunit,*) "[INFO] ROOT processor is reading Noah-MP.4.0.1 tables "
+           write(LIS_logunit,*) "[INFO] masterproc is reading Noah-MP.4.0.1 tables."
            call read_mp_veg_parameters(trim(NOAHMP401_struc(n)%landuse_scheme_name), &
                 trim(NOAHMP401_struc(n)%noahmp_tbl_name))
            call read_mp_soil_parameters(trim(NOAHMP401_struc(n)%soil_tbl_name), &
@@ -256,7 +256,7 @@ subroutine NoahMP401_setup()
            call read_mp_crop_parameters(trim(NOAHMP401_struc(n)%noahmp_tbl_name))
            call read_mp_optional_parameters(trim(NOAHMP401_struc(n)%noahmp_tbl_name))
         else
-           write(LIS_logunit,*) "[INFO] Recieving Noah-MP.4.0.1 tables from ROOT"
+           write(LIS_logunit,*) "[INFO] Receiving Noah-MP.4.0.1 tables from masterproc."
         endif
 
         ! ====================================================================
