@@ -26,7 +26,7 @@ subroutine NoahMP401_setup()
     use NoahMP401_lsmMod
     use LIS_logMod,    only: LIS_logunit, LIS_verify, LIS_endrun
     use LIS_fileIOMod, only: LIS_read_param!, LIS_convertParamDataToLocalDomain
-    use LIS_coreMod,   only: LIS_rc, LIS_surface
+    use LIS_coreMod,   only: LIS_rc, LIS_surface, LIS_masterproc
     use LIS_mpiMod
     use NOAHMP_TABLES_401
 
@@ -60,13 +60,8 @@ subroutine NoahMP401_setup()
     integer           :: col, row
     real, allocatable :: placeholder(:,:)
     integer       :: soilcolor, vegtyp, soiltyp(4), slopetyp, croptype
-    integer            :: comm_rank, comm_size, status
+    integer            :: status
 
-    call MPI_COMM_Size(LIS_mpi_comm,comm_size,status)
-    call LIS_verify(status, "[ERR] Error from MPI_COMM_Size")
-    call MPI_COMM_Rank(LIS_mpi_comm,comm_rank,status)
-    call LIS_verify(status, "[ERR] Error from MPI_COMM_Rank")
-    
     mtype = LIS_rc%lsm_index
     
     do n=1, LIS_rc%nnest
@@ -245,7 +240,7 @@ subroutine NoahMP401_setup()
         write(LIS_logunit,*) "[INFO] Noah-MP.4.0.1 Soil classification scheme: ",  &
              "STAS (default, cannot change)" 
 
-        if (comm_rank == 0) then 
+        if ( LIS_masterproc ) then
            write(LIS_logunit,*) "[INFO] masterproc is reading Noah-MP.4.0.1 tables."
            call read_mp_veg_parameters(trim(NOAHMP401_struc(n)%landuse_scheme_name), &
                 trim(NOAHMP401_struc(n)%noahmp_tbl_name))
