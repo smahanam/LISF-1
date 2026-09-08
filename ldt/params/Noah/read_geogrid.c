@@ -63,7 +63,7 @@ int read_geogrid_(
 
    if (cnt == 0) 
    {
-      free(c)
+      free(c);
       printf("ERROR reading %s\n",local_fname);
       *status = 1;
       return 1;
