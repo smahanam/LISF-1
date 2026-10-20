@@ -14,7 +14,7 @@ Met forcing sources:                    "AGRMET"
 Topographic correction method (met forcing):  "none"
 Enable spatial downscaling of precipitation:  0
 Spatial upscaling method (met forcing):       average
-Spatial interpolation method (met forcing):   average
+Spatial interpolation method (met forcing):   bilinear
 Temporal interpolation method (met forcing):  linear
 
 #Runtime options
@@ -42,7 +42,7 @@ Undefined value:                       -9999
 Output directory:                       ./output/
 Diagnostic output file:                 LSMLISLOGFILE
 
-Number of ensembles per tile:           12
+Number of ensembles per tile:           1
 
 #The following options are used for subgrid tiling based on vegetation
 Maximum number of surface type tiles per grid:    1
@@ -105,17 +105,17 @@ Perturbations restart filename:                   DAPERTRSTFILE
 Perturbations restart output interval:                1mo                                    
 Apply perturbation bias correction:                   1                                      
 
-Forcing perturbation algorithm:                       "GMAO scheme"                        
+Forcing perturbation algorithm:                       none
 Forcing perturbation frequency:                       1hr                                 
 Forcing attributes file:                              ./input/attribs/forcing_attribs.txt   
 Forcing perturbation attributes file:                 ./input/attribs/forcing_pertattribs.txt  
 
-State perturbation algorithm:                         "GMAO scheme"                           
+State perturbation algorithm:                         none
 State perturbation frequency:                         6hr                                    
 State attributes file:                                ./input/attribs/noahmp_sm_attribs.txt 
 State perturbation attributes file:                   ./input/attribs/noahmp_sm_pertattribs.txt 
 
-Observation perturbation algorithm:                   "GMAO scheme" 
+Observation perturbation algorithm:                   none
 Observation perturbation frequency:                   6hr          
 Observation attributes file:                          ./input/attribs/smap_attribs.txt
 Observation perturbation attributes file:             ./input/attribs/smap_pertattribs.txt

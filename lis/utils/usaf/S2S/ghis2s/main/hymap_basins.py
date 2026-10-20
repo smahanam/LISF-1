@@ -138,7 +138,7 @@ class HyMAPDomains():
             # configure lis.config
             # --------------------
             shutil.copy(setup.e2esdir + '/lis_darun/input/template_files/lis.config_template.' +\
-                        setup.domain + '_MERRA2', 'lis.config')
+                        setup.domain + '_noDA', 'lis.config')
             dapertrstfile = './output/DAPERT/' + yyyyp + \
                 mmp + f'/LIS_DAPERT_{yyyyp}{mmp}010000.d01.bin'
             noahmp401rstfile = './output/SURFACEMODEL/' + yyyyp + mmp +\
