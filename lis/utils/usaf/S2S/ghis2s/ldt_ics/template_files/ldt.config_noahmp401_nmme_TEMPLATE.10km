@@ -17,15 +17,15 @@ Undefined value:                        -9999.0
 # -- New LDT restart generation sampling option
 
 LIS restart source:                               "LSM"
-Ensemble restart generation mode:                 LDTRSTGENOPT
-Ensemble restart generation sampling strategy:    "random sampling"
+Ensemble restart generation mode:                 upscale
+Ensemble restart generation sampling strategy:    replicate
 
 Input restart filename:                        INPUTRSTFILE
 Output restart filename:                       OUTPUTRSTFILE 
-Number of ensembles per tile (input restart):     12
+Number of ensembles per tile (input restart):     1
 Number of ensembles per tile (output restart):    OUTENSMEMS
 
-Number of ensembles per tile:                     12
+Number of ensembles per tile:                     1
 
 Maximum number of surface type tiles per grid:     1
 Minimum cutoff percentage (surface type tiles):    0.05
@@ -67,25 +67,25 @@ Run domain resolution (dy):              0.1
 #Landcover parameter inputs
 Landcover data source:                  "MODIS_Native"
 Landcover classification:               "IGBPNCEP"
-Landcover file:                         ./input/LS_PARAMETERS/noah_2dparms/igbp.bin
-Landcover spatial transform:            tile
+Landcover file:                         /discover/nobackup/projects/servirwa/pos/src/landcover/igbp_no_wetland_inner_ocean_char.bin
+Landcover spatial transform:            mode
 Landcover map projection:               latlon
 Landcover fill option:                  neighbor
 Landcover fill radius:                  5
 Landcover fill value:                   10
  
 #Landmask parameter inputs
-Create or readin landmask:              "readin"
-Landmask data source:                   "UKMO_CAP_Netcdf"
-Landmask file:                          ./input/LS_PARAMETERS/cap2ldt_ps41.nc
-Landmask spatial transform:             mode    # Go from ~10 KM to 25KM domain ...
+Create or readin landmask:              "create"
+Landmask data source:                   "MODIS_Native"
+Landmask file:                          /discover/nobackup/swang9/Projects/Freshwater/mask/mask_be_sq.bin
+Landmask spatial transform:             none
 Landmask map projection:                latlon
-Landmask lower left lat:               -89.9531250
-Landmask lower left lon:              -179.9296875
-Landmask upper right lat:               89.9531250
-Landmask upper right lon:              179.9296875
-Landmask resolution (dx):                0.1406250
-Landmask resolution (dy):                0.0937500
+Landmask lower left lat:                LATMIN
+Landmask lower left lon:                LATMAX
+Landmask upper right lat:               LONMIN
+Landmask upper right lon:               LONMAX
+Landmask resolution (dx):                0.1
+Landmask resolution (dy):                0.1
  
 #Soil parameter inputs
 Soil fraction data source:              none

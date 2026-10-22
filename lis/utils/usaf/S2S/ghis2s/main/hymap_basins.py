@@ -110,7 +110,7 @@ class HyMAPDomains():
             # write lisda_run.j
             # -----------------
             s2s_api.lis_job_file(setup.e2esroot +'/' + setup.config_file, f'lisda_{domain}_run.j',
-                                 f'lisda_{domain}_', cwd, str(5))
+                                 f'lisda_{domain}_', cwd, str(2))
 
             if 'discover' in platform.node() or 'borg' in platform.node():
                 if 'mil' in setup.constraint:
