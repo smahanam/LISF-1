@@ -28,41 +28,37 @@
 # * 01 Nov 2021: Eric Kemp/SSAI, addressed pylint format complaints.
 # * 15 Nov 2021: K. Arsenault/SAIC, made minor fixes and added config entries.
 # * 18 Jan 2022: K. Arsenault/SAIC, fixed prev to current year in naming convention
-#
+# * 27 Oct 2026: Sarith Mahanama/SSAI, replaced LDT with Python in order to process 
+#                HYMAP RST files.
 #------------------------------------------------------------------------------
 """
 
 
 # Standard modules
 import os
-import sys
-import platform
-import argparse
 import datetime
+import argparse
 import shutil
-import subprocess
 import yaml
+import numpy as np
+import netCDF4 as nc
 from ghis2s.bcsd.bcsd_library.nmme_module import NMMEParams
+from ghis2s.shared.logging_utils import TaskLogger
 
-# Private constants
-_LDT_EXEC = "./LDT"
+# Global Constants
 _LSM_NAME = ""
 _ROUTING_NAME = ""
 _INPUT_NUMFCSTMONS = 9
-_LDT_INPUT_FILE = ""
-
-# NMME model names
+_ROUTING_SUBDOMAINS = False
+_INPUT_ENS_MEMS = 12
 _NMME_MODELS = []
 
-#
 INPUTDIR = ''
 WORKDIR = ''
 FORECAST_YEAR = 0
 FORECAST_MONTH = 0
-
-_CONFIGS_OUTPUT_DIR = "./ldt.config_files"
-_TEMPLATE_DIR = "./template_files"
-_LDTCONFIG_LSM_TEMPLATE = f"{_TEMPLATE_DIR}/ldt.config_{_LSM_NAME}_nmme_TEMPLATE"
+_LOGGER = None
+_SUBTASK = ''
 
 def _recursive_chmod(path, mode):
     """Recursively runs chmod"""
@@ -76,129 +72,143 @@ def _recursive_chmod(path, mode):
 def _handle_dates():
     """Collect and return date information."""
     currentdate = datetime.date(FORECAST_YEAR, FORECAST_MONTH, 1)
-    print("[INFO] Current year / month: " + \
-          f"{currentdate.year:04d} / {currentdate.month:02d}")
+    _LOGGER.info(f"Current year / month: {currentdate.year:04d} / {currentdate.month:02d}", subtask=_SUBTASK)
     rstdate = datetime.date(currentdate.year, currentdate.month, 1)
-    print(f"[INFO] Rst Start Month Name: {rstdate.strftime('%b')}")
+    _LOGGER.info(f" Rst Start Month Name: {rstdate.strftime('%b')}", subtask=_SUBTASK)
     prevdate = rstdate - datetime.timedelta(days=1)
-    print("[INFO] Rst year / month / day: " + \
-          f"{prevdate.year:04d} / {prevdate.month:02d} / {prevdate.day:02d}")
+    _LOGGER.info(f" Rst year / month / day: {prevdate.year:04d} / {prevdate.month:02d} / {prevdate.day:02d}"
+                 , subtask=_SUBTASK)
     return currentdate, prevdate
 
-def _create_ldtconfig_lsm_target(nmme_model, currentdate):
-    """Create name of new ldt.config file."""
-    lc_nmmemodel = nmme_model.lower()
-    ldtconfig_nameconv_lsm = \
-        f"ldt.config_{_LSM_NAME}_nmme_{lc_nmmemodel}"
-    print("[INFO] Processing LDT ensemble restart file for " + \
-          f"{ldtconfig_nameconv_lsm}")
-    ldtconfig_lsm_target = \
-        f"{_CONFIGS_OUTPUT_DIR}/{ldtconfig_nameconv_lsm}_" + \
-        f"{currentdate.year:04d}{currentdate.month:02d}"
-    return ldtconfig_lsm_target
 
-def _customize_ldt_config(ldtconfig_lsm_target, lsm_rstdir, currentdate,
-                          prevdate, nmme_model):
-    """Customize new ldt.config file."""
-    shutil.copy(_LDTCONFIG_LSM_TEMPLATE, ldtconfig_lsm_target)
+def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
+    """Safely scales a LIS restart file's ntiles dimension by reshaping the grouped ensembles."""
+    # pylint: disable=no-member
+    with nc.Dataset(in_file, 'r') as src, nc.Dataset(out_file, 'w') as dst:
+        total_tiles = src.dimensions['ntiles'].size
+        actual_tiles = total_tiles // input_ens
+        target_tiles = actual_tiles * target_ens
 
-    num_ensmems = NMMEParams(nmme_model).ens_num
-    ldt_rstgen = NMMEParams(nmme_model).scaling
+        # 1. Copy dimensions safely
+        for dimname, dim in src.dimensions.items():
+            if dimname == 'ntiles':
+                dst.createDimension(dimname, target_tiles)
+            elif dim.isunlimited():
+                dst.createDimension(dimname, None)
+            else:
+                dst.createDimension(dimname, len(dim))
 
-    # Build customized settings for target ldt.config file
-    input_fname = f"{lsm_rstdir}/LIS_RST_NOAHMP401_" + \
-        f"{prevdate.year:04d}{prevdate.month:02d}{prevdate.day:02d}2345.d01.nc"
-    rst_date = f"{prevdate.year:04d}{prevdate.month:02d}{prevdate.day:02d}"
-    rst_monname = currentdate.strftime("%b")
+        # 2. Copy global attributes
+        dst.setncatts(src.__dict__)
 
-    output_fname = f"{nmme_model}/LIS_RST_NOAHMP401_{rst_date}2345.ICS_" + \
-        f"{rst_monname}{currentdate.year:04d}.ens{num_ensmems:d}.nc"
-    lsm_logfile = \
-        f"{nmme_model}/ldtlog_{_LSM_NAME}_{rst_monname}{currentdate.year:04d}"
-    mask_parmlogfile = f"{nmme_model}/MaskParamFill.log"
+        # 3. Copy, reshape, and scale variables dynamically
+        for name, variable in src.variables.items():
+            dst.createVariable(name, variable.datatype, variable.dimensions)
+            dst[name].setncatts(src[name].__dict__)
 
-    # Now edit the target ldt.config with these customized settings
-    with open(ldtconfig_lsm_target, "rt", encoding='ascii') as file_obj:
-        data = file_obj.read()
-    data = data.replace("LDTINPUTFILE", _LDT_INPUT_FILE)
-    data = data.replace("LDTRSTGENOPT", ldt_rstgen)
-    data = data.replace("INPUTRSTFILE", input_fname)
-    data = data.replace("OUTPUTRSTFILE", f"./{output_fname}")
-    data = data.replace("OUTENSMEMS", f"{num_ensmems:d}")
-    data = data.replace("LSMLDTLOGFILE", f"./{lsm_logfile}")
-    data = data.replace("PARAMLOGFILE", f"./{mask_parmlogfile}")
-    data = data.replace("MODELDIR", f"./{nmme_model}/")
-    with open(ldtconfig_lsm_target, "wt", encoding="ascii") as file_obj:
-        file_obj.write(data)
+            if 'ntiles' in variable.dimensions:
+                axis = variable.dimensions.index('ntiles')
+                shp = list(variable.shape)
+
+                # Load the data
+                data = src[name][:]
+
+                # RESHAPE: Break 1D ntiles into (input_ens, actual_tiles)
+                # to match Fortran memory order
+                new_shape = list(shp)
+                new_shape[axis:axis+1] = [input_ens, actual_tiles]
+                data = data.reshape(new_shape)
+
+                if target_ens < input_ens:
+                    # DOWNSCALE: Drop the extra ensembles (Slice the new ensemble axis)
+                    slices = [slice(None)] * len(new_shape)
+                    slices[axis] = slice(0, target_ens)
+                    data = data[tuple(slices)]
+                else:
+                    # UPSCALE: Replicate member 1
+                    slices = [slice(None)] * len(new_shape)
+                    slices[axis] = slice(0, 1)
+                    base_data = data[tuple(slices)]
+                    data = np.repeat(base_data, target_ens, axis=axis)
+
+                # FLATTEN: Compress (target_ens, actual_tiles) back into 1D ntiles
+                final_shape = list(shp)
+                final_shape[axis] = target_tiles
+                dst[name][:] = data.reshape(final_shape)
+
+            else:
+                # If variable doesn't use ntiles (like 'time'), just copy it normally
+                dst[name][:] = src[name][:]
 
 def _driver():
     """Main driver"""
-    # print(f"[INFO] Working directory is: {_WORK_DIR}")
-    # os.chdir(_WORK_DIR)
-    #print(f"[INFO] Working directory is: {WORKDIR}")
-    #os.chdir(WORKDIR)
-
-    if not os.path.exists(_LDT_EXEC):
-        print(f"[ERR] {_LDT_EXEC} does not exist!")
-        sys.exit(1)
-
-#    if not os.path.exists(_CONFIGS_OUTPUT_DIR):
-#        os.makedirs(_CONFIGS_OUTPUT_DIR, exist_ok = False)
-
     currentdate, prevdate = _handle_dates()
 
     # Form input restart directory and filenames together
-    lsm_rstdir = f"{INPUTDIR}/SURFACEMODEL/" + \
-        f"{prevdate.year:04d}{prevdate.month:02d}"
-    hymap_rstdir = f"{INPUTDIR}/ROUTING/" + \
-        f"{prevdate.year:04d}{prevdate.month:02d}"
+    lsm_rstdir = f"{INPUTDIR}/SURFACEMODEL/{prevdate.year:04d}{prevdate.month:02d}"
+    hymap_rstdir = f"{INPUTDIR}/ROUTING/{prevdate.year:04d}{prevdate.month:02d}"
 
     for nmme_model in _NMME_MODELS:
-
-        #if not os.path.exists('./' + nmme_model):
-        #    os.makedirs('./' + nmme_model, exist_ok = False)
-
         num_ensmems = NMMEParams(nmme_model).ens_num
-        print(f"[INFO] Number of members: {num_ensmems:d}" + \
-              f" for model {nmme_model}")
-        ldt_rstgen = NMMEParams(nmme_model).scaling
-        print("[INFO] LDT ensemble restart generation: " + \
-              f"{ldt_rstgen} for model {nmme_model}")
+        _LOGGER.info(f" Number of members: {num_ensmems:d} for model {nmme_model}",
+                     subtask=_SUBTASK)
 
-        ldtconfig_lsm_target = \
-            _create_ldtconfig_lsm_target(nmme_model, currentdate)
-
-        _customize_ldt_config(ldtconfig_lsm_target, lsm_rstdir,
-                              currentdate, prevdate,
-                              nmme_model)
-
-        # Run LDT
-        #if 'discover' in platform.node() or 'borg' in platform.node():
-        #    #cmd = f"mpirun -np 1 {_LDT_EXEC} {ldtconfig_lsm_target}"
-        #    cmd = f"srun {_LDT_EXEC} {ldtconfig_lsm_target}"
-        #else:
-        #    cmd = f"srun {_LDT_EXEC} {ldtconfig_lsm_target}"
-        cmd = f"srun {_LDT_EXEC} {ldtconfig_lsm_target}"
-        print(f"[INFO] {cmd}")
-        subprocess.run(cmd, shell=True, check=True)
-
-        # Copy HyMAP2 restart file and rename, placing 1-member restart
-        # file per NMME model directory
         rst_date = f"{prevdate.year:04d}{prevdate.month:02d}{prevdate.day:02d}"
         rst_monname = currentdate.strftime("%b")
 
-        hymap_inrstfile = \
-            f"{hymap_rstdir}/LIS_RST_HYMAP2_router_{rst_date}2345.d01.nc"
-        hymap_outrstfile = \
-            f"./{nmme_model}/LIS_RST_HYMAP2_router_{rst_date}2345.ICS_" + \
-            f"{rst_monname}{currentdate.year:04d}.ens1.nc"
-        shutil.copy(hymap_inrstfile, hymap_outrstfile)
+        # ---------------------------------------------------------
+        # 1. PROCESS LSM RESTART
+        # ---------------------------------------------------------
+        lsm_inrstfile = f"{lsm_rstdir}/LIS_RST_NOAHMP401_{rst_date}2345.d01.nc"
+        lsm_outrstfile = (
+            f"./{nmme_model}/LIS_RST_NOAHMP401_{rst_date}2345.ICS_{rst_monname}"
+            f"{currentdate.year:04d}.ens{num_ensmems:d}.nc")
 
-        # Recursively update permissions in work subdirectory
-        #_recursive_chmod('./' + nmme_model, 0o755)
+        input_ensmems = _INPUT_ENS_MEMS
+        target_ensmems = num_ensmems
 
-    #_recursive_chmod(_CONFIGS_OUTPUT_DIR, 0o755)
-    print("[INFO] Done generating LDT config files and restart files.")
+        _LOGGER.info(f" Processing NOAHMP401 restart: {input_ensmems} -> {target_ensmems} members"
+                     , subtask=_SUBTASK)
+        if input_ensmems == target_ensmems:
+            shutil.copy(lsm_inrstfile, lsm_outrstfile)
+            _LOGGER.info(f" Copied NOAHMP401 restart file to {lsm_outrstfile}", subtask=_SUBTASK)
+        else:
+            _scale_lis_restart(lsm_inrstfile, lsm_outrstfile, input_ensmems, target_ensmems)
+            _LOGGER.info(f" Scaled NOAHMP401 restart to {target_ensmems} members.",
+                         subtask=_SUBTASK)
+
+        # ---------------------------------------------------------
+        # 2. PROCESS ROUTER RESTART
+        # ---------------------------------------------------------
+        router_upper = _ROUTING_NAME.upper() if _ROUTING_NAME else "HYMAP2"
+        hymap_inrstfile = f"{hymap_rstdir}/LIS_RST_{router_upper}_router_{rst_date}2345.d01.nc"
+        hymap_outrstfile = (
+            f"./{nmme_model}/LIS_RST_{router_upper}_router_{rst_date}2345.ICS_{rst_monname}"
+            f"{currentdate.year:04d}.ens{num_ensmems:d}.nc")
+
+        if _ROUTING_SUBDOMAINS:
+            _LOGGER.info((f" Processing {router_upper} restart: {input_ensmems} ->"
+                          f"{target_ensmems} members")
+                         , subtask=_SUBTASK)
+            if input_ensmems == target_ensmems:
+                shutil.copy(hymap_inrstfile, hymap_outrstfile)
+                _LOGGER.info(f" Copied {router_upper} restart file to {hymap_outrstfile}",
+                             subtask=_SUBTASK)
+            else:
+                _scale_lis_restart(hymap_inrstfile, hymap_outrstfile, input_ensmems, target_ensmems)
+                _LOGGER.info(f" Scaled {router_upper} restart to {target_ensmems} members.",
+                             subtask=_SUBTASK)
+        else:
+            # Output Global router as exactly 1 member
+            hymap_outrstfile_glob = (
+                f"./{nmme_model}/LIS_RST_{router_upper}_router_{rst_date}2345.ICS_{rst_monname}"
+                f"{currentdate.year:04d}.ens1.nc")
+            shutil.copy(hymap_inrstfile, hymap_outrstfile_glob)
+            _LOGGER.info(f" Copied global {router_upper} restart file to {hymap_outrstfile_glob}",
+                         subtask=_SUBTASK)
+
+    print("[INFO] Done generating restart files.")
+
 
 if __name__ == "__main__":
 
@@ -225,8 +235,14 @@ if __name__ == "__main__":
     _INPUT_NUMFCSTMONS = CONFIG['EXP']['lead_months']
     _LSM_NAME = CONFIG['EXP']['lsm']
     _ROUTING_NAME = CONFIG['EXP']['routing_model'].get('model')
+    _ROUTING_SUBDOMAINS = CONFIG['EXP']['routing_model'].get('subdomains', False)
+    if _ROUTING_SUBDOMAINS:
+        _SUBTASK = os.path.basename(os.getcwd())
     _NMME_MODELS = CONFIG['EXP']['NMME_models']
-    _LDTCONFIG_LSM_TEMPLATE = f"{_TEMPLATE_DIR}/ldt.config_{_LSM_NAME}_nmme_TEMPLATE"
-    _LDT_INPUT_FILE = './input/' + CONFIG['SETUP']['ldtinputfile']
+    _INPUT_ENS_MEMS = CONFIG['BCSD'].get('nof_raw_ens', 12)
+    _TASK_NAME = os.environ.get('SCRIPT_NAME')
+    _LOGGER = TaskLogger(_TASK_NAME,
+                         os.getcwd(),
+                         f'ldt_ics/generate_ldtconfig_files_ensrst_nrt.py creating ICs files')
 
     _driver()

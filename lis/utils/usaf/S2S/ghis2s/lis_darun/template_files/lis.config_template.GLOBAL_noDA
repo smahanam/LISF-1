@@ -42,7 +42,7 @@ Undefined value:                       -9999
 Output directory:                       ./output/
 Diagnostic output file:                 LSMLISLOGFILE
 
-Number of ensembles per tile:           1
+Number of ensembles per tile:           12
 
 #The following options are used for subgrid tiling based on vegetation
 Maximum number of surface type tiles per grid:    1
@@ -100,17 +100,17 @@ Bias estimation start mode:                           none
 Bias estimation restart file:                         none                                
 
 #Perturbation options
-Perturbations start mode:                             PERTMODE                            
+Perturbations start mode:                             coldstart
 Perturbations restart filename:                   DAPERTRSTFILE 
 Perturbations restart output interval:                1mo                                    
 Apply perturbation bias correction:                   1                                      
 
-Forcing perturbation algorithm:                       none
+Forcing perturbation algorithm:                       "GMAO scheme"
 Forcing perturbation frequency:                       1hr                                 
 Forcing attributes file:                              ./input/attribs/forcing_attribs.txt   
 Forcing perturbation attributes file:                 ./input/attribs/forcing_pertattribs.txt  
 
-State perturbation algorithm:                         none
+State perturbation algorithm:                         "GMAO scheme"
 State perturbation frequency:                         6hr                                    
 State attributes file:                                ./input/attribs/noahmp_sm_attribs.txt 
 State perturbation attributes file:                   ./input/attribs/noahmp_sm_pertattribs.txt 
@@ -137,7 +137,7 @@ SMAP(NRT) model CDF file:                             ./input/cdf/noahmp401_cdf_
 SMAP(NRT) observation CDF file:                       ./input/cdf/smap_c007_cdf_100obs.nc
 SMAP(NRT) soil moisture number of bins in the CDF:              100
 SMAP(NRT) soil moisture use scaled standard deviation model:    0
-SMAP(NRT) CDF read option:                                      1
+SMAP(NRT) CDF read option:                                      0
 
 #------------------------DOMAIN SPECIFICATION--------------------------
 #The following options list the choice of parameter maps to be used
@@ -426,7 +426,7 @@ HYMAP2 routing model time step:         "15mn"
 HYMAP2 routing model output interval:   "1da"
 HYMAP2 routing model restart interval:  "1mo"
 HYMAP2 enable 2-way coupling:            0
-HYMAP2 run in ensemble mode:             0         # Run HYMAP in single member mode
+HYMAP2 run in ensemble mode:             1         # Run HYMAP independently in all ensembles
 
 HYMAP2 routing method:                   "kinematic"  # "local inertia"
 HYMAP2 routing model time step method:   "constant"   # "adaptive" 

@@ -19,9 +19,11 @@ import shutil
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 import numpy as np
+from scipy.ndimage import distance_transform_edt
 import xarray as xr
 import dask
 from dask.diagnostics import ProgressBar
+import netCDF4 as nc
 from ghis2s.main import s2s_api
 from ghis2s.shared import utils
 from ghis2s.lis_fcst import generate_lis_config_scriptfiles_fcst
@@ -207,32 +209,10 @@ class HyMAPDomains():
         # create subdomain job irectories
         for domain in self.domains:
             ldtfile = f'{self.subdomain_path}lis_input_{domain}.nc'
-            ldt_xr = xr.open_dataset(ldtfile)
-            latmin = np.round(ldt_xr['lat'].min().values, 2)
-            latmax = np.round(ldt_xr['lat'].max().values, 2)
-            lonmin = np.round(ldt_xr['lon'].min().values, 2)
-            lonmax = np.round(ldt_xr['lon'].max().values, 2)
             cwd = f'{setup.scrdir}/ldt_ics/{domain}/'
             os.makedirs(setup.e2esdir + f'/ldt_ics/{domain}/input/', exist_ok=True)
             os.chdir(setup.e2esdir + f'/ldt_ics/{domain}/')
             [os.makedirs(model, exist_ok=True) for model in setup.models]
-            os.makedirs('ldt.config_files', exist_ok=True)
-            os.makedirs('template_files', exist_ok=True)
-            shutil.copy(
-                setup.lishdir +
-                f'/ghis2s/ldt_ics/template_files/ldt.config_noahmp401_nmme_TEMPLATE.{setup.resol}',
-                'template_files/ldt.config_noahmp401_nmme_TEMPLATE')
-
-            with open('template_files/ldt.config_noahmp401_nmme_TEMPLATE',
-                      'r', encoding="utf-8") as file:
-                filedata = file.read()
-            filedata = filedata.replace('LATMIN', str(latmin))
-            filedata = filedata.replace('LATMAX', str(latmax))
-            filedata = filedata.replace('LONMIN', str(lonmin))
-            filedata = filedata.replace('LONMAX', str(lonmax))
-            with open('template_files/ldt.config_noahmp401_nmme_TEMPLATE',
-                      'w', encoding="utf-8") as file:
-                file.write(filedata)
 
             os.chdir(setup.e2esdir + f'/ldt_ics/{domain}/input/')
             setup.create_symlink(ldtfile, f"{setup.config['SETUP']['ldtinputfile']}")
@@ -240,19 +220,12 @@ class HyMAPDomains():
             os.makedirs(cwd + '/input/', exist_ok=True)
             os.chdir(cwd +'/input/')
             setup.create_symlink(ldtfile, f"{setup.config['SETUP']['ldtinputfile']}")
-            setup.create_symlink(setup.supdir + '/LS_PARAMETERS', 'LS_PARAMETERS')
             os.chdir(cwd)
-            setup.create_symlink(setup.lisfdir + '/ldt/LDT', 'LDT')
             setup.create_symlink(setup.e2esdir + f'/lis_darun/output/{domain}/', 'lisda_output')
             setup.create_symlink(f'{setup.scrdir}/ldt_ics/logs/', 'logs')
 
             for model in setup.models:
                 setup.create_symlink(setup.e2esdir + f'/ldt_ics/{domain}/{model}', model)
-
-            setup.create_symlink(setup.e2esdir + f'/ldt_ics/{domain}/ldt.config_files',
-                                 'ldt.config_files')
-            setup.create_symlink(setup.e2esdir + f'/ldt_ics/{domain}/template_files',
-                                 'template_files')
 
             # configure batch script
             # ----------------------
@@ -276,11 +249,7 @@ class HyMAPDomains():
             shutil.copy(f'ldtics_{domain}_run.j', f'ldtics_{domain}_run.sh')
             utils.remove_sbatch_lines(f'ldtics_{domain}_run.sh')
             #utils.cylc_job_scripts(f'ldtics_{domain}_run.sh', 2, cwd, command_list=[command])
-            mon_abbr = date(int(setup.yyyy), int(setup.mm), 1).strftime('%b')
-            _ = TaskLogger(f'ldtics_{domain}_run.j',
-                           f'{setup.scrdir}/ldt_ics/',
-                           (f'LDTICS log files are at: \n{setup.e2esdir}/ldt_ics/*/'
-                            f'ldtlog_noahmp401_{mon_abbr}{setup.yyyy}.0000'))
+
         os.chdir(setup.e2esdir)
         return setup.schedule
 
@@ -317,6 +286,7 @@ class HyMAPDomains():
             setup.create_symlink(ldtfile, f"{setup.config['SETUP']['ldtinputfile']}")
 
             os.chdir(setup.scrdir + f'lis_fcst/{domain}/')
+            os.makedirs(setup.scrdir + f'lis_fcst/{domain}/logs')
             cwd = setup.scrdir + f'lis_fcst/{domain}/'
             setup.create_symlink(setup.lisfdir + 'lis/LIS', 'LIS')
             setup.create_symlink(setup.e2esdir + 'bcsd_fcst', 'bcsd_fcst')
@@ -608,10 +578,10 @@ class HyMAPDomains():
 
                 sub_lat_slice = slice(sub_r0, sub_r1 + 1)
                 sub_lon_slice = slice(sub_c0, sub_c1 + 1)
-                local_mask = domain_mask.isel(
-                    lat=slice(gbl_r0, gbl_r1 + 1),
-                    lon=slice(gbl_c0, gbl_c1 + 1)
-                ).values
+                #local_mask = domain_mask.isel(
+                #    lat=slice(gbl_r0, gbl_r1 + 1),
+                #    lon=slice(gbl_c0, gbl_c1 + 1)
+                #).values
 
                 # ------------------------------------------------------
                 # Stitch each variable
@@ -638,25 +608,7 @@ class HyMAPDomains():
                     slices_global[ns_idx] = slice(gbl_r0, gbl_r1 + 1)
                     slices_global[ew_idx] = slice(gbl_c0, gbl_c1 + 1)
 
-                    # Expand local_mask to match variable dimensions
-                    # 2D vars: (crop_ns, crop_ew)          → no expansion
-                    # 3D vars: (n_profiles, crop_ns, crop_ew) → prepend axis
-                    expanded_mask = local_mask
-                    for dim_idx, dim in enumerate(var_dims):
-                        if dim not in ('north_south', 'east_west'):
-                            if dim_idx < ns_idx:
-                                expanded_mask = np.expand_dims(
-                                    expanded_mask, axis=0)
-                            else:
-                                expanded_mask = np.expand_dims(
-                                    expanded_mask, axis=-1)
-
-                    expanded_mask = np.broadcast_to(
-                        expanded_mask, var_data_crop.shape)
-
-                    # Write where domain mask is True and data is not NaN
-                    valid_mask = expanded_mask & ~np.isnan(var_data_crop)
-
+                    valid_mask = (var_data_crop != fill_value) & (~np.isnan(var_data_crop))
                     global_array = global_vars[var_name]['array']
                     global_array[tuple(slices_global)][valid_mask] = \
                         var_data_crop[valid_mask]
@@ -820,6 +772,186 @@ class HyMAPDomains():
             dask.compute(*tasks)
 
         print(f"\nDecomposition complete! {len(tasks)} files written to {output_path}")
+
+    def decompose_ldtfile(self, ldt_filename):
+        '''
+        Loads LDT file, aligns domain masks, propagates missing values
+        using nearest-neighbor, subsets, and restores missing LIS dimensions.
+        '''
+        print(f"Loading {ldt_filename}...")
+
+        # Extract raw dimensions
+        with nc.Dataset(ldt_filename, 'r') as src:
+            # Save the exact dimensions and their sizes straight from the source file
+            raw_dimensions = {name: dim.size for name, dim in src.dimensions.items()}
+
+        # Open with xarray for processing
+        ds = xr.open_dataset(ldt_filename, decode_cf=False)
+        original_vars = list(ds.variables.keys())
+
+        ns_size = ds.sizes['north_south']
+        ew_size = ds.sizes['east_west']
+        hymap_subdomains = np.zeros((ns_size, ew_size), dtype=int)
+
+        landmask = ds['LANDMASK'].values
+        hymap_subdomains[landmask == 1.0] = 1000
+
+        domain_mask_vals = self.domain_masks.values
+
+        for i, dom_name in enumerate(self.domains):
+            print(f"Assigning initial domain {i+1}/{len(self.domains)}: {dom_name}")
+            hymap_subdomains[domain_mask_vals == (i + 1)] = i + 1
+
+        print("Performing nearest neighbor assignment for unassigned land pixels...")
+        unassigned_mask = hymap_subdomains == 1000
+        valid_mask = (hymap_subdomains >= 1) & (hymap_subdomains <= len(self.domains))
+
+        dist_background = np.ones_like(hymap_subdomains)
+        dist_background[valid_mask] = 0
+
+        distances, nearest_indices = distance_transform_edt(dist_background, return_indices=True)
+        hymap_subdomains[unassigned_mask] = \
+            hymap_subdomains[tuple(nearest_indices[:, unassigned_mask])]
+
+        orig_sw_lat = ds.attrs.get('SOUTH_WEST_CORNER_LAT', -59.95)
+        orig_sw_lon = ds.attrs.get('SOUTH_WEST_CORNER_LON', -179.95)
+        dy = ds.attrs.get('DY', 0.1)
+        dx = ds.attrs.get('DX', 0.1)
+
+        for i, dom_name in enumerate(self.domains):
+            dom_id = i + 1
+            print(f"Subsetting and saving domain {dom_id}: {dom_name}...")
+
+            dom_mask = hymap_subdomains == dom_id
+            if not np.any(dom_mask):
+                print(f"Warning: No pixels mapped to {dom_name}. Skipping.")
+                continue
+
+            rows, cols = np.where(dom_mask)
+            min_y, max_y = rows.min(), rows.max()
+            min_x, max_x = cols.min(), cols.max()
+
+            subset_ds = ds.isel(
+                north_south=slice(min_y, max_y + 1),
+                east_west=slice(min_x, max_x + 1)
+            )
+
+            if 'north_south_b' in ds.dims:
+                subset_ds = subset_ds.isel(north_south_b=slice(min_y, max_y + 5))
+            if 'east_west_b' in ds.dims:
+                subset_ds = subset_ds.isel(east_west_b=slice(min_x, max_x + 5))
+
+            cropped_mask = dom_mask[min_y:max_y + 1, min_x:max_x + 1]
+
+            # 1. Update DOMAINMASK and LANDMASK safely
+            orig_landmask = subset_ds['LANDMASK'].values == 1.0
+            active_land_mask = cropped_mask & orig_landmask
+
+            subset_ds['DOMAINMASK'].values = active_land_mask.astype(subset_ds['DOMAINMASK'].dtype)
+            subset_ds['LANDMASK'].values = active_land_mask.astype(subset_ds['LANDMASK'].dtype)
+
+            # ---------------------------------------------------------
+            # 2. Mask ALL HyMAP routing variables to match the domain
+            # ---------------------------------------------------------
+            for var in subset_ds.data_vars:
+                if var.startswith('HYMAP_'):
+                    var_vals = subset_ds[var].values
+                    fill_val = -9999.0
+
+                    # np.where automatically broadcasts the 2D active_land_mask
+                    # to 3D arrays like HYMAP_floodplain_height
+                    subset_ds[var].values = np.where(
+                        active_land_mask, var_vals, fill_val).astype(var_vals.dtype)
+
+            # NOTE: We DO NOT mask the rest of the variables. We let them retain
+            # their native global values
+
+            # -------------------------
+            # 3. Shift Flow Directions
+            # -------------------------
+            if 'HYMAP_flow_direction_x' in subset_ds.variables and \
+               'HYMAP_flow_direction_y' in subset_ds.variables:
+                flow_x = subset_ds['HYMAP_flow_direction_x'].values
+                flow_y = subset_ds['HYMAP_flow_direction_y'].values
+
+                # Identify valid flow vectors
+                valid_mask_flow = (flow_x != -9.0) & (flow_x != -9999.0) & (~np.isnan(flow_x)) & \
+                                  (flow_y != -9.0) & (flow_y != -9999.0) & (~np.isnan(flow_y))
+
+                # Convert to local 1-based indices (Run this shift ONLY ONCE)
+                flow_x_local = flow_x[valid_mask_flow] - min_x
+                flow_y_local = flow_y[valid_mask_flow] - min_y
+
+                # Convert to Python 0-based indices to safely check the arrays
+                target_x_py = flow_x_local.astype(int) - 1
+                target_y_py = flow_y_local.astype(int) - 1
+
+                ew_len = max_x - min_x + 1
+                ns_len = max_y - min_y + 1
+
+                # 1. Identify targets strictly OUTSIDE the rectangular bounding box
+                oob = (target_x_py < 0) | (target_x_py >= ew_len) | \
+                      (target_y_py < 0) | (target_y_py >= ns_len)
+
+                # 2. Identify targets INSIDE the bounding box, but masked out (dead pixels)
+                target_is_dead = np.zeros_like(oob, dtype=bool)
+                in_bounds = ~oob
+                # Only check active_land_mask for indices that are safely in-bounds
+                target_is_dead[in_bounds] = ~active_land_mask \
+                    [target_y_py[in_bounds], target_x_py[in_bounds]]
+
+                # If a river flows out-of-bounds OR into a dead pixel, sever it!
+                needs_severing = oob | target_is_dead
+
+                flow_x_local[needs_severing] = -9.0
+                flow_y_local[needs_severing] = -9.0
+
+                # Map the corrected local indices back to the global arrays
+                flow_x[valid_mask_flow] = flow_x_local
+                flow_y[valid_mask_flow] = flow_y_local
+
+                subset_ds['HYMAP_flow_direction_x'].values = flow_x
+                subset_ds['HYMAP_flow_direction_y'].values = flow_y
+
+            # ---------------------------------------------------------
+            # 4. Prevent missing land_grid_area (HyMAP routing divisor)
+            # ---------------------------------------------------------
+            if 'land_grid_area' in subset_ds.variables:
+                area_vals = subset_ds['land_grid_area'].values
+                valid_area = (area_vals != -9999.0) & (~np.isnan(area_vals))
+                if np.any(valid_area):
+                    mean_area = np.mean(area_vals[valid_area])
+                    area_vals[~valid_area] = mean_area
+                    subset_ds['land_grid_area'].values = area_vals
+
+            # Update corners
+            new_sw_lat = np.float32(round(orig_sw_lat + (min_y * dy), 3))
+            new_sw_lon = np.float32(round(orig_sw_lon + (min_x * dx), 3))
+            subset_ds.attrs['SOUTH_WEST_CORNER_LAT'] = new_sw_lat
+            subset_ds.attrs['SOUTH_WEST_CORNER_LON'] = new_sw_lon
+
+            subset_ds = subset_ds[original_vars]
+
+            encoding = {}
+            for var in subset_ds.variables:
+                encoding[var] = {'_FillValue': None}
+                if var in subset_ds.data_vars:
+                    encoding[var].update({'zlib': True, 'complevel': 4})
+
+            out_file = f"{self.subdomain_path}lis_input_{dom_name}.nc"
+            subset_ds.to_netcdf(out_file, format='NETCDF4', encoding=encoding)
+            subset_ds.close()
+
+            # Restore missing dimensions
+            with nc.Dataset(out_file, 'a') as rootgrp:
+                for dim_name, dim_size in raw_dimensions.items():
+                    if dim_name not in rootgrp.dimensions:
+                        rootgrp.createDimension(dim_name, dim_size)
+
+            print(f"Saved -> {out_file}")
+
+        ds.close()
+        print("Decomposition completed successfully.")
 
 if __name__ == "__main__":
     import argparse

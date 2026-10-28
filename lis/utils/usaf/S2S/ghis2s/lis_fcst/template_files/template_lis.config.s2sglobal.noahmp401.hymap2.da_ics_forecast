@@ -147,7 +147,7 @@ TBOT skin temperature lag days:           0
 
 # Ensemble Forecast (user-generated):
 # NOTE:  Below directories paths are temporary placeholders:
-Generic ensemble forecast directory:  bcsd_fcst/CFSv2_25km/final/6-Hourly/
+Generic ensemble forecast directory:  bcsd_fcst/CFSv2_RESOLUTION/final/6-Hourly/
 Generic ensemble forecast initial date: IC_YYYYMMDD
 Generic ensemble forecast number of ensemble members:  NUMENSMEMBERS
 
@@ -219,7 +219,7 @@ HYMAP2 routing model restart interval:  "1mo"
 HYMAP2 routing model time step:         "15mn"
 HYMAP2 routing model output interval:   "1da"
 HYMAP2 enable 2-way coupling:            0
-HYMAP2 run in ensemble mode:             0            # Run HYMAP in single member mode
+HYMAP2 run in ensemble mode:             1            # Run HYMAP in single member mode
 
 HYMAP2 routing method:                   "kinematic"  #"local inertia"
 HYMAP2 routing model time step method:   "constant"   # "adaptive" 

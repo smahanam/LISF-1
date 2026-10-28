@@ -1221,30 +1221,19 @@ class S2Srun(DownloadForecasts):
         os.chdir(self.e2esdir + '/ldt_ics/')
         [os.makedirs(model, exist_ok=True) for model in self.models]
         os.makedirs('ldt.config_files', exist_ok=True)
-        os.makedirs('template_files', exist_ok=True)
-        shutil.copy(
-            self.lishdir +
-            f'/ghis2s/ldt_ics/template_files/ldt.config_noahmp401_nmme_TEMPLATE.{self.domain}',
-            'template_files/ldt.config_noahmp401_nmme_TEMPLATE')
 
         os.chdir(self.e2esdir + '/ldt_ics/input/')
         self.create_symlink(self.supdir + '/lis_darun/' + self.ldtfile, self.ldtfile)
-        self.create_symlink(self.supdir + '/LS_PARAMETERS', 'LS_PARAMETERS')
         os.makedirs(self.scrdir + '/ldt_ics/input/', exist_ok=True)
         os.chdir(self.scrdir + '/ldt_ics/input/')
         self.create_symlink(self.supdir + '/lis_darun/' + self.ldtfile, self.ldtfile)
-        self.create_symlink(self.supdir + '/LS_PARAMETERS', 'LS_PARAMETERS')
 
         os.chdir(self.scrdir + '/ldt_ics')
         cwd=self.scrdir + 'ldt_ics'
-        self.create_symlink(self.lisfdir + '/ldt/LDT', 'LDT')
         self.create_symlink(self.e2esdir + '/lis_darun/output', 'lisda_output')
 
         for model in self.models:
             self.create_symlink(self.e2esdir + '/ldt_ics/' + model, model)
-
-        self.create_symlink(self.e2esdir + '/ldt_ics/ldt.config_files', 'ldt.config_files')
-        self.create_symlink(self.e2esdir + '/ldt_ics/template_files', 'template_files')
 
         # configure batch script
         # ----------------------
@@ -1268,12 +1257,7 @@ class S2Srun(DownloadForecasts):
         shutil.copy('ldtics_run.j', 'ldtics_run.sh')
         utils.remove_sbatch_lines('ldtics_run.sh')
         #utils.cylc_job_scripts('ldtics_run.sh', 2, cwd, command_list=[command])
-        mon_abbr = date(int(self.yyyy), int(self.mm), 1).strftime('%b')
-        _ = TaskLogger('ldtics_run.j',
-                            os.getcwd(),
-                            (f'LDTICS log files are at: \n{self.e2esdir}/ldt_ics/*/'
-                             f'ldtlog_noahmp401_{mon_abbr}{self.yyyy}.0000'))
-
+        
         os.chdir(self.e2esdir)
 
     def bcsd(self, clim=None):
@@ -1884,7 +1868,7 @@ class S2Srun(DownloadForecasts):
         # processing monthlies multi tasks per job
         jobname='s2spost_mon_'
         prev = sorted(glob.glob("s2spost_0*_run.j"))
-        l_sub = 4 
+        l_sub = 4
         slurm_sub = self.split_list(monthly_commands, l_sub)
         for i, sub_val in enumerate(slurm_sub):
             tfile = self.sublist_to_file(sub_val, cwd)

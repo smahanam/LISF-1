@@ -81,9 +81,12 @@ def _handle_dates(year, month, input_numfcstmons):
     return dates
 
 def _customize_lisconfig(lisconfig_target, config, dates, \
-                         nmme_model, fcstdir, ic_date = None, jobid = None):
+                         nmme_model, fcstdir, resol,\
+                         ic_date = None, jobid = None):
     """Create customized lis.config file"""
     global _NMME_MODELS
+    is_subdomain = config['EXP']['routing_model'].get('subdomains', False)
+    ens_num = NMMEParams(nmme_model).ens_num
     with open(lisconfig_target, "rt", encoding='ascii') as file_obj:
         data = file_obj.read()
     data = data.replace("NUMPROCX", f"{config['FCST']['numprocx']}")
@@ -92,6 +95,7 @@ def _customize_lisconfig(lisconfig_target, config, dates, \
     data = data.replace("START_MONTH", f"{dates['start'].month:02d}")
     data = data.replace("END_YEAR", f"{dates['end'].year:04d}")
     data = data.replace("END_MONTH", f"{dates['end'].month:02d}")
+    data = data.replace("RESOLUTION", resol)
 
     if ic_date is None:
         # The entire forecast is run by a single job
@@ -117,11 +121,16 @@ def _customize_lisconfig(lisconfig_target, config, dates, \
             f"ens{NMMEParams(nmme_model).ens_num}.nc"
 
         hymap_rstdir = f"./input/LDT_ICs/{nmme_model}"
+        if is_subdomain:
+            router_ens_suffix = f"ens{ens_num}.nc"
+        else:
+            router_ens_suffix = "ens1.nc"
+
         hymap_rstfile = \
             f"{hymap_rstdir}/LIS_RST_{config['EXP']['routing_model'].get('model').upper()}" + \
             f"_router_{rst_date}2345.ICS_{rst_monname}" + \
             f"{dates['start'].year:04d}." + \
-            "ens1.nc"
+            f"{router_ens_suffix}"
 
     else:
         rst_date = f"{dates['start'].year:04d}{dates['start'].month:02d}" + \
@@ -173,7 +182,8 @@ def main(config_file, FORECAST_YEAR, FORECAST_MONTH, WORKDIR, JOB_NAME):
         config = yaml.safe_load(file)
 
     _NMME_MODELS = config['EXP']['NMME_models']
-
+    lats, _ = utils.get_domain_info(config_file, coord=True)
+    resol = f'{round((lats[1] - lats[0])*100)}km'
     domlabel=''
     if config['EXP']['DOMAIN'] == 'AFRICOM':
         domlabel = 's2safricom'
@@ -245,7 +255,7 @@ def main(config_file, FORECAST_YEAR, FORECAST_MONTH, WORKDIR, JOB_NAME):
                         "{:02d}".format(i)
                     shutil.copy(lisconfig_template, lisconfig_target)
                     _customize_lisconfig(lisconfig_target, config, dates[0], \
-                                         nmme_model, fcstdir)
+                                         nmme_model, fcstdir, resol)
                 else:
                     dates.append(_handle_dates(dates[i-1].get('end').year,
                                                dates[i-1].get('end').month, slen[i]))
@@ -255,7 +265,7 @@ def main(config_file, FORECAST_YEAR, FORECAST_MONTH, WORKDIR, JOB_NAME):
                         "{:02d}".format(i)
                     shutil.copy(lisconfig_template, lisconfig_target)
                     _customize_lisconfig(lisconfig_target, config, dates[i], \
-                                         nmme_model, fcstdir, \
+                                         nmme_model, fcstdir, resol, \
                                          ic_date = dates[0], jobid = '_{:02d}'.format(i))
 
                 jobfile = JOB_NAME + '_' + nmme_model + jno + '_run.j'
