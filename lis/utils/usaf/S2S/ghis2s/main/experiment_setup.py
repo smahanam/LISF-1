@@ -1626,7 +1626,7 @@ class S2Srun(DownloadForecasts):
                 try:
                     s2s_api.python_job_file(self.e2esroot +'/' + self.config_file,
                                         jobname + f'{i+1:02d}_run.j',
-                                        jobname + f'{i+1:02d}_', 1, str(12), self._cwd, tfile.name,
+                                        jobname + f'{i+1:02d}_', 1, str(6), self._cwd, tfile.name,
                                         parallel_run=par_info)
                     self.create_dict(jobname + f'{i+1:02d}_run.j', 'bcsd_fcst', prev=prev)
                 finally:
@@ -1684,7 +1684,7 @@ class S2Srun(DownloadForecasts):
             )
             if not is_valid:
                 print(f"[ERROR] {model} Unsupported nof job segments: "
-                      f"{self.config['FCST']['JOB_SEGMENTS'][0].get(model)}")
+                      f"{self.config['FCST']['JOB_SEGMENTS'].get(model)}")
                 print(f'Try these instead: {good_nseg}')
                 sys.exit()
 
@@ -1694,7 +1694,7 @@ class S2Srun(DownloadForecasts):
 #                self.config['FCST']['JOB_SEGMENTS'].get(model))
 #            if not is_valid:
 #                print(f"[ERROR] {model} Unsupported nof job segments: "
-#                      f"{self.config['FCST']['JOB_SEGMENTS'][0].get(model)}")
+#                      f"{self.config['FCST']['JOB_SEGMENTS'].get(model)}")
 #                print(f'Try these instead: {good_nseg}')
 #                sys.exit()
 

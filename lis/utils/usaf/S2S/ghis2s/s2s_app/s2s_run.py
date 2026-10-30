@@ -1,13 +1,3 @@
-#-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
-# NASA Goddard Space Flight Center
-# Land Information System Framework (LISF)
-# Version 7.8
-#
-# Copyright (c) 2026 United States Government as represented by the
-# Administrator of the National Aeronautics and Space Administration.
-# All Rights Reserved.
-#-------------------------END NOTICE -- DO NOT EDIT-----------------------
-
 ''' 
 GHI-S2S run script
 '''
@@ -46,10 +36,24 @@ if __name__ == "__main__":
         if os.path.exists(JOB_SCHEDULE):
             walltime.slurm(s2s.scrdir)
         else:
+            # Construct the base workflow name (without the CWD)
             if args.step is None:
-                CYLC_WORKFLOW = f'cylc_e2e_{s2s.yyyy}{s2s.mm}'
+                base_workflow = f'cylc_e2e_{s2s.yyyy}{s2s.mm}'
             else:
-                CYLC_WORKFLOW = f'cylc_{args.step.lower()}_{s2s.yyyy}{s2s.mm}'
+                base_workflow = f'cylc_{args.step.lower()}_{s2s.yyyy}{s2s.mm}'
+
+            # Construct the newer format (with the CWD)
+            cwd_name = os.path.basename(os.getcwd())
+            cwd_workflow = f'{base_workflow}_{cwd_name}'
+
+            # Auto-detect which one actually exists in your directory!
+            if os.path.exists(cwd_workflow):
+                CYLC_WORKFLOW = cwd_workflow
+            elif os.path.exists(base_workflow):
+                CYLC_WORKFLOW = base_workflow
+            else:
+                print("WORKFLOW does not exist !!")
+
             walltime.cylc(CYLC_WORKFLOW)
         sys.exit()
 

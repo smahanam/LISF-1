@@ -286,7 +286,7 @@ class HyMAPDomains():
             setup.create_symlink(ldtfile, f"{setup.config['SETUP']['ldtinputfile']}")
 
             os.chdir(setup.scrdir + f'lis_fcst/{domain}/')
-            os.makedirs(setup.scrdir + f'lis_fcst/{domain}/logs')
+            os.makedirs(setup.scrdir + f'lis_fcst/{domain}/logs', exist_ok=True)
             cwd = setup.scrdir + f'lis_fcst/{domain}/'
             setup.create_symlink(setup.lisfdir + 'lis/LIS', 'LIS')
             setup.create_symlink(setup.e2esdir + 'bcsd_fcst', 'bcsd_fcst')

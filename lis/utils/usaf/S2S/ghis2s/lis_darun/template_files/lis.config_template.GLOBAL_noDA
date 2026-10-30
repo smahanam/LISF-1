@@ -19,7 +19,7 @@ Temporal interpolation method (met forcing):  linear
 
 #Runtime options
 Forcing variables list file:            ./input/forcing_variables.txt
-Output methodology:                     "2d gridspace"
+Output methodology:                     "2d ensemble gridspace"
 Output model restart files:             1
 Output data format:                     netcdf
 Output naming style:                    "3 level hierarchy"

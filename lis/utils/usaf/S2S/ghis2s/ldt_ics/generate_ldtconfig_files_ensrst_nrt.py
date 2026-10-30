@@ -80,16 +80,16 @@ def _handle_dates():
                  , subtask=_SUBTASK)
     return currentdate, prevdate
 
-
 def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
-    """Safely scales a LIS restart file's ntiles dimension by reshaping the grouped ensembles."""
+    """scales a LIS restart file's ntiles dimension by reshaping the grouped ensembles."""
+
     # pylint: disable=no-member
     with nc.Dataset(in_file, 'r') as src, nc.Dataset(out_file, 'w') as dst:
         total_tiles = src.dimensions['ntiles'].size
         actual_tiles = total_tiles // input_ens
         target_tiles = actual_tiles * target_ens
 
-        # 1. Copy dimensions safely
+        # Copy dimensions safely
         for dimname, dim in src.dimensions.items():
             if dimname == 'ntiles':
                 dst.createDimension(dimname, target_tiles)
@@ -98,46 +98,48 @@ def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
             else:
                 dst.createDimension(dimname, len(dim))
 
-        # 2. Copy global attributes
+        # Copy global attributes
         dst.setncatts(src.__dict__)
 
         # 3. Copy, reshape, and scale variables dynamically
         for name, variable in src.variables.items():
-            dst.createVariable(name, variable.datatype, variable.dimensions)
-            dst[name].setncatts(src[name].__dict__)
+            # extract _FillValue if it exists
+            fill_val = variable._FillValue if hasattr(variable, '_FillValue') else None
+            dst.createVariable(name, variable.datatype, variable.dimensions, fill_value=fill_val)
+
+            # Copy all other attributes
+            attrs = {k: variable.getncattr(k) for k in variable.ncattrs() if k != '_FillValue'}
+            if attrs:
+                dst[name].setncatts(attrs)
 
             if 'ntiles' in variable.dimensions:
                 axis = variable.dimensions.index('ntiles')
                 shp = list(variable.shape)
-
-                # Load the data
                 data = src[name][:]
 
-                # RESHAPE: Break 1D ntiles into (input_ens, actual_tiles)
-                # to match Fortran memory order
+                # (actual_tiles, input_ens) preserves geography!
                 new_shape = list(shp)
-                new_shape[axis:axis+1] = [input_ens, actual_tiles]
+                new_shape[axis:axis+1] = [actual_tiles, input_ens]
                 data = data.reshape(new_shape)
 
                 if target_ens < input_ens:
-                    # DOWNSCALE: Drop the extra ensembles (Slice the new ensemble axis)
+                    # Drop extra ensembles from EVERY tile
                     slices = [slice(None)] * len(new_shape)
-                    slices[axis] = slice(0, target_ens)
+                    slices[axis+1] = slice(0, target_ens)
                     data = data[tuple(slices)]
                 else:
                     # UPSCALE: Replicate member 1
                     slices = [slice(None)] * len(new_shape)
-                    slices[axis] = slice(0, 1)
+                    slices[axis+1] = slice(0, 1)
                     base_data = data[tuple(slices)]
-                    data = np.repeat(base_data, target_ens, axis=axis)
+                    data = np.repeat(base_data, target_ens, axis=axis+1)
 
-                # FLATTEN: Compress (target_ens, actual_tiles) back into 1D ntiles
+                # Compress back into 1D ntiles
                 final_shape = list(shp)
                 final_shape[axis] = target_tiles
                 dst[name][:] = data.reshape(final_shape)
 
             else:
-                # If variable doesn't use ntiles (like 'time'), just copy it normally
                 dst[name][:] = src[name][:]
 
 def _driver():
