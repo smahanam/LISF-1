@@ -429,9 +429,9 @@ class S2Srun(DownloadForecasts):
         self.schedule = {}
         self.additional_env_vars = additional_env_vars
         self.hymap = None
+        lats, _ = utils.get_domain_info(self.config_file, coord=True)
+        self.resol = f'{round((lats[1] - lats[0])*100)}km'
         if self.config.get("EXP", {}).get("routing_model", {}).get("subdomains") is True:
-            lats, _ = utils.get_domain_info(self.config_file, coord=True)
-            self.resol = f'{round((lats[1] - lats[0])*100)}km'
             subdomain_path = self.config['SETUP']['supplementarydir'] + f"/hymap_domains/{self.resol}/"
             self.hymap = HyMAPDomains(subdomain_path)
 
@@ -547,6 +547,8 @@ class S2Srun(DownloadForecasts):
     def rst_file_checker(self):
         ''' Checks availability of LSM, DA and HyMAP restart files '''
         # previous month
+        if self.resol != '25km':
+            return
         date_obj = datetime.strptime(f"{self.yyyy}-{self.mm}-01", "%Y-%m-%d")
         previous_month_date = date_obj - relativedelta(months=1)
         yyyymmp = previous_month_date.strftime("%Y%m")
@@ -1263,16 +1265,15 @@ class S2Srun(DownloadForecasts):
     def bcsd(self, clim=None):
         """ BCSD 7 steps """
         lats, _ = utils.get_domain_info(self.config_file, coord=True)
-        self._resol = f'{round((lats[1] - lats[0])*100)}km'
         fcast_clim_dir=\
-            f'{self.e2esroot}/hindcast/bcsd_fcst/{self.fcst_model}_{self._resol}/raw/Climatology/'
+            f'{self.e2esroot}/hindcast/bcsd_fcst/{self.fcst_model}_{self.resol}/raw/Climatology/'
         nmme_clim_dir=f'{self.e2esroot}/hindcast/bcsd_fcst/NMME/raw/Climatology/'
-        usaf_25km=f'{self.e2esroot}/hindcast/bcsd_fcst/{self.obs_model}_{self._resol}/raw/Climatology/'
+        usaf_25km=f'{self.e2esroot}/hindcast/bcsd_fcst/{self.obs_model}_{self.resol}/raw/Climatology/'
 
         os.makedirs(self.e2esdir + '/bcsd_fcst', exist_ok=True)
         os.chdir(self.e2esdir + '/bcsd_fcst')
-        os.makedirs(f'{self.obs_model}_{self._resol}/raw', exist_ok=True)
-        os.makedirs(f'{self.fcst_model}_{self._resol}/raw/', exist_ok=True)
+        os.makedirs(f'{self.obs_model}_{self.resol}/raw', exist_ok=True)
+        os.makedirs(f'{self.fcst_model}_{self.resol}/raw/', exist_ok=True)
         os.makedirs('NMME/raw', exist_ok=True)
 
         # manage jobs from SCRATCH
@@ -1285,7 +1286,7 @@ class S2Srun(DownloadForecasts):
 
         if self.hindcast:
             if clim:
-                os.makedirs(f'{self.e2esdir}/bcsd_fcst/{self.fcst_model}_{self._resol}/raw/Climatology/', exist_ok=True)
+                os.makedirs(f'{self.e2esdir}/bcsd_fcst/{self.fcst_model}_{self.resol}/raw/Climatology/', exist_ok=True)
                 clim_syr = self.config['BCSD']['clim_start_year']
                 clim_eyr = self.config['BCSD']['clim_end_year']
                 self._mf_regrid(clim_syr, clim_eyr=clim_eyr)
@@ -1295,13 +1296,13 @@ class S2Srun(DownloadForecasts):
                 return
         else:
             # link Climatology directories
-            os.chdir(self.e2esdir + f'/bcsd_fcst/{self.fcst_model}_{self._resol}/raw')
+            os.chdir(self.e2esdir + f'/bcsd_fcst/{self.fcst_model}_{self.resol}/raw')
             self.create_symlink(fcast_clim_dir, 'Climatology')
 
             os.chdir(self.e2esdir + '/bcsd_fcst/NMME/raw')
             self.create_symlink(nmme_clim_dir, 'Climatology')
 
-            os.chdir(self.e2esdir + f'/bcsd_fcst/{self.obs_model}_{self._resol}/raw')
+            os.chdir(self.e2esdir + f'/bcsd_fcst/{self.obs_model}_{self.resol}/raw')
             self.create_symlink(usaf_25km, 'Climatology')
             os.chdir(self.scrdir + 'bcsd_fcst')
             self._mf_regrid(self.year)
@@ -1332,7 +1333,7 @@ class S2Srun(DownloadForecasts):
             '5km': {'CPT': str(64), 'MEM':'240GB', 'NT': str(1), 'TPN': 1, 'l_sub': 1,
                     'HOURS': str(self.config["EXP"]["lead_months"] + 1)},
         }
-        info = resol_info[self._resol]
+        info = resol_info[self.resol]
         slurm_commands = bcsd.metforce_regridding.main(
             self.e2esroot +'/' + self.config_file, clim_syr, clim_eyr,
             self._mmm, self._cwd, jobname, 1, 2, py_call=True)
@@ -1345,7 +1346,7 @@ class S2Srun(DownloadForecasts):
         par_info['NT'] = info['NT']
         par_info['TPN'] = info['TPN']
         par_info['MP'] = False
-        if self.fcst_model.upper() == 'GEOSV3' and self._resol == '5km':
+        if self.fcst_model.upper() == 'GEOSV3' and self.resol == '5km':
             par_info['MEM'] = '400GB'
             info['HOURS'] = '8'
             par_info['MP'] = True
@@ -1439,9 +1440,9 @@ class S2Srun(DownloadForecasts):
 
         # multi tasks per job
         l_sub = self.config["EXP"]["lead_months"]
-        if self._resol == '10km':
+        if self.resol == '10km':
             l_sub = 4
-        if self._resol == '5km':
+        if self.resol == '5km':
             l_sub = 1
         slurm_sub = self.split_list(slurm_commands, l_sub)
         for i, sub_val in enumerate(slurm_sub):
@@ -1481,9 +1482,9 @@ class S2Srun(DownloadForecasts):
 
         # multi tasks per job
         l_sub = self.config["EXP"]["lead_months"]
-        if self._resol == '10km':
+        if self.resol == '10km':
             l_sub = 4
-        if self._resol == '5km':
+        if self.resol == '5km':
             l_sub = 1
         slurm_sub = self.split_list(slurm_commands, l_sub)
         for i, sub_val in enumerate(slurm_sub):
@@ -1564,7 +1565,7 @@ class S2Srun(DownloadForecasts):
 
         # multi tasks per job
         l_sub = 2
-        if self._resol == '5km':
+        if self.resol == '5km':
             l_sub = 1
 
         slurm_sub = self.split_list(slurm_commands, l_sub)
@@ -1605,7 +1606,7 @@ class S2Srun(DownloadForecasts):
         par_info['TPN'] = None
         par_info['MP'] = True
 
-        if self._resol == '25km':
+        if self.resol == '25km':
             tfile = self.sublist_to_file([slurm_9_10[0]], self._cwd)
             try:
                 s2s_api.python_job_file(self.e2esroot +'/' + self.config_file, jobname + 'run.j',
@@ -1694,7 +1695,7 @@ class S2Srun(DownloadForecasts):
 #                self.config['FCST']['JOB_SEGMENTS'].get(model))
 #            if not is_valid:
 #                print(f"[ERROR] {model} Unsupported nof job segments: "
-#                      f"{self.config['FCST']['JOB_SEGMENTS'].get(model)}")
+#                      f"{self.config['FCST']['JOB_SEGMENTS'][0].get(model)}")
 #                print(f'Try these instead: {good_nseg}')
 #                sys.exit()
 
@@ -1848,6 +1849,8 @@ class S2Srun(DownloadForecasts):
 
         # processing dailies multi tasks per job
         l_sub = 27
+        if self.resol != '25km':
+            l_sub = 6 
         slurm_sub = self.split_list(slurm_commands, l_sub)
         for i, sub_val in enumerate(slurm_sub):
             tfile = self.sublist_to_file(sub_val, cwd)

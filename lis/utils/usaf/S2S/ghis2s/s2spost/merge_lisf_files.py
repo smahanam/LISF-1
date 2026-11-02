@@ -3,9 +3,9 @@
 #-----------------------BEGIN NOTICE -- DO NOT EDIT-----------------------
 # NASA Goddard Space Flight Center
 # Land Information System Framework (LISF)
-# Version 7.8
+# Version 7.5
 #
-# Copyright (c) 2026 United States Government as represented by the
+# Copyright (c) 2024 United States Government as represented by the
 # Administrator of the National Aeronautics and Space Administration.
 # All Rights Reserved.
 #-------------------------END NOTICE -- DO NOT EDIT-----------------------
@@ -149,32 +149,33 @@ def merge_files_xarray(
     ds_hymap2 = load_ncdata(hymap2_file, [logger, subtask])
     ds_ldt = load_ncdata(ldtfile, [logger, subtask])
 
-    def safe_rename_dims(dataset, rename_dict):
+    def safe_rename_dims_and_coords(dataset, rename_dict):
         existing_dims = {k: v for k, v in rename_dict.items() if k in dataset.sizes}
         if existing_dims:
-            return dataset.rename(existing_dims)
+            dataset = dataset.rename(existing_dims)
+
+        # Ensure lat and lon are coordinates in ALL datasets
+        if 'lat' in dataset.variables and 'lon' in dataset.variables:
+            if len(dataset['lat'].dims) == 2:
+                dataset = dataset.assign_coords({
+                    'lat': dataset['lat'].isel(lon=0),
+                    'lon': dataset['lon'].isel(lat=0)
+                })
+            else:
+                dataset = dataset.set_coords(['lat', 'lon'])
         return dataset
 
-    # Rename dimensions in all datasets (only if they exist)
-    ds_noahmp = safe_rename_dims(ds_noahmp, dimension_dict)
-    ds_hymap2 = safe_rename_dims(ds_hymap2, dimension_dict)
-    ds_ldt = safe_rename_dims(ds_ldt, dimension_dict)
+    # Rename dimensions and promote coordinates in all datasets
+    ds_noahmp = safe_rename_dims_and_coords(ds_noahmp, dimension_dict)
+    ds_hymap2 = safe_rename_dims_and_coords(ds_hymap2, dimension_dict)
+    ds_ldt = safe_rename_dims_and_coords(ds_ldt, dimension_dict)
 
     # Start with NoahMP as the base dataset
     merged_ds = ds_noahmp.copy(deep=True)
 
-    # Handle coordinate variables for CF convention
-    if 'lat' in merged_ds.variables and len(merged_ds['lat'].dims) == 2:
-        merged_ds = merged_ds.assign_coords({
-            'lat': merged_ds['lat'].isel(lon=0),
-            'lon': merged_ds['lon'].isel(lat=0)
-        })
-
     # Find soil variables by checking what actually exists
     potential_soil_vars = ["SoilMoist_tavg", "SoilTemp_tavg", "RelSMC_tavg"]
     actual_soil_vars = [var for var in potential_soil_vars if var in merged_ds.data_vars]
-
-    #print("Found soil variables:", actual_soil_vars)
 
     # Transpose soil variables to match CF convention
     for var in actual_soil_vars:

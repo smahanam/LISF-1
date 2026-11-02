@@ -457,6 +457,6 @@ else:
         for _future in _futures:
             result_ = _future.result()
 
-        links()
+links()
 
 logger.info("RAN SUCCESSFULLY !")

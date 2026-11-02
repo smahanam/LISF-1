@@ -85,7 +85,7 @@ class HyMAPDomains():
         # create subdomain job irectories
         for domain in self.domains:
             ldtfile = f'{self.subdomain_path}lis_input_{domain}.nc'
-            os.makedirs(f'{setup.e2esdir}/lis_darun/output/{domain}/lis.config_files/',
+            os.makedirs(f'{setup.e2esdir}/lis_darun/restarts/{domain}/lis.config_files/',
                         exist_ok=True)
             cwd = f'{setup.scrdir}/lis_darun/{domain}/'
             os.makedirs(cwd + '/input/', exist_ok=True)
@@ -105,7 +105,7 @@ class HyMAPDomains():
 
             os.chdir(cwd)
             setup.create_symlink(setup.lisfdir + '/lis/LIS', 'LIS')
-            setup.create_symlink(setup.e2esdir + '/lis_darun/output/' + domain, 'output')
+            setup.create_symlink(setup.e2esdir + '/lis_darun/restarts/' + domain, 'output')
             setup.create_symlink(setup.metforc, setup.metforc.rstrip('/').split('/')[-1])
             setup.create_symlink(f'{setup.scrdir}/lis_darun/logs/', 'logs')
 
@@ -221,7 +221,7 @@ class HyMAPDomains():
             os.chdir(cwd +'/input/')
             setup.create_symlink(ldtfile, f"{setup.config['SETUP']['ldtinputfile']}")
             os.chdir(cwd)
-            setup.create_symlink(setup.e2esdir + f'/lis_darun/output/{domain}/', 'lisda_output')
+            setup.create_symlink(setup.e2esdir + f'/lis_darun/restarts/{domain}/', 'lisda_output')
             setup.create_symlink(f'{setup.scrdir}/ldt_ics/logs/', 'logs')
 
             for model in setup.models:
@@ -312,35 +312,31 @@ class HyMAPDomains():
                                        f'{model} log at: \n{setup.scrdir}/lis_fcst/{domain}/'
                                        f'{setup.yyyy}{setup.mm}/{model}/logs/lislog{lindex}.')
 
-
         # job file to stitch up LIS_HIST
         jobname = 'stitch_lisfcst_'
-        par_info = {}
-        par_info['CPT'] = '1'
-        par_info['NT']= str(1)
-        par_info['MEM']= '120GB'
-        par_info['TPN'] = None
-        par_info['MP'] = True
-        par_info['SKIP_ARG'] = True
-        cwd = f'{setup.scrdir}/lis_fcst/'
-        os.chdir(cwd)
-
         # lead months string
         start_date = datetime(setup.year, setup.month, 1)
         month_strings = [(start_date + relativedelta(months=i)).strftime("%Y%m")
                          for i in range(setup.config["EXP"]["lead_months"])]
         lead_months = ','.join(month_strings)
 
-        command=[(f"python {setup.lishdir}/ghis2s/main/hymap_basins.py "
-                  f"-c {setup.e2esroot}/{setup.config_file} "
-                  f"-m {lead_months} -s FCST")]
-        tfile = setup.sublist_to_file(command, cwd)
-        s2s_api.python_job_file(setup.e2esroot +'/' + setup.config_file, jobname + 'run.j', jobname,
-                                str(1), str(3), cwd,  tfile.name, parallel_run=par_info)
-        tfile.close()
-        os.unlink(tfile.name)
-        shutil.copy(f'{jobname}run.j', f'{jobname}run.sh')
-        utils.remove_sbatch_lines(f'{jobname}run.sh')
+        par_info = {}
+        par_info['CPT'] = str(len(month_strings))
+        par_info['NT']= str(1)
+        par_info['MEM']= '240GB'
+        par_info['TPN'] = None
+        par_info['MP'] = True
+        par_info['SKIP_ARG'] = True
+        cwd = f'{setup.scrdir}/lis_fcst/'
+        os.chdir(cwd)
+
+        slurm_commands = []
+        for nmme_model in setup.models:
+            for lead in month_strings:
+                command=[(f"python {setup.lishdir}/ghis2s/main/hymap_basins.py "
+                          f"-c {setup.e2esroot}/{setup.config_file} "
+                          f"-m {lead} -s FCST -n {nmme_model} -i {month_strings[0]}")]
+                slurm_commands.extend(command)
 
         prev = None
         fcst_list = [job for job in setup.schedule
@@ -356,7 +352,22 @@ class HyMAPDomains():
                     if last_item is not None:
                         prev.append(last_item)
 
-        setup.create_dict(f'{jobname}run.j', 'lis_fcst', prev=prev)
+        l_sub = len(month_strings)
+        slurm_sub = setup.split_list(slurm_commands, l_sub)
+        for i, sub_val in enumerate(slurm_sub):
+            tfile = setup.sublist_to_file(sub_val, cwd)
+            try:
+                s2s_api.python_job_file(setup.e2esroot +'/' + setup.config_file, jobname + f'{i+1:02d}_run.j',
+                                        jobname + f'{i+1:02d}_', str(1), str(3), cwd, tfile.name,
+                                        parallel_run=par_info)
+                setup.create_dict(jobname + f'{i+1:02d}_run.j', 'lis_fcst', prev=prev)
+            finally:
+                tfile.close()
+                os.unlink(tfile.name)
+
+            shutil.copy(jobname + f'{i+1:02d}_run.j', jobname + f'{i+1:02d}_run.sh')
+            utils.remove_sbatch_lines(jobname + f'{i+1:02d}_run.sh')
+
         os.chdir(setup.e2esdir)
         return setup.schedule
 
@@ -547,6 +558,10 @@ class HyMAPDomains():
                     sub_lat_r = np.round(sub_ds['lat'].values, 2)
                     sub_lon_r = np.round(sub_ds['lon'].values, 2)
 
+                if sub_lat_r.ndim == 2: 
+                    sub_lat_r = sub_lat_r[:, 0]  
+                if sub_lon_r.ndim == 2:
+                    sub_lon_r = sub_lon_r[0, :]
                 sub_lat_global = np.array(
                     [lat_to_idx.get(float(v), -1) for v in sub_lat_r]
                 )
@@ -962,8 +977,11 @@ if __name__ == "__main__":
                         help='stitch options: LISDA, FCST')
     parser.add_argument('-m', '--yyyymm', required=False, default=None, type=str,
                     help='month(s) YYYYMM comma-separated (e.g. 202603 or 202603,202604,202605)')
+    parser.add_argument('-i', '--ic_yyyymm', required=False, default=None, type=str,
+                        help='Initial condition month YYYYMM (e.g. 202601)')
+    parser.add_argument('-n', '--nmme_model', required=False, default=None, type=str,
+                        help='NMME model name (e.g. CanESM5)')
     args = parser.parse_args()
-
     with open(args.config_file, 'r', encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
@@ -986,7 +1004,7 @@ if __name__ == "__main__":
         for yyyymm in yyyymm_list:
             for model_ in ['ROUTING', 'SURFACEMODEL']:
                 if args.stitch.lower() == 'lisda':
-                    INDIR = f'{config["SETUP"]["E2ESDIR"]}/lis_darun/output/'
+                    INDIR = f'{config["SETUP"]["E2ESDIR"]}/lis_darun/restarts/'
                     OUTDIR = f'{config["SETUP"]["E2ESDIR"]}/lis_darun/output/{model_}/{yyyymm}/'
                     os.makedirs(OUTDIR, exist_ok=True)
                     file_list = sorted(glob.glob(
@@ -999,17 +1017,28 @@ if __name__ == "__main__":
                                          [logger_, f'{model_}-{yyyymm}'])
 
                 if args.stitch.lower() == 'fcst':
-                    INDIR_SCR = f'{config["SETUP"]["E2ESDIR"]}/scratch/{yyyymm_list[0]}/lis_fcst/'
-                    for nmme_model in config["EXP"]["NMME_models"]:
-                        INDIR = f'{INDIR_SCR}/{hymap.domains[0]}/{yyyymm_list[0]}/{nmme_model}/'
-                        OUTDIR = (f'{config["SETUP"]["E2ESDIR"]}/lis_fcst/{yyyymm_list[0]}/'
-                                  f'{nmme_model}/{model_}/{yyyymm}/')
-                        os.makedirs(OUTDIR, exist_ok=True)
-                        file_list = sorted(glob.glob(
-                            f'{INDIR}/{model_}/{yyyymm}/LIS_HIST_*nc'))
-                        basenames = [os.path.basename(f) for f in file_list]
-                        for _file in basenames:
-                            OUTFILE = f'{OUTDIR}/{_file}'
-                            logger_.info(OUTFILE, subtask=f'{nmme_model}-{model_}-{yyyymm}')
-                            hymap.stitch_lis(INDIR, f'/{model_}/{yyyymm}/', _file, OUTFILE,
-                                             [logger_, f'{model_}-{yyyymm}'])
+                    if not args.ic_yyyymm or not args.nmme_model:
+                        logger_.error("For FCST, both --ic_yyyymm and --nmme_model must be provided.")
+                        exit(1)
+
+                    ic_yyyymm = args.ic_yyyymm
+                    nmme_model = args.nmme_model
+                    INDIR_BASE = f'{config["SETUP"]["E2ESDIR"]}/scratch/{ic_yyyymm}/lis_fcst'
+                    OUTDIR = (f'{config["SETUP"]["E2ESDIR"]}/lis_fcst/{ic_yyyymm}/'
+                              f'{nmme_model}/{model_}/{yyyymm}/')
+                    os.makedirs(OUTDIR, exist_ok=True)
+                    
+                    search_dir = f'{INDIR_BASE}/{hymap.domains[0]}/{ic_yyyymm}/{nmme_model}/{model_}/{yyyymm}'
+                    file_list = sorted(glob.glob(f'{search_dir}/LIS_HIST_*nc'))
+                    basenames = [os.path.basename(f) for f in file_list]
+                    
+                    if not basenames:
+                        logger_.info(f"No files found in {search_dir}. Skipping.")
+                        continue
+
+                    for _file in basenames:
+                        OUTFILE = f'{OUTDIR}/{_file}'
+                        logger_.info(OUTFILE, subtask=f'{nmme_model}-{model_}-{yyyymm}')
+                        suffix = f'/{ic_yyyymm}/{nmme_model}/{model_}/{yyyymm}/'
+                        hymap.stitch_lis(INDIR_BASE, suffix, _file, OUTFILE,
+                                         [logger_, f'{model_}-{yyyymm}'])                    
