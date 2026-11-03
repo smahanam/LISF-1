@@ -47,9 +47,9 @@ if __name__ == "__main__":
             cwd_workflow = f'{base_workflow}_{cwd_name}'
 
             # Auto-detect which one actually exists in your directory!
-            if os.path.exists(cwd_workflow):
+            if os.path.exists(s2s.scrdir + cwd_workflow):
                 CYLC_WORKFLOW = cwd_workflow
-            elif os.path.exists(base_workflow):
+            elif os.path.exists(s2s.scrdir + base_workflow):
                 CYLC_WORKFLOW = base_workflow
             else:
                 print("WORKFLOW does not exist !!")
