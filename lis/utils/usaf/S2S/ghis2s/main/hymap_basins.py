@@ -294,6 +294,54 @@ class HyMAPDomains():
             generate_lis_config_scriptfiles_fcst.main(setup.e2esroot + setup.config_file,
                                                       setup.year, setup.month, cwd, jobname)
             for model in setup.models:
+                if domain == 'russia_tip':
+                    # 126 processors returned 0 land tiles for some processors
+                    config_dir = f"input/lis.config_files/{model}/"
+                    config_files = glob.glob(os.path.join(config_dir, "lis.config.*"))
+                    for config_file in config_files:
+                        with open(config_file, "rt", encoding="ascii") as file_obj:
+                            data = file_obj.read()
+
+                        data = re.sub(
+                            r"Number of processors along y:\s+\d+", 
+                            "Number of processors along y:          60", 
+                            data
+                        )
+                        with open(config_file, "wt", encoding="ascii") as file_obj:
+                            file_obj.write(data)
+
+                    # update bash scripts
+                    j_scripts = glob.glob(f"./*{model}*.j")
+                    sh_scripts = glob.glob(f"./*{model}*.sh")
+                    for jno, slurm_file in enumerate(j_scripts):
+                        with open(slurm_file, "rt", encoding="ascii") as jfile_obj:
+                            dataj = jfile_obj.read()
+                        with open(sh_scripts[jno], "rt", encoding="ascii") as sfile_obj:
+                            datas = sfile_obj.read()
+
+                        # Update the SBATCH task request
+                        dataj = re.sub(
+                            r"#SBATCH\s+--ntasks-per-node=\d+", 
+                            "#SBATCH --ntasks-per-node=60", 
+                            dataj
+                        )
+                        # Update the Intel MPI environment variable
+                        dataj = re.sub(
+                            r"export I_MPI_PMI_VALUE_LENGTH_MAX=\d+", 
+                            "export I_MPI_PMI_VALUE_LENGTH_MAX=60", 
+                            dataj
+                        )
+                        datas = re.sub(
+                            r"export I_MPI_PMI_VALUE_LENGTH_MAX=\d+", 
+                            "export I_MPI_PMI_VALUE_LENGTH_MAX=60", 
+                            datas
+                        )
+
+                        with open(slurm_file, "wt", encoding="ascii") as jfile_obj:
+                            jfile_obj.write(dataj)
+                        with open(sh_scripts[jno], "wt", encoding="ascii") as sfile_obj:
+                            sfile_obj.write(datas)
+
                 lindex = ''
                 job_list = sorted(glob.glob(f"{jobname}_{model}*_run.j"))
                 n_files = len(job_list)
@@ -558,8 +606,8 @@ class HyMAPDomains():
                     sub_lat_r = np.round(sub_ds['lat'].values, 2)
                     sub_lon_r = np.round(sub_ds['lon'].values, 2)
 
-                if sub_lat_r.ndim == 2: 
-                    sub_lat_r = sub_lat_r[:, 0]  
+                if sub_lat_r.ndim == 2:
+                    sub_lat_r = sub_lat_r[:, 0]
                 if sub_lon_r.ndim == 2:
                     sub_lon_r = sub_lon_r[0, :]
                 sub_lat_global = np.array(
@@ -1027,11 +1075,11 @@ if __name__ == "__main__":
                     OUTDIR = (f'{config["SETUP"]["E2ESDIR"]}/lis_fcst/{ic_yyyymm}/'
                               f'{nmme_model}/{model_}/{yyyymm}/')
                     os.makedirs(OUTDIR, exist_ok=True)
-                    
+
                     search_dir = f'{INDIR_BASE}/{hymap.domains[0]}/{ic_yyyymm}/{nmme_model}/{model_}/{yyyymm}'
                     file_list = sorted(glob.glob(f'{search_dir}/LIS_HIST_*nc'))
                     basenames = [os.path.basename(f) for f in file_list]
-                    
+
                     if not basenames:
                         logger_.info(f"No files found in {search_dir}. Skipping.")
                         continue
@@ -1041,4 +1089,4 @@ if __name__ == "__main__":
                         logger_.info(OUTFILE, subtask=f'{nmme_model}-{model_}-{yyyymm}')
                         suffix = f'/{ic_yyyymm}/{nmme_model}/{model_}/{yyyymm}/'
                         hymap.stitch_lis(INDIR_BASE, suffix, _file, OUTFILE,
-                                         [logger_, f'{model_}-{yyyymm}'])                    
+                                         [logger_, f'{model_}-{yyyymm}'])
