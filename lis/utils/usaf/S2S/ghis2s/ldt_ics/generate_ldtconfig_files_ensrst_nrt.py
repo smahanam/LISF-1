@@ -81,15 +81,12 @@ def _handle_dates():
     return currentdate, prevdate
 
 def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
-    """scales a LIS restart file's ntiles dimension by reshaping the grouped ensembles."""
-
-    # pylint: disable=no-member
+    """Scales a LIS/HYMAP restart file's ntiles dimension safely for 1D and 2D arrays."""
     with nc.Dataset(in_file, 'r') as src, nc.Dataset(out_file, 'w') as dst:
         total_tiles = src.dimensions['ntiles'].size
         actual_tiles = total_tiles // input_ens
         target_tiles = actual_tiles * target_ens
 
-        # Copy dimensions safely
         for dimname, dim in src.dimensions.items():
             if dimname == 'ntiles':
                 dst.createDimension(dimname, target_tiles)
@@ -97,17 +94,13 @@ def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
                 dst.createDimension(dimname, None)
             else:
                 dst.createDimension(dimname, len(dim))
-
-        # Copy global attributes
+                
         dst.setncatts(src.__dict__)
 
-        # 3. Copy, reshape, and scale variables dynamically
         for name, variable in src.variables.items():
-            # extract _FillValue if it exists
             fill_val = variable._FillValue if hasattr(variable, '_FillValue') else None
             dst.createVariable(name, variable.datatype, variable.dimensions, fill_value=fill_val)
 
-            # Copy all other attributes
             attrs = {k: variable.getncattr(k) for k in variable.ncattrs() if k != '_FillValue'}
             if attrs:
                 dst[name].setncatts(attrs)
@@ -117,28 +110,30 @@ def _scale_lis_restart(in_file, out_file, input_ens, target_ens):
                 shp = list(variable.shape)
                 data = src[name][:]
 
-                # (actual_tiles, input_ens) preserves geography!
+                # [..., actual_tiles, ens_count]
                 new_shape = list(shp)
                 new_shape[axis:axis+1] = [actual_tiles, input_ens]
                 data = data.reshape(new_shape)
 
+                # The ensemble dimension is now located at `axis + 1`
+                ens_axis = axis + 1
+
                 if target_ens < input_ens:
-                    # Drop extra ensembles from EVERY tile
+                    # DOWNSCALE
                     slices = [slice(None)] * len(new_shape)
-                    slices[axis+1] = slice(0, target_ens)
+                    slices[ens_axis] = slice(0, target_ens)
                     data = data[tuple(slices)]
                 else:
-                    # UPSCALE: Replicate member 1
-                    slices = [slice(None)] * len(new_shape)
-                    slices[axis+1] = slice(0, 1)
-                    base_data = data[tuple(slices)]
-                    data = np.repeat(base_data, target_ens, axis=axis+1)
+                    # UPSCALE (Wraps members seamlessly)
+                    # Ex 1: 12 -> 15 becomes [0, 1, ..., 11, 0, 1, 2]
+                    # Ex 2: 1 -> 10 becomes [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                    wrap_indices = np.arange(target_ens) % input_ens
+                    data = np.take(data, wrap_indices, axis=ens_axis)
 
-                # Compress back into 1D ntiles
+                # Compress back into LIS ntiles format
                 final_shape = list(shp)
                 final_shape[axis] = target_tiles
                 dst[name][:] = data.reshape(final_shape)
-
             else:
                 dst[name][:] = src[name][:]
 
