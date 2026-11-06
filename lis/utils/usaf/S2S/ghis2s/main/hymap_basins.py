@@ -128,7 +128,7 @@ class HyMAPDomains():
             with open(f'lisda_{domain}_run.j', 'r', encoding="utf-8") as file:
                 filedata = file.read()
             filedata = filedata.replace('COMMAND', command)
-            if domain == 'russia_tip':
+            if domain in ['russia_tip', 'hawaii']:
                 filedata = filedata.replace(str(setup.config['FCST']['numprocy']), '60')
             with open(f'lisda_{domain}_run.j', 'w', encoding="utf-8") as file:
                 file.write(filedata)
@@ -165,7 +165,7 @@ class HyMAPDomains():
             filedata = filedata.replace('PERTMODE', pertmode)
             filedata = filedata.replace('LSMLISLOGFILE', lsmlislogfile)
             filedata = filedata.replace('NUMPROCX', str(setup.config['FCST']['numprocx']))
-            if domain == 'russia_tip':
+            if domain in ['russia_tip', 'hawaii']:
                 filedata = filedata.replace('NUMPROCY', '60')
             else:
                 filedata = filedata.replace('NUMPROCY', str(setup.config['FCST']['numprocy']))
@@ -294,7 +294,7 @@ class HyMAPDomains():
             generate_lis_config_scriptfiles_fcst.main(setup.e2esroot + setup.config_file,
                                                       setup.year, setup.month, cwd, jobname)
             for model in setup.models:
-                if domain == 'russia_tip':
+                if domain in ['russia_tip', 'hawaii']:
                     # 126 processors returned 0 land tiles for some processors
                     config_dir = f"input/lis.config_files/{model}/"
                     config_files = glob.glob(os.path.join(config_dir, "lis.config.*"))
@@ -863,7 +863,62 @@ class HyMAPDomains():
 
         for i, dom_name in enumerate(self.domains):
             print(f"Assigning initial domain {i+1}/{len(self.domains)}: {dom_name}")
-            hymap_subdomains[domain_mask_vals == (i + 1)] = i + 1
+            hymap_subdomains[(domain_mask_vals == (i + 1)) & (hymap_subdomains == 1000)] = i + 1
+
+        # ---------------------------------------------------------
+        # HYMAP-BASED ROUTING CRACK FILLER
+        # ---------------------------------------------------------
+        print("Performing hydrological routing assignment for cracks...")
+        
+        basin_mask = ds['HYMAP_basin_mask'].values
+        flow_x_global = ds['HYMAP_flow_direction_x'].values
+        flow_y_global = ds['HYMAP_flow_direction_y'].values
+
+        # Find pixels that actually have a downstream flow direction (ignore -9999.0)
+        valid_flow = (flow_x_global > 0) & (flow_y_global > 0) & (basin_mask > 0)
+        
+        # Convert Fortran 1-based indices to Python 0-based indices for the whole global grid
+        target_x_py = np.full_like(flow_x_global, -1, dtype=int)
+        target_y_py = np.full_like(flow_y_global, -1, dtype=int)
+        
+        target_x_py[valid_flow] = flow_x_global[valid_flow].astype(int) - 1
+        target_y_py[valid_flow] = flow_y_global[valid_flow].astype(int) - 1
+
+        # Iteratively assign crack pixels (1000) by looking at their downstream targets
+        changed = True
+        iteration = 0
+        while changed and iteration < 100:  # Safety cap of 100 iterations
+            changed = False
+            iteration += 1
+            
+            # Find pixels that are still cracks (1000) AND have valid downstream flow
+            crack_mask = (hymap_subdomains == 1000) & valid_flow
+            
+            if np.any(crack_mask):
+                # Get the Y/X coordinates of these crack pixels
+                crack_y, crack_x = np.where(crack_mask)
+                
+                # Look up their downstream targets
+                tx = target_x_py[crack_y, crack_x]
+                ty = target_y_py[crack_y, crack_x]
+                
+                # Find the current subdomain ID of those downstream targets
+                target_domains = hymap_subdomains[ty, tx]
+                
+                # We only want to inherit if the downstream pixel is a definitively assigned subdomain
+                # (i.e., >= 1 and <= number of domains)
+                valid_targets = (target_domains >= 1) & (target_domains <= len(self.domains))
+                
+                if np.any(valid_targets):
+                    # Filter down to the crack pixels that have valid targets
+                    crack_y_update = crack_y[valid_targets]
+                    crack_x_update = crack_x[valid_targets]
+                    
+                    # Inherit the downstream pixel's subdomain ID!
+                    hymap_subdomains[crack_y_update, crack_x_update] = target_domains[valid_targets]
+                    
+                    changed = True
+                    print(f"  -> Routing fill Iter {iteration}: Inherited {np.sum(valid_targets)} pixels.")
 
         print("Performing nearest neighbor assignment for unassigned land pixels...")
         unassigned_mask = hymap_subdomains == 1000
@@ -881,6 +936,44 @@ class HyMAPDomains():
         dy = ds.attrs.get('DY', 0.1)
         dx = ds.attrs.get('DX', 0.1)
 
+        # ---------------------------------------------------------
+        # DOMAIN ASSIGNMENT SANITY CHECK
+        # ---------------------------------------------------------
+        print("\n" + "="*55)
+        print("DOMAIN ASSIGNMENT SANITY CHECK")
+        print("="*55)
+
+        # 1. Total valid land pixels in the global file
+        total_land = np.sum(landmask == 1.0)
+        print(f"Total LANDMASK pixels (Global):       {total_land}")
+
+        # 2. Total pixels successfully assigned to subdomains
+        total_assigned = np.sum((hymap_subdomains >= 1) & (hymap_subdomains <= len(self.domains)))
+        print(f"Total pixels assigned to Subdomains:  {total_assigned}")
+
+        # 3. Check for leftover 'cracks'
+        leftover_cracks = np.sum(hymap_subdomains == 1000)
+        print(f"Leftover unassigned 'crack' pixels:   {leftover_cracks}")
+
+        # 4. Check Routed vs Non-Routed (Antarctica/Deserts) remainder overlap
+        routed_pixels = np.sum((landmask == 1.0) & (basin_mask > 0) & ~np.isnan(basin_mask))
+        non_routed_pixels = total_land - routed_pixels
+        
+        # Pixels that got assigned to a subdomain but are NOT in the basin mask
+        assigned_non_routed = np.sum(
+            (hymap_subdomains >= 1) & ((basin_mask <= 0) | np.isnan(basin_mask))
+        )      
+        print(f"  -> Routed land (HyMAP active):      {routed_pixels}")
+        print(f"  -> Non-routed land (e.g. deserts):  {non_routed_pixels}")
+        print(f"  -> Assigned non-routed pixels:      {assigned_non_routed}")
+
+        # Final Validation
+        if total_land == total_assigned and leftover_cracks == 0 and non_routed_pixels == assigned_non_routed:
+            print("✅ SUCCESS: All land perfectly partitioned! No cracks remain.")
+        else:
+            print("❌ WARNING: Domain partition mismatch detected! Check arrays.")
+        print("="*55 + "\n")
+        
         for i, dom_name in enumerate(self.domains):
             dom_id = i + 1
             print(f"Subsetting and saving domain {dom_id}: {dom_name}...")
@@ -922,12 +1015,8 @@ class HyMAPDomains():
                     fill_val = -9999.0
 
                     # np.where automatically broadcasts the 2D active_land_mask
-                    # to 3D arrays like HYMAP_floodplain_height
                     subset_ds[var].values = np.where(
                         active_land_mask, var_vals, fill_val).astype(var_vals.dtype)
-
-            # NOTE: We DO NOT mask the rest of the variables. We let them retain
-            # their native global values
 
             # -------------------------
             # 3. Shift Flow Directions
@@ -966,8 +1055,24 @@ class HyMAPDomains():
                 # If a river flows out-of-bounds OR into a dead pixel, sever it!
                 needs_severing = oob | target_is_dead
 
-                flow_x_local[needs_severing] = -9.0
-                flow_y_local[needs_severing] = -9.0
+                original_global_x = flow_x[valid_mask_flow]
+                # 1. If it was already Missing (-9999.0), KEEP it Missing!
+                is_missing = (original_global_x == -9999.0)
+                flow_x_local[is_missing] = -9999.0
+                flow_y_local[is_missing] = -9999.0
+
+                # 2. If it was already an Ocean Outlet (-9.0), KEEP it an Outlet!
+                is_ocean = (original_global_x == -9.0)
+                flow_x_local[is_ocean] = -9.0
+                flow_y_local[is_ocean] = -9.0
+
+                # 3. If it was a REAL river ( > 0 ), but it flows OOB in this subdomain, sever it!
+                is_active_river_severed = needs_severing & ~is_missing & ~is_ocean
+                flow_x_local[is_active_river_severed] = -9.0
+                flow_y_local[is_active_river_severed] = -9.0
+                severed_count = np.sum(is_active_river_severed)
+                if severed_count > 0:
+                    print(f"  ⚠️ WARNING: {dom_name} original mask severed {severed_count} active river pixels!")
 
                 # Map the corrected local indices back to the global arrays
                 flow_x[valid_mask_flow] = flow_x_local
